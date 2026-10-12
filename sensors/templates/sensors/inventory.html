@@ -1,0 +1,47 @@
+{% extends 'monitor/base.html' %}{% load static %}
+{% block title %}Sensors · {{ device.name }}{% endblock %}
+{% block body_class %}devices-page sensors-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=4-auto-start">{% endblock %}
+{% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=4-auto-start" defer></script>{% endblock %}
+{% block content %}
+<section class="page-intro"><div><p class="eyebrow">DEVICE / SNMP SENSORS</p><h2>{{ device.name }}</h2><p class="muted">{{ device.management_ip }} · Independent, read-only SNMP monitoring</p></div><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></section>
+{% for message in messages %}<p class="preview-notice" role="status">{{ message }}</p>{% endfor %}
+<p class="preview-notice" id="sensorWorkerStatus">{% if polling_authorized %}Sensors start automatically when added. Stop individual sensors at any time.{% else %}Add a sensor to start SNMP monitoring automatically.{% endif %}</p>
+{% if user.is_staff or user.is_superuser %}<div class="sensor-page-actions"><button class="primary-button" type="button" data-open-sensor>+ Add Sensor</button><span class="muted">CPU, uptime and interface bandwidth</span></div>{% endif %}
+<section class="sensor-grid" data-sensor-data="{% url 'sensor_data' device.id %}" aria-label="Device sensors">
+{% for sensor in sensors %}<article class="panel sensor-card" data-sensor-id="{{ sensor.id }}"><header><div><p class="eyebrow">{{ sensor.get_kind_display }}</p><h3>{{ sensor.name }}</h3></div><span class="sensor-status" data-value="status">{% if sensor.enabled %}Waiting for data{% else %}Stopped{% endif %}</span></header>
+<p class="muted">{% if sensor.interface_name %}{{ sensor.interface_name }} · {% endif %}Every {{ sensor.interval }} seconds</p>
+<dl class="sensor-values">{% if sensor.kind == 'traffic' %}<div><dt>Inbound Mbps</dt><dd data-value="in_mbps">—</dd></div><div><dt>Outbound Mbps</dt><dd data-value="out_mbps">—</dd></div><div><dt>Interface status</dt><dd data-value="interface_status">—</dd></div>{% elif sensor.kind == 'cpu' %}<div><dt>CPU utilization (%)</dt><dd data-value="cpu">—</dd></div>{% else %}<div><dt>Device uptime · days / hours / minutes / seconds</dt><dd data-value="uptime">—</dd></div><div><dt>Detected uptime resets</dt><dd data-value="restart_count">—</dd></div>{% endif %}</dl>
+<p class="sensor-sample-note" data-sample-note>Waiting for a successful reading.</p><p class="muted">Last successful reading: <time data-value="last_success">—</time></p><p role="status" data-value="error"></p>
+{% if sensor.kind != 'uptime' %}<figure class="sensor-chart"><figcaption>{% if sensor.kind == 'traffic' %}Inbound / outbound Mbps{% else %}CPU %{% endif %} · latest 120 samples</figcaption><svg viewBox="0 0 600 180" role="img" aria-label="Historical sensor readings" data-chart></svg><p data-chart-note>No historical samples.</p><span class="sensor-legend">{% if sensor.kind == 'traffic' %}Blue: inbound · Green: outbound{% else %}Blue: CPU{% endif %}</span></figure>{% endif %}
+<details><summary>Historical samples</summary><div class="sensor-history"><table><thead><tr><th>Time</th><th>Reading</th><th>Status</th></tr></thead><tbody data-history><tr><td colspan="3">No samples.</td></tr></tbody></table></div></details>
+{% if user.is_staff or user.is_superuser %}<footer><form method="post" action="{% url 'sensor_control' device.id sensor.id 'start' %}">{% csrf_token %}<button class="primary-button"{% if sensor.enabled %} disabled{% endif %}>Start</button></form><form method="post" action="{% url 'sensor_control' device.id sensor.id 'stop' %}">{% csrf_token %}<button class="secondary-button"{% if not sensor.enabled %} disabled{% endif %}>Stop</button></form><a class="secondary-button" href="{% url 'sensor_edit' device.id sensor.id %}">Edit</a><details><summary>Delete</summary><p>Delete this sensor and all its historical samples?</p><form method="post" action="{% url 'sensor_control' device.id sensor.id 'delete' %}">{% csrf_token %}<button class="secondary-button">Confirm delete</button></form></details></footer>{% endif %}</article>
+{% empty %}<div class="panel"><h3>No sensors yet</h3><p>Use Add Sensor to configure monitoring for {{ device.name }}.</p></div>{% endfor %}</section>
+{% endblock %}
+
+{% block dialogs %}
+{% if user.is_staff or user.is_superuser %}
+<dialog id="addSensor" class="device-dialog sensor-wizard" aria-labelledby="sensorWizardTitle" data-reopen="{% if sensor_error or sensor_success or profile_form.errors or sensor_form.errors or discovered %}true{% else %}false{% endif %}">
+<div class="dialog-heading"><div><p class="eyebrow">SNMP SENSOR SETUP</p><h2 id="sensorWizardTitle">Add Sensor</h2><p class="muted">{{ device.name }} &middot; {{ device.management_ip }}</p></div><button class="icon-button" type="button" data-close-sensor aria-label="Close sensor setup">&times;</button></div>
+<p class="wizard-intro">Test the connection, detect a metric, then add your sensor.</p>
+<p class="wizard-feedback" data-wizard-feedback role="status" hidden></p>
+{% if sensor_error %}<p class="wizard-error" role="alert">{{ sensor_error }}</p>{% endif %}
+{% if sensor_success %}<p class="wizard-success" role="status">{{ sensor_success }}</p>{% endif %}
+<section class="wizard-step"><div class="wizard-step-title"><span>1</span><h3>SNMP connection</h3>{% if profile_ready %}<strong class="wizard-verified">Verified</strong>{% endif %}</div>
+{% if profile_ready %}<p class="muted">Using this device's encrypted SNMP credentials.</p><details class="wizard-credentials"{% if profile_form.errors %} open{% endif %}><summary>Change SNMP credentials</summary>{% endif %}
+<form method="post" action="{% url 'sensor_profile' device.id %}" autocomplete="off" data-wizard-form="profile">{% csrf_token %}{{ profile_form.non_field_errors }}<div class="form-grid">{% for field in profile_form %}<label>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}</div><button class="primary-button" type="submit">Test connection &amp; save</button><small>Use a read-only SNMP community. Replacing credentials stops this device's sensors.</small></form>
+{% if profile_ready %}</details>{% endif %}</section>
+<section class="wizard-step"><div class="wizard-step-title"><span>2</span><h3>Detect a sensor</h3></div>
+{% if not profile_ready %}<p class="muted">Test the SNMP connection to enable detection.</p>{% endif %}
+<form method="post" action="{% url 'sensor_detect' device.id %}" data-wizard-form="detect">{% csrf_token %}<div class="sensor-type-options">
+<button type="submit" name="kind" value="cpu" class="sensor-type" {% if not profile_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg><strong>Detect CPU</strong><small>Processor utilization</small></button>
+<button type="submit" name="kind" value="uptime" class="sensor-type" {% if not profile_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg><strong>Detect Uptime</strong><small>Uptime and restart indications</small></button>
+<button type="submit" name="kind" value="traffic" formaction="{% url 'sensor_discover' device.id %}" class="sensor-type" {% if not profile_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v18m-4-4 4 4 4-4M17 21V3m-4 4 4-4 4 4"/></svg><strong>Detect Bandwidth</strong><small>Choose device interfaces</small></button>
+</div></form></section>
+{% if profile_ready and sensor_form.kind.value %}<section class="wizard-step"><div class="wizard-step-title"><span>3</span><h3>{% if sensor_form.kind.value == 'traffic' %}Select interfaces{% else %}Configure sensor{% endif %}</h3></div>
+<form method="post" action="{% url 'sensor_add' device.id %}" data-wizard-form="add">{% csrf_token %}{{ sensor_form.non_field_errors }}<input type="hidden" name="kind" value="{{ sensor_form.kind.value }}">{{ sensor_form.kind.errors }}{{ sensor_form.discovery }}
+{% if sensor_form.kind.value == 'traffic' %}<p class="muted">Select one or more interfaces. Each selection creates a separate Bandwidth Sensor.</p><fieldset class="wizard-interfaces"><legend>Interface / operational status</legend>{{ sensor_form.interfaces }}{{ sensor_form.interfaces.errors }}</fieldset>{% endif %}
+<label class="wizard-interval">Polling interval{{ sensor_form.interval }}{{ sensor_form.interval.errors }}</label><div class="wizard-save"><small>Adding a sensor starts read-only monitoring at the selected interval.</small><button class="primary-button" type="submit">Add {% if sensor_form.kind.value == 'traffic' %}selected sensors{% else %}sensor{% endif %}</button></div></form></section>{% endif %}
+<div class="wizard-footer"><span>Read-only SNMP detection</span><button type="button" class="secondary-button" data-close-sensor>Close</button></div>
+</dialog>{% endif %}
+{% endblock %}

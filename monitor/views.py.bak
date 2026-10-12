@@ -1,0 +1,238 @@
+import time
+
+from django.http import HttpResponse, JsonResponse
+from django.middleware.csrf import get_token
+
+# Import MikroTik monitoring service
+from .services.mikrotik_api import get_firewall_rules
+
+
+# Monitoring state
+previous_counters = {}
+monitoring_enabled = True
+last_rules = []
+
+
+def calculate_pps(name, packets):
+    now = time.time()
+
+    if name not in previous_counters:
+        previous_counters[name] = {
+            "packets": packets,
+            "time": now,
+        }
+        return 0
+
+    previous = previous_counters[name]
+    packet_difference = packets - previous["packets"]
+    time_difference = now - previous["time"]
+
+    previous_counters[name] = {
+        "packets": packets,
+        "time": now,
+    }
+
+    if time_difference <= 0 or packet_difference < 0:
+        return 0
+
+    return packet_difference / time_difference
+
+
+def monitoring_data(request):
+    global last_rules
+
+    if monitoring_enabled:
+        rules = get_firewall_rules()
+
+        for rule in rules:
+            rule["pps"] = round(
+                calculate_pps(rule["name"], rule["packets"]), 2
+            )
+
+        last_rules = rules
+
+    return JsonResponse({
+        "monitoring": monitoring_enabled,
+        "rules": last_rules,
+    })
+
+
+def start_monitoring(request):
+    global monitoring_enabled
+    monitoring_enabled = True
+
+    return JsonResponse({"monitoring": True})
+
+
+def stop_monitoring(request):
+    global monitoring_enabled
+    monitoring_enabled = False
+
+    return JsonResponse({"monitoring": False})
+
+
+def dashboard(request):
+    csrf_token = get_token(request)
+
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>NetShield - Firewall Monitor</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 30px;
+                background: #f5f6fa;
+                color: #222;
+            }
+            h1 { color: #172554; }
+            button {
+                padding: 10px 20px;
+                cursor: pointer;
+                border: 0;
+                border-radius: 4px;
+                background: #dc2626;
+                color: white;
+                font-size: 15px;
+            }
+            table {
+                border-collapse: collapse;
+                margin-top: 20px;
+                width: 100%;
+                background: white;
+            }
+            th, td {
+                border: 1px solid #ddd;
+                padding: 12px;
+                text-align: left;
+            }
+            th { background: #e9edf5; }
+            .running { color: green; font-weight: bold; }
+            .stopped { color: red; font-weight: bold; }
+            #error { color: red; }
+        </style>
+    </head>
+    <body>
+        <h1>NetShield</h1>
+        <h2>Firewall Monitor</h2>
+
+        <p>
+            Status:
+            <span id="status" class="running">MONITORING</span>
+        </p>
+
+        <button id="monitorButton" type="button"
+                onclick="toggleMonitoring()">Stop Monitoring</button>
+
+        <p id="error"></p>
+
+        <h3>MikroTik Firewall Rules</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Rule</th>
+                    <th>Packets</th>
+                    <th>PPS</th>
+                    <th>Bytes</th>
+                    <th>GB</th>
+                </tr>
+            </thead>
+            <tbody id="rulesTable">
+                <tr><td colspan="5">Loading monitoring data...</td></tr>
+            </tbody>
+        </table>
+
+        <script>
+            let monitoring = true;
+            const csrfToken = "__CSRF_TOKEN__";
+
+            function updateStatus() {
+                const status = document.getElementById("status");
+                const button = document.getElementById("monitorButton");
+
+                status.textContent = monitoring
+                    ? "MONITORING" : "MONITORING STOPPED";
+                status.className = monitoring ? "running" : "stopped";
+                button.textContent = monitoring
+                    ? "Stop Monitoring" : "Start Monitoring";
+                button.style.background = monitoring ? "#dc2626" : "#15803d";
+            }
+
+            function toggleMonitoring() {
+                const endpoint = monitoring
+                    ? "/stop-monitoring/" : "/start-monitoring/";
+
+                fetch(endpoint, {
+                    method: "POST",
+                    headers: {"X-CSRFToken": csrfToken}
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error("Request failed");
+                    return response.json();
+                })
+                .then(data => {
+                    monitoring = data.monitoring;
+                    updateStatus();
+                    getMonitoringData();
+                })
+                .catch(error => {
+                    document.getElementById("error").textContent =
+                        "Could not change monitoring status. Check the server.";
+                });
+            }
+
+            function updateTable(rules) {
+                const table = document.getElementById("rulesTable");
+                table.replaceChildren();
+
+                if (!rules || rules.length === 0) {
+                    const row = table.insertRow();
+                    const cell = row.insertCell();
+                    cell.colSpan = 5;
+                    cell.textContent = "No MONITOR- rules found.";
+                    return;
+                }
+
+                rules.forEach(rule => {
+                    const row = table.insertRow();
+
+                    [rule.name, rule.packets,
+                     Number(rule.pps || 0).toFixed(2),
+                     rule.bytes, Number(rule.gb || 0).toFixed(6)
+                    ].forEach(value => {
+                        const cell = row.insertCell();
+                        cell.textContent = value;
+                    });
+                });
+            }
+
+            function getMonitoringData() {
+                fetch("/monitoring-data/")
+                .then(response => {
+                    if (!response.ok) throw new Error("Monitoring request failed");
+                    return response.json();
+                })
+                .then(data => {
+                    monitoring = data.monitoring;
+                    updateStatus();
+                    updateTable(data.rules);
+                    document.getElementById("error").textContent = "";
+                })
+                .catch(error => {
+                    document.getElementById("error").textContent =
+                        "Cannot retrieve MikroTik data. Check the server terminal.";
+                });
+            }
+
+            getMonitoringData();
+            setInterval(getMonitoringData, 2000);
+        </script>
+    </body>
+    </html>
+    """
+
+    html = html.replace("__CSRF_TOKEN__", str(csrf_token))
+    return HttpResponse(html)

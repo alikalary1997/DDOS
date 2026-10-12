@@ -1,0 +1,29 @@
+{% extends "monitor/base.html" %}
+{% load static %}
+{% block title %}RAW Provisioning | NetShield{% endblock %}
+{% block body_class %}devices-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}"><style>
+.provisioning-layout{max-width:900px}.provisioning-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0}.provisioning-profile dt{font-size:11px;color:var(--muted)}.provisioning-profile dd{margin:5px 0 0;overflow-wrap:anywhere;font-weight:600}.provisioning-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.provisioning-actions label{flex:1;min-width:180px}.provisioning-actions input{width:100%}.provisioning-rules{padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font:12px/1.8 Consolas,monospace;overflow-wrap:anywhere}.provisioning-authorize{display:flex;gap:10px;align-items:start;margin:18px 0}.provisioning-authorize input{width:16px;flex:none;margin-top:4px}.provisioning-layout .panel{margin-bottom:18px}.provisioning-layout .muted{font-size:12px}@media(max-width:600px){.provisioning-profile{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>{% endblock %}
+{% block content %}
+<div class="provisioning-layout">
+<section class="page-intro"><div><p class="eyebrow">DEVICE MANAGEMENT / WRITE AUTHORIZATION</p><h2>Automatic RAW provisioning</h2><p class="muted">{{ device.name }} · Device ID {{ device.id }}</p></div><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></section>
+{% for message in messages %}<div class="preview-notice" role="status">{{ message }}</div>{% endfor %}
+<section class="panel" aria-labelledby="provisioningTarget"><div class="panel-heading"><h2 id="provisioningTarget">Saved target</h2><span class="phase-badge">{% if provisioning_enabled %}ENABLED{% elif device.raw_provisioning_enabled %}ENABLED · VALIDATES ON SAVE{% else %}DISABLED{% endif %}</span></div>
+<dl class="provisioning-profile"><div><dt>Device</dt><dd>{{ device.name }} (ID {{ device.id }})</dd></div><div><dt>Management IP / API port</dt><dd>{{ device.management_ip }}:{{ device.api_port }}</dd></div><div><dt>API SSL</dt><dd>{{ device.use_ssl|yesno:"ON,OFF" }}</dd></div><div><dt>Saved monitoring interface</dt><dd>{{ device.incoming_monitoring_interface|default:"Not configured" }}</dd></div><div><dt>Preflight public IP</dt><dd>{{ device.raw_preflight_address|default:"Not validated" }}</dd></div><div><dt>Authorized at</dt><dd>{{ device.raw_provisioning_authorized_at|default:"Not authorized" }}</dd></div></dl>
+<p class="muted">Uses saved encrypted API credentials. Automatic provisioning stays enabled when the saved device profile changes. The next Public IP Save or Retry validates the current connection, interface and RAW rules before renewing its configuration fingerprint. Explicitly disabling provisioning stops future writes. Device deletion remains database-only.</p>
+{% if device.raw_provisioning_enabled %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="disable"><button class="secondary-button" type="submit">Disable automatic provisioning</button></form>{% endif %}
+</section>
+<section class="panel" aria-labelledby="preflightTitle"><div class="panel-heading"><h2 id="preflightTitle">1. Validate without changing rules</h2></div><p class="muted">Tests the saved connection, verifies the selected interface, and checks existing RAW rules for this public IP. No firewall writes are made.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="validate">{% if validation_form.errors %}<div class="modal-notice" role="alert">{{ validation_form.non_field_errors }}{{ validation_form.public_ip.errors }}</div>{% endif %}<div class="provisioning-actions"><label><span>{{ validation_form.public_ip.label }}</span>{{ validation_form.public_ip }}</label><button class="primary-button" type="submit">Run read-only validation</button></div></form>
+{% if device.raw_preflight_message %}<p role="status">{{ device.raw_preflight_message }}</p>{% endif %}
+{% if device.raw_preflight_at %}<p class="muted">Validated {{ device.raw_preflight_at }}. Validation is valid for 15 minutes for this exact saved configuration.</p>{% endif %}
+</section>
+{% if not device.raw_provisioning_enabled %}<section class="panel" aria-labelledby="authorizationTitle"><div class="panel-heading"><h2 id="authorizationTitle">2. Authorize live provisioning</h2></div>
+{% if preflight_ready %}<p class="muted">The rules below show the validated IP. Future Save and Retry use each assignment's actual public IP and the device's saved interface. Enabling this setting does not create rules immediately.</p>
+<div class="provisioning-rules">{% for rule in expected_rules %}<div>{{ rule }}</div>{% endfor %}</div>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="enable"><input type="hidden" name="fingerprint" value="{{ device.raw_preflight_fingerprint }}"><label class="provisioning-authorize"><input type="checkbox" name="authorize" value="yes" required><span>I authorize NetShield to create and verify missing RAW passthrough monitoring rules on <strong>{{ device.name }} (ID {{ device.id }}), {{ device.management_ip }}:{{ device.api_port }}</strong>, using <strong>{{ device.incoming_monitoring_interface }}</strong>, for assigned public IPs.</span></label><button class="primary-button" type="submit">Authorize and enable for {{ device.name }}</button></form>
+{% else %}<p class="muted">Successful connection and read-only RAW validation are required before live write authorization becomes available.</p><button class="primary-button" disabled>Authorization unavailable</button>{% endif %}
+</section>{% endif %}
+</div>
+{% endblock %}

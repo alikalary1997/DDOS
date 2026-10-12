@@ -1,0 +1,29 @@
+<section class="panel settings-section" id="detectionSettings" aria-labelledby="detectionSettingsTitle">
+    <div class="panel-heading"><div><h2 id="detectionSettingsTitle">DDoS Detection</h2><p class="panel-subtitle">Editable warning and attack thresholds</p></div><span class="phase-badge">SAVED CONFIGURATION</span></div>
+    <p class="settings-section-note" id="ddosThresholdNote">Initial values are examples, not validated production thresholds. Saving these settings does not activate detection or block traffic.</p>
+    <form method="post" action="{% url 'settings' %}#detectionSettings" id="ddosSettingsForm">
+        {% csrf_token %}<input type="hidden" name="settings_section" value="ddos">
+        {% if ddos_settings_form.non_field_errors %}<div class="threshold-errors" role="alert">{{ ddos_settings_form.non_field_errors }}</div>{% endif %}
+        <table class="ddos-thresholds-table" aria-describedby="ddosThresholdNote ddosThresholdValidation">
+            <caption class="sr-only">DDoS Detection Thresholds</caption>
+            <thead><tr><th scope="col">Metric</th><th scope="col">Warning</th><th scope="col">Attack</th></tr></thead>
+            <tbody>{% for row in ddos_settings_form.threshold_rows %}
+                <tr><th scope="row">{{ row.label }}</th>
+                    <td>{{ row.warning }}{% if row.warning.errors %}<div class="threshold-errors" role="alert">{{ row.warning.errors }}</div>{% endif %}</td>
+                    <td>{{ row.attack }}{% if row.attack.errors %}<div class="threshold-errors" role="alert">{{ row.attack.errors }}</div>{% endif %}</td>
+                </tr>
+            {% endfor %}</tbody>
+        </table>
+        <p class="settings-section-note" id="ddosThresholdValidation">Warning must be zero or greater. Attack must be greater than Warning. All eight values are required; up to three decimal places are supported.</p>
+        <div class="settings-section-actions">{% if can_manage_raw_settings %}<button type="submit" class="primary-button">Save Changes</button>{% else %}<span>Administrator access is required to change thresholds.</span>{% endif %}</div>
+    </form>
+    <h3>Confirmation and recovery</h3>
+    <p class="settings-section-note">Detection is {% if detection_policy.enabled %}enabled globally (per-IP opt-outs apply){% else %}globally disabled{% endif %}. These settings do not start polling or enable detection.</p>
+    <form method="post" action="{% url 'settings' %}#detectionSettings" id="detectionPolicyForm">
+        {% csrf_token %}<input type="hidden" name="settings_section" value="ddos_policy">
+        {{ detection_policy_form.non_field_errors }}
+        <div class="settings-fields">{% for field in detection_policy_form %}<label><span>{{ field.label }}</span>{{ field }}{{ field.errors }}</label>{% endfor %}</div>
+        <p class="settings-section-note">At 20% hysteresis, recovery requires every metric to fall below 80% of its current severity threshold. Missing samples reset confirmation counts; they never confirm recovery. Sample counts are 1–100; hysteresis is 0–99%.</p>
+        {% if can_manage_raw_settings %}<div class="settings-section-actions"><button type="submit" class="primary-button">Save Detection Policy</button></div>{% endif %}
+    </form>
+</section>

@@ -1,0 +1,21 @@
+{% extends "monitor/base.html" %}
+{% load static %}
+{% block title %}Sign in | NetShield{% endblock %}
+{% block body_class %}devices-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261010-step2">{% endblock %}
+{% block content %}
+<section class="page-intro"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2>Sign in</h2><p class="muted">Sign in to view your device inventory.</p></div></section>
+<section class="panel">
+    <form method="post" autocomplete="on">
+        {% csrf_token %}
+        {% if form.errors %}<p class="modal-notice" role="alert">Sign-in failed. Check your username and password.</p>{% endif %}
+        <div class="form-grid">
+            <label for="{{ form.username.id_for_label }}"><span>Username</span>{{ form.username }}</label>
+            <label for="{{ form.password.id_for_label }}"><span>Password</span>{{ form.password }}</label>
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="dialog-footer"><span>Use your NetShield account.</span><button type="submit" class="primary-button">Sign in</button></div>
+    </form>
+</section>
+{% endblock %}
+{% block footer_note %}Device inventory{% endblock %}

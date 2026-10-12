@@ -1,0 +1,9 @@
+.detection-badge{display:inline-block;padding:4px 8px;border-radius:6px;border:1px solid currentColor;font-size:11px;font-weight:600;line-height:1.4;color:var(--muted);background:var(--surface)}
+.detection-badge[data-state="normal"]{color:var(--green,#15803d)}
+.detection-badge[data-state="warning"]{color:var(--amber,#a16207)}
+.detection-badge[data-state="under-attack"]{color:var(--red,#dc2626)}
+.detection-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.detection-inline small,[data-ddos-message]{color:var(--muted);font-size:11px}
+.detection-history{display:grid;gap:16px}.detection-event{padding:18px;border:1px solid var(--border);background:var(--surface);border-radius:10px}
+.detection-event dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px}.detection-event dt{color:var(--muted);font-size:11px}.detection-event dd{margin:4px 0;font-variant-numeric:tabular-nums}
+.ip-badge[data-state="stale"],.ip-badge[data-state="connection-failed"]{color:var(--amber);border-color:currentColor}

@@ -1,0 +1,4 @@
+{% extends 'monitor/base.html' %}{% load static %}
+{% block body_class %}devices-page sensors-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}">{% endblock %}
+{% block content %}<section class="panel"><h2>Edit {{ sensor.get_kind_display }}</h2><form method="post">{% csrf_token %}{{ form.as_p }}<button class="primary-button">Save changes</button> <a class="secondary-button" href="{% url 'device_sensors' sensor.device_id %}">Cancel</a></form><p class="muted">To select a different traffic interface, add a new Traffic Sensor using interface discovery. History stays attached to the original interface.</p></section>{% endblock %}

@@ -1,0 +1,2 @@
+<div class="detection-inline" aria-label="DDoS detection status"><span>DDoS</span><span class="detection-badge" data-ddos-status data-state="{{ ip.ddos_status|default:'Unknown'|slugify }}">{{ ip.ddos_status|default:"Unknown" }}</span><small data-ddos-metrics>{% for metric in ip.ddos_metrics %}{{ metric.label }}{% if not forloop.last %} · {% endif %}{% endfor %}</small></div>
+<p class="filter-note" data-ddos-message>{{ ip.ddos_message }}</p>

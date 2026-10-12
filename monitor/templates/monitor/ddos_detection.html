@@ -1,0 +1,19 @@
+{% extends "monitor/base.html" %}
+{% load static %}
+{% block title %}DDoS Detection{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/management.css' %}?v=20261010-theme1">{% endblock %}
+{% block footer_note %}Detection only ? no automatic mitigation{% endblock %}
+{% block content %}
+<section class="page-intro"><div><p class="eyebrow">NETWORK SECURITY / DDOS DETECTION</p><h2>Detection history</h2><p class="muted">Confirmed incidents from real RAW monitoring samples.</p></div><span class="phase-badge">{% if detection_policy.enabled %}PASSIVE DETECTION ENABLED{% else %}DETECTION DISABLED{% endif %}</span></section>
+<div class="preview-notice"><p>Detection does not block traffic or change router configuration. Missing samples show Unknown on monitoring cards; ongoing incidents remain open until confirmed recovery. Open events without recent observations are unresolved, not proof of a current attack.</p></div>
+<p><a href="{% url 'settings' %}#detectionSettings">Detection thresholds and recovery settings</a> ? <a href="{% url 'public_ips' %}">Public IP Monitoring</a></p>
+<section class="detection-history" aria-label="Detection event history">
+{% for event in events %}<article class="detection-event">
+<div class="panel-heading"><h3>{{ event.address }} ? {{ event.device_name }}</h3><span class="detection-badge" data-state="{{ event.highest_severity|slugify }}">{{ event.highest_severity }}</span></div>
+<p class="muted">{{ event.management_ip }} ? Device #{{ event.device_id_snapshot }} ? Assignment #{{ event.assignment_id_snapshot }}</p>
+<p>Triggering metrics: {% for metric in event.triggering_metrics %}{{ metric.label }} ({{ metric.severity }}){% if not forloop.last %}, {% endif %}{% empty %}?{% endfor %}</p>
+<dl><div><dt>Started</dt><dd>{{ event.started_at|date:"Y-m-d H:i:s T" }}</dd></div><div><dt>Ended</dt><dd>{% if event.ended_at %}{{ event.ended_at|date:"Y-m-d H:i:s T" }}{% else %}Open / recovery unconfirmed{% endif %}</dd></div><div><dt>Last observation</dt><dd>{{ event.last_observed_at|date:"Y-m-d H:i:s T" }}</dd></div><div><dt>Duration (seconds)</dt><dd>{{ event.duration_seconds }}</dd></div><div><dt>Peak Total PPS</dt><dd>{{ event.peak_total_pps|floatformat:2 }}</dd></div><div><dt>Peak Mbps</dt><dd>{{ event.peak_bandwidth_mbps|floatformat:6 }}</dd></div><div><dt>Peak TCP SYN PPS</dt><dd>{{ event.peak_syn_pps|floatformat:2 }}</dd></div><div><dt>Peak UDP PPS</dt><dd>{{ event.peak_udp_pps|floatformat:2 }}</dd></div></dl>
+</article>{% empty %}<div class="panel"><h3>No confirmed incidents</h3><p>No detection events have been recorded.</p></div>{% endfor %}
+</section>
+<nav aria-label="History pages">{% if events.has_previous %}<a href="?page={{ events.previous_page_number }}">Previous</a>{% endif %} Page {{ events.number }} of {{ events.paginator.num_pages }} {% if events.has_next %}<a href="?page={{ events.next_page_number }}">Next</a>{% endif %}</nav>
+{% endblock %}

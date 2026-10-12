@@ -1,0 +1,21 @@
+        <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand" href="{% url 'dashboard' %}" aria-label="NetShield dashboard">
+                <span class="brand-mark" aria-hidden="true">N</span>
+                <span class="brand-name">Net<span>Shield</span></span>
+            </a>
+            <div class="nav-label">WORKSPACE</div>
+            <nav class="nav-list">
+                <a class="nav-item{% if active_page == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}"{% if active_page == 'dashboard' %} aria-current="page"{% endif %}><span class="nav-icon">▦</span>Dashboard</a>
+                <a class="nav-item{% if active_page == 'devices' %} active{% endif %}" href="{% url 'devices' %}"{% if active_page == 'devices' %} aria-current="page"{% endif %}><span class="nav-icon">▣</span>Devices</a>
+                <a class="nav-item{% if active_page == 'public_ips' %} active{% endif %}" href="{% url 'public_ips' %}"{% if active_page == 'public_ips' %} aria-current="page"{% endif %}><span class="nav-icon">◎</span>Public IPs</a>
+                <a class="nav-item{% if active_page == 'traffic_monitor' %} active{% endif %}" href="{% url 'traffic_monitor' %}"{% if active_page == 'traffic_monitor' %} aria-current="page"{% endif %}><span class="nav-icon">⌁</span>Traffic Monitor</a>
+                <a class="nav-item{% if active_page == 'ddos_detection' %} active{% endif %}" href="{% url 'ddos_detection' %}"{% if active_page == 'ddos_detection' %} aria-current="page"{% endif %}><span class="nav-icon">◈</span>DDoS Detection</a>
+                <a class="nav-item{% if active_page == 'alerts' %} active{% endif %}" href="{% url 'alerts' %}"{% if active_page == 'alerts' %} aria-current="page"{% endif %}><span class="nav-icon">♧</span>Alerts</a>
+                <a class="nav-item{% if active_page == 'reports' %} active{% endif %}" href="{% url 'reports' %}"{% if active_page == 'reports' %} aria-current="page"{% endif %}><span class="nav-icon">▤</span>Reports</a>
+                <a class="nav-item{% if active_page == 'settings' %} active{% endif %}" href="{% url 'settings' %}"{% if active_page == 'settings' %} aria-current="page"{% endif %}><span class="nav-icon">⚙</span>Settings</a>
+            </nav>
+            <div class="sidebar-bottom">
+                {% if active_page == "dashboard" %}<div class="sidebar-status"><span class="pulse-dot" id="routerDot" data-state="connecting"></span><span><b>MikroTik monitoring</b><small id="routerStatus">Waiting for data</small></span></div>{% else %}<div class="sidebar-status"><span class="pulse-dot" data-state="stopped"></span><span><b>{% if active_page == "public_ips" %}Public IP inventory{% elif active_page == "traffic_monitor" %}Traffic monitoring{% elif active_page == "ddos_detection" %}DDoS detection{% elif active_page == "alerts" %}Alert monitoring{% elif active_page == "reports" %}Network reports{% elif active_page == "settings" %}Application settings{% else %}Device inventory{% endif %}</b><small>{% if inventory_ready %}{% if inventory_unavailable %}Inventory unavailable{% else %}Saved device profiles{% endif %}{% else %}Backend pending{% endif %}</small></span></div>{% endif %}
+                <div class="sidebar-foot">NETSHIELD NOC <span>v1.0</span></div>
+            </div>
+        </aside>

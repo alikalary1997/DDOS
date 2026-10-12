@@ -1,0 +1,40 @@
+<section class="page-intro fleet-intro">
+    <div><p class="eyebrow">INFRASTRUCTURE / MIKROTIK</p><h2>Your network, at a glance.</h2><p class="muted">Device health, sensor telemetry and connection profiles in one place.</p></div>
+    <div class="fleet-intro-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>SNMP telemetry<strong>Read-only monitoring</strong></span></div>
+</section>
+{% if not open_add_device %}{% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}{% endif %}
+<section class="fleet-summary" aria-label="Fleet summary">
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Devices</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6h.01M7 17h.01M11 6h6M11 17h6"/></svg></div><strong id="deviceTotal">{{ total_devices|default_if_none:"—" }}</strong><span>Saved across your network</span></article>
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Configured sensors</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M6 6a8.5 8.5 0 0 0 0 12M18 6a8.5 8.5 0 0 1 0 12M3 3a13 13 0 0 0 0 18M21 3a13 13 0 0 1 0 18"/></svg></div><strong data-fleet-sensor-count>{{ sensor_summary.total|default_if_none:"—" }}</strong><span>CPU &middot; uptime &middot; bandwidth</span></article>
+    <article class="fleet-stat fleet-stat-active"><div class="fleet-stat-top"><span>Active sensors</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div><strong data-fleet-active-count>{{ sensor_summary.active|default_if_none:"—" }}</strong><span>Fresh, successful readings</span></article>
+    <article class="fleet-stat fleet-stat-attention"><div class="fleet-stat-top"><span>Needs attention</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 10 18H2L12 3ZM12 9v5m0 3h.01"/></svg></div><strong data-fleet-needs-attention>{{ sensor_summary.attention|default_if_none:"—" }}</strong><span>Stale, failed or paused sensors</span></article>
+</section>
+<div id="connectionFeedback" class="preview-notice" role="status" hidden></div>
+<section class="panel inventory-panel fleet-panel" aria-labelledby="inventoryTitle">
+    <div class="panel-heading"><div><p class="eyebrow">DEVICE INVENTORY</p><h2 id="inventoryTitle">Device Management Fleet</h2></div><div class="noc-view-switch" role="group" aria-label="Inventory view"><button type="button" data-inventory-view="matrix" aria-pressed="true">Fleet Table</button><button type="button" data-inventory-view="grid" aria-pressed="false">Router Grid</button></div></div>
+    <div class="device-toolbar" role="search" aria-label="Search and filter devices">
+        <label class="search-field"><span>Find a device</span><input type="search" id="deviceSearch" placeholder="Device name or IP address" aria-describedby="filterNote"></label>
+        <label><span>Last API test</span><select id="statusFilter"><option value="">All results</option><option value="not_tested">Not Tested</option><option value="online">Last Test Successful</option><option value="offline">Last Test Failed</option><option value="disabled">Disabled</option></select></label>
+        <label class="sr-only"><span>Device type</span><select id="typeFilter"><option value="">All device types</option><option value="mikrotik">MikroTik</option><option value="cisco">Cisco</option><option value="other">Other</option></select></label>
+        <label><span>RAW provisioning</span><select id="rawFilter"><option value="">All states</option><option>Enabled</option><option>Disabled</option><option>Needs Revalidation</option></select></label>
+        {% if can_add_devices %}<button type="button" class="primary-button" data-open-device disabled>+ Add Device</button>{% endif %}
+    </div>
+    <div class="fleet-context"><p id="filterNote">SNMP readings show their monitoring state. Open Actions to manage the device and its sensors.</p><div><span><strong data-summary="online">{{ online_devices|default_if_none:"—" }}</strong> API tests passed</span><span><strong data-summary="raw">{{ raw_enabled_devices|default_if_none:"—" }}</strong> RAW enabled</span><span class="sr-only" data-summary="offline">{{ offline_devices|default_if_none:"—" }}</span></div></div>
+    <div class="noc-inventory fleet-inventory" data-view="matrix" id="inventoryView" data-sensor-fleet-url="{% url 'device_sensor_data' %}" role="region" aria-label="Device inventory">
+    <table class="devices-table"><caption class="sr-only">Device name, IP Address, CPU, Interface Traffic and uptime</caption>
+    <thead><tr><th scope="col">Device Name</th><th scope="col">IP Address</th><th scope="col">CPU</th><th scope="col">Interface Traffic</th><th scope="col">Uptime</th><th scope="col">Actions</th></tr></thead>
+    <tbody id="deviceRows">{% for device in device_rows %}
+    <tr data-device-id="{{ device.id }}" data-device-row data-device-type="{{ device.device_type }}" data-device-status="{{ device.status_filter }}" data-connection-status="{{ device.connection_status }}" data-raw-status="{{ device.raw_status }}">
+        <td class="fleet-identity" data-label="Device Name"><div class="fleet-device-heading"><span class="fleet-router-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 11h.01M7 14h.01M11 11h6M7 3v4m10-4v4"/></svg></span><strong class="noc-name" data-cell="name">{{ device.name }}</strong></div></td>
+        <td class="fleet-address" data-label="IP Address"><strong class="fleet-management-ip" data-cell="management_ip">{{ device.management_ip }}</strong></td>
+        <td class="fleet-cpu" data-label="CPU"><div data-device-sensor="cpu">{% if device.snmp_cpu %}{% include 'monitor/components/fleet_sensor_reading.html' with sensor=device.snmp_cpu metric='cpu' %}{% endif %}</div><div data-api-cpu{% if device.snmp_cpu %} hidden{% endif %}><strong class="fleet-sensor-value" data-cell="cpu">{{ device.cpu_display }}</strong><small>API snapshot</small></div></td>
+        <td class="fleet-traffic" data-label="Interface Traffic"><div data-device-sensor="traffic">{% for sensor in device.snmp_traffic %}{% include 'monitor/components/fleet_sensor_reading.html' with sensor=sensor metric='traffic' %}{% empty %}<strong class="fleet-sensor-value">—</strong><small>Bandwidth sensor not added</small>{% endfor %}</div></td>
+        <td class="fleet-uptime" data-label="Uptime"><div data-device-sensor="uptime">{% if device.snmp_uptime %}{% include 'monitor/components/fleet_sensor_reading.html' with sensor=device.snmp_uptime metric='uptime' %}{% else %}<strong class="fleet-sensor-value">—</strong><small>Uptime sensor not added</small>{% endif %}</div></td>
+        <td class="noc-card-actions fleet-actions" data-label="Actions">{% include 'monitor/components/device_actions.html' %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="inventory-empty"><div class="device-empty-content"><h3>{% if inventory_unavailable %}Inventory is temporarily unavailable{% else %}Your fleet starts here{% endif %}</h3><p>{% if inventory_unavailable %}Please try again shortly.{% else %}Add your first device, then select sensors to start monitoring.{% endif %}</p>{% if can_add_devices %}<button class="secondary-button" type="button" data-open-device disabled>Add Device</button>{% endif %}</div></td></tr>{% endfor %}
+    <tr id="noMatchingDevices" hidden><td colspan="6" class="inventory-empty">No matching devices. Try another search or filter.</td></tr>
+    </tbody></table></div>
+    <div class="fleet-panel-footer"><span>Read-only sensor telemetry</span><span>Actions opens device details and sensor controls</span></div>
+</section>
+<noscript><p class="preview-notice">Enable JavaScript to open device dialogs and refresh sensor readings.</p></noscript>

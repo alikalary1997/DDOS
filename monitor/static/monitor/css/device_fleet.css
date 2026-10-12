@@ -1,0 +1,96 @@
+/* Device fleet: source-aware telemetry with shared light and dark theme tokens. */
+.fleet-page .fleet-intro{align-items:center;margin:8px 0 28px;gap:24px}
+.fleet-page .fleet-intro h2{font-size:30px;font-weight:750;letter-spacing:-1px;margin:6px 0 8px}
+.fleet-page .fleet-intro .muted{font-size:13px;line-height:1.6}
+.fleet-intro-note{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:11px}
+.fleet-intro-note svg{width:38px;height:38px;padding:8px;stroke:var(--blue);stroke-width:1.7;fill:none;background:var(--ns-info-surface-1);border:1px solid var(--ns-info-border-5);border-radius:10px}
+.fleet-intro-note strong{display:block;color:var(--text);font-size:12px;margin-top:4px}
+.fleet-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:26px}
+.fleet-stat{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:13px;padding:19px 21px;background:linear-gradient(120deg,var(--surface) 65%,var(--surface-2));box-shadow:0 3px 14px var(--ns-shadow-soft-1)}
+.fleet-stat-top{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:12px;font-weight:550;margin-bottom:12px}
+.fleet-stat-top svg{width:28px;height:28px;padding:5px;stroke:var(--blue);stroke-width:1.5;fill:none;background:var(--ns-info-surface-1);border-radius:7px}
+.fleet-stat>strong{display:block;font-size:32px;line-height:1.15;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums;margin-bottom:8px}
+.fleet-stat>span{font-size:11px;color:var(--muted)}
+.fleet-stat-active .fleet-stat-top svg{color:var(--green);stroke:currentColor;background:var(--ns-success-surface-1)}
+.fleet-stat-attention .fleet-stat-top svg{color:var(--amber);stroke:currentColor;background:var(--ns-warning-surface-1)}
+.fleet-page .fleet-panel{padding:0;border-radius:14px;background:var(--surface);overflow:visible;box-shadow:0 4px 22px var(--ns-shadow-soft-1)}
+.fleet-page .fleet-panel .panel-heading{padding:22px 22px 18px;margin:0;gap:18px;align-items:center}
+.fleet-page .fleet-panel .panel-heading .eyebrow{margin:0 0 6px;font-size:9px;letter-spacing:1.3px}
+.fleet-page .fleet-panel .panel-heading h2{font-size:20px;letter-spacing:-.5px}
+.fleet-page .fleet-panel .device-toolbar{margin:0 22px;padding:18px 0 0;grid-template-columns:minmax(180px,1fr) 165px 165px auto;gap:12px}
+.fleet-page .fleet-panel .device-toolbar label{font-size:10px}
+.fleet-page .fleet-panel .device-toolbar :is(input,select){font-size:12px;padding:10px 11px;height:39px;background:var(--surface-2);border-color:var(--border)}
+.fleet-page .fleet-panel .device-toolbar .primary-button{height:39px;white-space:nowrap}
+.fleet-context{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:15px 22px 20px;font-size:10px;color:var(--muted)}
+.fleet-context p{margin:0;line-height:1.5}.fleet-context>div{display:flex;gap:14px}.fleet-context strong{color:var(--text);font-weight:650}
+.fleet-page .fleet-inventory .devices-table{width:100%;table-layout:fixed;min-width:0;border-collapse:collapse}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(n){width:auto;display:table-cell;font:600 10px/1.5 Inter,"Segoe UI",sans-serif;letter-spacing:.4px;text-transform:uppercase;white-space:normal;padding:14px 12px;background:var(--surface-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);color:var(--muted)}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(1){width:19%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(2){width:17%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(3){width:12%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(4){width:23%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(5){width:19%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(6){width:10%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table td:nth-child(n){display:table-cell;padding:23px 12px;border-bottom:1px solid var(--border);vertical-align:top;white-space:normal;overflow-wrap:anywhere;background:transparent;font-size:12px}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table :is(td,th):first-child{padding-left:22px}
+.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]:hover td{background:var(--surface-2)}
+.fleet-device-heading{display:flex;gap:10px;align-items:center;min-width:0}
+.fleet-device-heading>div{min-width:0}
+.fleet-router-icon{display:grid;place-items:center;flex:none;width:34px;height:34px;background:var(--ns-info-surface-1);color:var(--blue);border:1px solid var(--ns-info-border-5);border-radius:9px}
+.fleet-router-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5}
+.fleet-page .fleet-inventory .noc-name{font:750 15px/1.35 Inter,"Segoe UI",sans-serif;letter-spacing:-.2px;cursor:default}
+.fleet-management-ip{display:block;margin-top:5px;font:11px/1.5 ui-monospace,Consolas,monospace;color:var(--muted)}
+.fleet-page .fleet-address .fleet-management-ip{font-size:13px;font-weight:600;color:var(--text);margin-top:5px}
+.fleet-identity-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:14px;color:var(--muted);font-size:9px}
+.fleet-identity-tags>span{border:1px solid var(--border);border-radius:4px;padding:3px 5px;line-height:1.4}
+.fleet-page .fleet-inventory .fleet-identity-tags strong{font-size:9px;font-weight:550}
+.fleet-page .fleet-inventory .fleet-system>strong{display:block;font:600 12px/1.6 ui-monospace,Consolas,monospace;color:var(--text)}
+.fleet-page .fleet-inventory small{display:block;color:var(--muted);font-size:10px;line-height:1.6;margin-top:5px}
+.fleet-page .fleet-inventory .fleet-system small{font-size:10px;margin-top:9px}
+.fleet-page .fleet-inventory .fleet-sensor-value{display:block;font:650 17px/1.5 ui-monospace,Consolas,monospace;color:var(--text);letter-spacing:-.6px}
+.fleet-page .fleet-inventory .fleet-uptime .fleet-sensor-value{font-size:13px;line-height:1.7;letter-spacing:0}
+.fleet-page .fleet-inventory .fleet-memory>strong{font:600 12px/1.7 ui-monospace,Consolas,monospace;color:var(--text)}
+.fleet-memory progress{appearance:none;display:block;width:100%;height:4px;border:0;border-radius:4px;overflow:hidden;background:var(--border);margin:10px 0 0;accent-color:var(--blue)}
+.fleet-memory progress::-webkit-progress-bar{background:var(--border)}.fleet-memory progress::-webkit-progress-value{background:var(--blue);border-radius:4px}.fleet-memory progress::-moz-progress-bar{background:var(--blue)}
+.fleet-traffic-sensor+.fleet-traffic-sensor{border-top:1px solid var(--border);margin-top:12px;padding-top:12px}
+.fleet-page .fleet-inventory .fleet-interface-name{font:600 10px/1.5 ui-monospace,Consolas,monospace;display:block;margin-bottom:6px}
+.fleet-traffic-rates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fleet-traffic-interface{display:flex;align-items:center;gap:7px;font:600 10px/1.5 ui-monospace,Consolas,monospace;margin-bottom:9px}
+.fleet-page .fleet-inventory .fleet-traffic-interface small{font-size:9px;margin:0;font-weight:400}
+.fleet-traffic-interface small[data-state=active]{color:var(--green)}
+.fleet-traffic-rate>span{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--blue);font-weight:650}
+.fleet-traffic-rate:nth-child(2)>span{color:var(--green)}
+.fleet-page .fleet-inventory .fleet-traffic-rate small{margin:0;font-size:9px;font-weight:600;color:var(--blue)}
+.fleet-page .fleet-inventory .fleet-traffic-rate:nth-child(2) small{color:var(--green)}
+.fleet-traffic-rate small span{font-weight:400;color:var(--muted);margin-left:2px}
+.fleet-page .fleet-inventory .fleet-traffic-rate .fleet-sensor-value{font-size:15px;letter-spacing:-.4px}
+.fleet-page .fleet-inventory .fleet-reading-state{font-size:9px;color:var(--muted)}
+.fleet-page .fleet-inventory .fleet-reading-state[data-state=active]{color:var(--green)}
+.fleet-page .fleet-inventory .fleet-reading-state[data-state=attention]{color:var(--amber)}
+.fleet-health-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;line-height:1.5;color:var(--muted);background:var(--surface-2)}
+.fleet-health-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.fleet-health-badge[data-state=active]{color:var(--green);background:var(--ns-success-surface-1);border-color:var(--ns-success-border-1)}
+.fleet-health-badge[data-state=attention]{color:var(--amber);background:var(--ns-warning-surface-1)}
+.fleet-api-health{margin-top:12px}.fleet-page .fleet-inventory .fleet-api-health>strong{font-size:9px;display:block;margin:2px 0}.fleet-api-health time{display:block;font-size:9px;color:var(--muted);line-height:1.5}
+.fleet-sensor-error{margin-top:6px;font-size:10px;color:var(--red)}.fleet-sensor-error summary{cursor:pointer}.fleet-sensor-error p{font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.fleet-page .fleet-inventory .noc-card-actions{grid-row:auto;display:table-cell;margin:0}
+.fleet-page .fleet-inventory .noc-inspect{width:100%;justify-content:space-between;font-size:11px;padding:7px 9px!important;margin:0 0 6px!important;border:1px solid var(--border)!important;border-radius:6px;background:var(--surface)!important}
+.fleet-page .fleet-inventory .device-actions summary{font-size:10px;padding:6px 8px;background:var(--surface-2)}
+.fleet-panel-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;color:var(--muted);font-size:10px;line-height:1.6}
+.fleet-page .fleet-inventory[data-view=grid] tbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:0 18px 18px}
+.fleet-page .fleet-inventory[data-view=grid] tr[data-device-row]{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:20px;border-radius:12px}
+.fleet-page .fleet-inventory[data-view=grid] tr[data-device-row] td{display:block;padding:0;grid-column:auto;grid-row:auto;min-width:0}
+.fleet-page .fleet-inventory[data-view=grid] tr[data-device-row] .fleet-identity{grid-column:1/-1;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.fleet-page .fleet-inventory[data-view=grid] td[data-label]::before{content:attr(data-label);display:block;font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.fleet-page .fleet-inventory[data-view=grid] .fleet-identity::before{display:none}
+@media(max-width:1250px){
+ .fleet-page .fleet-panel .device-toolbar{grid-template-columns:minmax(140px,1fr) 145px 145px auto}
+ .fleet-page .fleet-inventory[data-view=matrix] .devices-table,.fleet-page .fleet-inventory[data-view=matrix] tbody{display:block}
+ .fleet-page .fleet-inventory[data-view=matrix] thead{display:none}
+ .fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:22px;border-bottom:1px solid var(--border)}
+ .fleet-page .fleet-inventory[data-view=matrix] .devices-table tr[data-device-row] td:nth-child(n){display:block;width:auto;padding:0;border:0}
+ .fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row] td[data-label]::before{content:attr(data-label);display:block;font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:9px}
+ .fleet-intro-note{display:none}
+}
+@media(max-width:950px){.fleet-page .fleet-panel .device-toolbar{grid-template-columns:1fr 1fr}.fleet-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-page .fleet-inventory[data-view=grid] tbody{grid-template-columns:1fr}.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-context>div{flex-wrap:wrap}}
+@media(max-width:520px){.fleet-page .fleet-intro h2{font-size:24px}.fleet-stat{padding:15px}.fleet-stat-top{font-size:11px;gap:8px}.fleet-stat>strong{font-size:28px}.fleet-stat-top svg{width:24px;height:24px;flex:none}.fleet-page .fleet-panel .panel-heading{flex-wrap:wrap;padding:18px}.fleet-page .fleet-panel .device-toolbar{margin:0 16px;gap:10px}.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]{padding:18px 16px;gap:20px 16px}.fleet-router-icon{display:none}.fleet-page .fleet-inventory .noc-name{font-size:15px}.fleet-page .fleet-inventory[data-view=grid] tbody{padding:0 12px 12px}.fleet-summary{gap:10px}.fleet-panel-footer{padding:14px 16px}}

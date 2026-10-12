@@ -1,0 +1,40 @@
+{% extends "monitor/base.html" %}
+{% load static %}
+{% block title %}Traffic Monitor | NetShield{% endblock %}
+{% block body_class %}traffic-page{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{% static 'monitor/css/management.css' %}?v=20261010-theme1">
+<link rel="stylesheet" href="{% static 'monitor/css/traffic_monitor.css' %}?v=20261010-theme1">
+{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/traffic_monitor.js' %}?v=20261009-traffic1" defer></script>{% endblock %}
+{% block footer_note %}Traffic Monitor frontend &middot; telemetry backend pending{% endblock %}
+{% block content %}
+<section class="page-intro"><div><p class="eyebrow">NETWORK VISIBILITY / TRAFFIC MONITOR</p><h2>Traffic Monitor</h2><p class="muted">Interface throughput and public IP packet activity in one workspace.</p></div><span class="phase-badge">FRONTEND PREVIEW</span></section>
+<div class="preview-notice"><span class="notice-mark" aria-hidden="true">i</span><div><strong>Traffic telemetry is not connected yet.</strong><p>Selectors, graphs and controls are design previews. No traffic history is generated and this page does not start, stop or poll the Dashboard monitor.</p></div></div>
+<section class="summary-grid" aria-label="Traffic summary">
+    <article class="summary-card"><div class="card-top"><span class="card-label">Total Inbound Traffic</span><span class="summary-icon blue" aria-hidden="true">&#8595;</span></div><div class="card-value unavailable">&mdash;</div><div class="card-note">No data available</div></article>
+    <article class="summary-card"><div class="card-top"><span class="card-label">Total Outbound Traffic</span><span class="summary-icon violet" aria-hidden="true">&#8593;</span></div><div class="card-value unavailable">&mdash;</div><div class="card-note">No data available</div></article>
+    <article class="summary-card"><div class="card-top"><span class="card-label">Total Packets Per Second</span><span class="summary-icon green" aria-hidden="true">&#8767;</span></div><div class="card-value unavailable">&mdash;</div><div class="card-note">No data available</div></article>
+    <article class="summary-card"><div class="card-top"><span class="card-label">Monitored Interfaces</span><span class="summary-icon amber" aria-hidden="true">&#9635;</span></div><div class="card-value unavailable">&mdash;</div><div class="card-note">No data available</div></article>
+</section>
+<section class="panel traffic-scope-panel" aria-labelledby="trafficScopeTitle">
+    <div class="panel-heading"><div><h2 id="trafficScopeTitle">Monitoring scope</h2><p class="panel-subtitle">Choose the device, interface and address to inspect</p></div><span class="phase-badge">NO TELEMETRY SOURCE</span></div>
+    <div class="traffic-selector-toolbar"><label><span>MikroTik Device</span><select disabled aria-describedby="trafficControlsNotice"><option>No device inventory available</option></select></label><label><span>Interface</span><select disabled aria-describedby="trafficControlsNotice"><option>No interface inventory available</option></select></label><label><span>Public IP</span><select disabled aria-describedby="trafficControlsNotice"><option>No public IP inventory available</option></select></label><button type="button" class="secondary-button" disabled aria-describedby="trafficControlsNotice">Refresh</button></div>
+    <div class="monitoring-control-bar"><div class="monitoring-buttons"><button type="button" class="primary-button" disabled aria-describedby="trafficControlsNotice"><span aria-hidden="true">&#9654;</span> Start Monitoring</button><button type="button" class="secondary-button stop-preview" disabled aria-describedby="trafficControlsNotice"><span aria-hidden="true">&#9632;</span> Stop Monitoring</button></div><div class="traffic-last-update"><span>Last Updated</span><strong>No data available</strong></div></div>
+    <p class="filter-note" id="trafficControlsNotice">Traffic controls are unavailable until the backend is implemented. Existing Dashboard monitoring controls remain independent.</p>
+</section>
+<div class="traffic-graphs">
+    {% include "monitor/components/traffic_graph.html" with graph_id="bandwidth" kind="bandwidth" title="Bandwidth" %}
+    {% include "monitor/components/traffic_graph.html" with graph_id="packets" kind="pps" title="Packets Per Second" %}
+</div>
+<section class="panel interface-panel" aria-labelledby="interfacesTitle">
+    <div class="panel-heading"><div><h2 id="interfacesTitle">Interface monitoring</h2><p class="panel-subtitle">Receive and transmit rates per device interface</p></div><span class="phase-badge">NO DATA AVAILABLE</span></div>
+    <div class="interface-filter-toolbar" role="search" aria-label="Search and filter interfaces"><label class="search-field"><span>Search interfaces</span><input id="interfaceSearch" type="search" placeholder="Search by device or interface" aria-describedby="interfaceFilterNote"></label><label><span>Device filter</span><select id="interfaceDeviceFilter" disabled aria-describedby="interfaceFilterNote"><option value="">All devices</option><option disabled>No device inventory available</option></select></label><label><span>Status filter</span><select id="interfaceStatusFilter" aria-describedby="interfaceFilterNote"><option value="">All statuses</option><option value="online">Online</option><option value="offline">Offline</option><option value="warning">Warning</option></select></label></div>
+    <p class="filter-note" id="interfaceFilterNote">Search and filters will apply when an interface telemetry backend is connected.</p>
+    <div class="table-wrap" role="region" tabindex="0" aria-label="Interface monitoring table"><table class="traffic-table"><caption class="sr-only">Interface receive and transmit bandwidth and packet rates</caption><thead><tr><th scope="col">Device</th><th scope="col">Interface</th><th scope="col">RX Mbps</th><th scope="col">TX Mbps</th><th scope="col">RX PPS</th><th scope="col">TX PPS</th><th scope="col">Status</th></tr></thead><tbody><tr><td colspan="7" class="inventory-empty"><div class="device-empty-content"><span class="device-empty-symbol" aria-hidden="true">&#8644;</span><h3>No monitored interfaces</h3><p id="interfaceEmptyMessage" role="status">No data available. Interface inventory and telemetry are not configured.</p><small>RX/TX metrics require a dedicated interface data source.</small></div></td></tr></tbody></table></div>
+</section>
+<section class="panel public-ip-traffic-panel" aria-labelledby="publicIpTrafficTitle"><div class="panel-heading"><div><h2 id="publicIpTrafficTitle">Public IP traffic</h2><p class="panel-subtitle">Address-level bandwidth and packet-rate monitoring</p></div><a class="traffic-inventory-link" href="{% url 'public_ips' %}">Public IP inventory <span aria-hidden="true">&rarr;</span></a></div>
+    <div class="traffic-source-note"><strong>Separate data sources are required.</strong><p>This panel will connect to MikroTik RAW firewall monitoring data later. RAW packet counters alone do not provide complete interface RX/TX traffic. Bandwidth and traffic rates remain unavailable until a suitable data source is connected.</p></div>
+    <div class="table-wrap" role="region" tabindex="0" aria-label="Public IP traffic table"><table class="traffic-table public-ip-traffic-table"><caption class="sr-only">Public IP bandwidth and total, SYN and UDP packet rates</caption><thead><tr><th scope="col">Public IP</th><th scope="col">Device</th><th scope="col">Bandwidth</th><th scope="col">PPS</th><th scope="col">SYN PPS</th><th scope="col">UDP PPS</th><th scope="col">Monitoring Status</th></tr></thead><tbody><tr><td colspan="7" class="inventory-empty"><div class="device-empty-content"><span class="device-empty-symbol" aria-hidden="true">&#9678;</span><h3>No public IP traffic available</h3><p>No data available. Address inventory and RAW rule telemetry are not connected to this page.</p><small>No firewall counters are presented as interface throughput.</small></div></td></tr></tbody></table></div>
+</section>
+{% endblock %}

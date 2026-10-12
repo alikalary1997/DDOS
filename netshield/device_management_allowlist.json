@@ -1,0 +1,4 @@
+{
+  "allowed_networks": ["0.0.0.0/0", "::/0"],
+  "local_additional_networks": ["172.26.241.0/24"]
+}

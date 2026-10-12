@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07111f">
+    <title>{% block title %}NetShield{% endblock %} | Network Operations Center</title>
+    <script src="{% static 'monitor/js/theme.js' %}?v=20261010-theme1"></script>
+    <link rel="stylesheet" href="{% static 'monitor/css/theme.css' %}?v=20261010-theme1">
+    <link rel="stylesheet" href="{% static 'monitor/css/dashboard.css' %}?v=20261010-theme1">
+    <link rel="stylesheet" href="{% static 'monitor/css/detection.css' %}?v=20261011-detection1">
+    <script src="{% static 'monitor/js/detection_ui.js' %}?v=20261011-detection1" defer></script>
+    {% block styles %}{% endblock %}
+    {% block scripts %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#pageContent">Skip to content</a>
+    <div class="app-shell">
+        {% include "monitor/components/sidebar.html" with active_page=active_page|default:"devices" %}
+        <main class="main-content" id="pageContent">
+            {% include "monitor/components/header.html" with active_page=active_page|default:"devices" %}
+            {% block content %}{% endblock %}
+            <footer class="page-footer"><span>NetShield Network Monitoring</span><span>{% block footer_note %}Device management frontend{% endblock %}</span></footer>
+        </main>
+    </div>
+    {% block dialogs %}{% endblock %}
+</body>
+</html>

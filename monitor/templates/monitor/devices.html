@@ -1,0 +1,52 @@
+{% extends "monitor/base.html" %}
+{% load static %}
+{% block title %}Devices | NetShield{% endblock %}
+{% block body_class %}devices-page fleet-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261012-actions-only">{% endblock %}
+{% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=4-auto-start" defer></script><script src="{% static 'sensors/fleet.js' %}?v=20261012-live-resume" defer></script><script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261012-actions-only" defer></script>{% endblock %}
+{% block content %}{% include "monitor/components/device_fleet.html" %}{% endblock %}
+{% block footer_note %}Device inventory{% endblock %}
+{% block dialogs %}
+{% for device in device_rows %}{% include "monitor/components/device_inspector.html" %}{% endfor %}
+{% if can_add_devices %}
+<dialog id="addDeviceDialog" class="device-dialog" aria-labelledby="addDeviceTitle" aria-describedby="deviceSaveNote" data-has-errors="{{ open_add_device|yesno:'true,false' }}" {% if open_add_device %}open{% endif %}>
+    <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addDeviceTitle">Add Device</h2></div><button class="icon-button" id="closeDeviceDialog" type="button" aria-label="Close Add Device">&times;</button></div>
+    <p class="dialog-description">Add a device connection profile to your inventory.</p>
+    <div class="modal-notice" id="deviceSaveNote"><strong>Save a device profile.</strong> Saving does not test the connection or change router configuration.</div>
+    <form id="addDeviceForm" method="post" action="{% url 'device_add' %}" autocomplete="off">
+        {% csrf_token %}
+        {% if add_device_form.errors %}<div class="modal-notice" role="alert"><strong>Device was not saved.</strong><p>Correct the errors below and enter the password again.</p>{{ add_device_form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+            {% for field in add_device_form %}
+            <label for="{{ field.id_for_label }}"{% if field.name == 'description' %} class="full-width"{% endif %}>
+                <span>{{ field.label }}</span>{{ field }}
+                {% if field.name == 'api_port' %}<small>Use the configured port. API-SSL commonly uses 8729; API uses 8728.</small>{% endif %}
+                {% if field.name == 'use_ssl' %}<small>Enable API-SSL when configured on your device.</small>{% endif %}
+                {% if field.errors %}<span role="alert">{{ field.errors }}</span>{% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        <div class="dialog-footer"><span>Credentials are stored encrypted.</span><button id="cancelDeviceDialog" class="secondary-button" type="button">Cancel</button><button class="primary-button" type="submit" id="saveDeviceButton">Save</button></div>
+    </form>
+</dialog>
+{% endif %}
+
+{% if edit_device and can_add_devices %}
+<dialog id="editDeviceDialog" class="device-dialog" aria-labelledby="editDeviceTitle" data-device-management-dialog open>
+<div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="editDeviceTitle">Edit Device</h2></div><button class="icon-button" type="button" data-close-management aria-label="Close Edit Device">&times;</button></div>
+<p class="modal-notice">Database changes only. Leave the password blank to keep it. Connection or interface changes clear old connection results and require provisioning review for assigned IPs. Existing router rules are retained.</p>
+<form method="post" action="{% url 'device_edit' edit_device.id %}" autocomplete="off" data-device-edit-form>{% csrf_token %}
+<div data-management-errors role="alert">{% if edit_device_form.errors %}<strong>Device was not saved.</strong>{{ edit_device_form.non_field_errors }}{% endif %}</div>
+<div class="form-grid">{% for field in edit_device_form %}<label for="{{ field.id_for_label }}"{% if field.name == 'description' %} class="full-width"{% endif %}><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<span role="alert">{{ field.errors }}</span>{% endif %}</label>{% endfor %}</div>
+<div class="dialog-footer"><a class="secondary-button" href="{% url 'devices' %}">Cancel</a><button class="primary-button" type="submit">Save changes</button></div>
+</form></dialog>{% endif %}
+{% if delete_device and can_add_devices %}
+<dialog id="deleteDeviceDialog" class="device-dialog" aria-labelledby="deleteDeviceTitle" data-device-management-dialog open>
+<div class="dialog-heading"><h2 id="deleteDeviceTitle">Delete Device</h2><button class="icon-button" type="button" data-close-management aria-label="Close Delete Device">&times;</button></div>
+<p>Delete <strong>{{ delete_device.name }}</strong> from NetShield?</p><p><strong data-assigned-count>{{ assigned_ip_count }}</strong> assigned public IP{{ assigned_ip_count|pluralize }}.</p>
+<p class="modal-notice"><strong>Permanent deletion:</strong> This device and all {{ assigned_ip_count }} public IP records assigned to it will be permanently deleted from NetShield. Their active polling state and cached counters will be removed. Unrelated devices and IPs will remain.</p>
+<p class="modal-notice"><strong>Router rules are retained.</strong> RAW monitoring rules may remain on the MikroTik. Router cleanup will not be performed. Historical provisioning audits and rule references will be retained for future review.</p>
+<form method="post" action="{% url 'device_delete' delete_device.id %}" data-device-delete-form>{% csrf_token %}<input type="hidden" name="confirm" value="yes"><div data-management-errors role="alert">{{ delete_device_error }}</div><div class="dialog-footer"><a class="secondary-button" href="{% url 'devices' %}">Cancel</a><button class="primary-button" type="submit">Delete Device and Assigned IPs</button></div></form>
+</dialog>{% endif %}
+{% endblock %}
