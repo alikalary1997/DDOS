@@ -81,8 +81,7 @@ def poll_device(device_id, calculator, *, scope=None):
         return []
     from .monitoring_runtime import live_run
     run = live_run()
-    if run and (scope is None or (device_id, scope.assignment_id, scope.address) !=
-                (run.device_id_snapshot, run.assignment_id_snapshot, run.address)):
+    if run and (scope is None or device_id != scope.device_id or not scope.matches(run)):
         return []
     try:
         # Read assignments and persist success/error samples under the same lock
@@ -100,14 +99,14 @@ def _poll_locked_device(device_id, calculator, *, scope=None):
         from .monitoring_scope import MonitoringScopeError
         if device_id != scope.device_id:
             raise MonitoringScopeError("Device does not match the monitoring scope.")
-        target = scope.validate()
-        device = target.device
+        targets = scope.targets()
+        device = targets[0].device
     else:
         device = Device.objects.filter(pk=device_id).first()
     if device is None:
         calculator.clear_device(device_id)
         return []
-    ips = [target] if scope is not None else list(PublicIP.objects.filter(
+    ips = targets if scope is not None else list(PublicIP.objects.filter(
         device_id=device_id, monitoring_enabled=True, provisioning_status="verified"))
     if not ips:
         calculator.clear_device(device_id)
@@ -184,7 +183,7 @@ def cached_rows():
     rows = {}
     now = timezone.now()
     freshness = sample_freshness_seconds()
-    from .monitoring_runtime import live_run
+    from .monitoring_runtime import covers, live_run
     run = live_run()
     enabled = polling_enabled()
     profiles = {ip["id"]: ip for ip in PublicIP.objects.values(
@@ -204,7 +203,7 @@ def cached_rows():
             max_age = max(freshness, sample_interval + 3) if sample_interval in POLLING_INTERVALS else freshness
             fresh = (
                 enabled and profile["monitoring_enabled"] and profile["provisioning_status"] == "verified"
-                and (run is None or run.assignment_id_snapshot == item["id"])
+                and (run is None or covers(run, item["id"]))
                 and version == item.get("profile_version") and attempted and timezone.is_aware(attempted)
                 and 0 <= (now - attempted).total_seconds() <= max_age
             )

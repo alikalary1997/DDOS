@@ -30,7 +30,7 @@ def start_monitoring(request):
     if live_run():
         return JsonResponse(dashboard_data(True))
     if not polling_enabled():
-        return JsonResponse({"monitoring": False, "error": "Open Public IP Monitoring and click Start Monitoring on the address you want to monitor."}, status=409)
+        return JsonResponse({"monitoring": False, "error": "Open DDoS Detection and click Start monitoring on the device you want to monitor."}, status=409)
     PublicIP.objects.filter(provisioning_status="verified", device__enabled=True, device__device_type="mikrotik").update(
         monitoring_enabled=True, updated_at=timezone.now())
     return JsonResponse(dashboard_data(True))
@@ -77,11 +77,40 @@ def traffic_monitor(request):
 @require_GET
 @never_cache
 def ddos_detection(request):
-    from django.core.paginator import Paginator
-    from .models import DetectionEvent, DetectionPolicy
+    from .services.ddos_overview import overview
     return render(request, "monitor/ddos_detection.html", {
-        "active_page": "ddos_detection", "detection_policy": DetectionPolicy.objects.filter(pk=1).first(),
-        "events": Paginator(DetectionEvent.objects.all(), 25).get_page(request.GET.get("page"))})
+        "active_page": "ddos_detection", "overview": overview(may_add_devices(request.user))})
+
+
+@login_required(login_url="device_login")
+@require_GET
+@never_cache
+def ddos_detection_data(request):
+    from .services.ddos_overview import overview
+    return JsonResponse(overview(may_add_devices(request.user)))
+
+
+@login_required(login_url="device_login")
+@require_POST
+@never_cache
+def ddos_detection_control(request, action, device_id=None):
+    if not may_add_devices(request.user):
+        raise PermissionDenied("Administrator access is required.")
+    if action not in ("start", "stop"):
+        return JsonResponse({"error": "Invalid monitoring action."}, status=400)
+    from django.core.exceptions import ValidationError
+    from django.db import DatabaseError
+    from devices.services.router_lock import RouterBusy
+    from .services.ddos_overview import control, overview
+    try:
+        message = control(action, device_id)
+    except ValidationError as error:
+        return JsonResponse({"error": " ".join(error.messages)}, status=409)
+    except RouterBusy:
+        return JsonResponse({"error": "A monitoring operation is busy. Retry shortly."}, status=409)
+    except DatabaseError:
+        return JsonResponse({"error": "The monitoring preference could not be saved."}, status=500)
+    return JsonResponse({"message": message, "data": overview(True)})
 
 
 def alerts(request):

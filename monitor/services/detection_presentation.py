@@ -3,7 +3,7 @@ from django.utils import timezone
 from monitor.models import DDoSDetectionSettings, DetectionPolicy, DetectionState
 from public_ips.models import PublicIP
 from public_ips.services.monitoring import polling_enabled
-from public_ips.services.monitoring_runtime import live_run
+from public_ips.services.monitoring_runtime import covers, live_run
 from .detection import authorized, configuration_key, profile_key, timestamp
 from .raw_settings import sample_freshness_seconds
 
@@ -22,7 +22,7 @@ class DetectionPresentation:
         at = timestamp(row.get("attempted_at"))
         fresh = at and 0 <= (timezone.now() - at).total_seconds() <= sample_freshness_seconds(row.get("polling_interval"))
         monitored = (ip and ip.device_id and ip.device.enabled and self.polling and ip.monitoring_enabled and ip.provisioning_status == "verified"
-                     and (not self.run or self.run.assignment_id_snapshot == assignment_id))
+                     and (not self.run or covers(self.run, assignment_id)))
         health = "Not Monitored"
         if monitored:
             health = "Stale"

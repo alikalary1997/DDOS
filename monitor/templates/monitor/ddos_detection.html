@@ -1,19 +1,34 @@
 {% extends "monitor/base.html" %}
 {% load static %}
 {% block title %}DDoS Detection{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/management.css' %}?v=20261010-theme1">{% endblock %}
-{% block footer_note %}Detection only ? no automatic mitigation{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/ddos_detection.css' %}?v=20261105-devcards1">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/ddos_detection.js' %}?v=20261105-devcards1" defer></script>{% endblock %}
+{% block footer_note %}Detection only &middot; no automatic mitigation{% endblock %}
 {% block content %}
-<section class="page-intro"><div><p class="eyebrow">NETWORK SECURITY / DDOS DETECTION</p><h2>Detection history</h2><p class="muted">Confirmed incidents from real RAW monitoring samples.</p></div><span class="phase-badge">{% if detection_policy.enabled %}PASSIVE DETECTION ENABLED{% else %}DETECTION DISABLED{% endif %}</span></section>
-<div class="preview-notice"><p>Detection does not block traffic or change router configuration. Missing samples show Unknown on monitoring cards; ongoing incidents remain open until confirmed recovery. Open events without recent observations are unresolved, not proof of a current attack.</p></div>
-<p><a href="{% url 'settings' %}#detectionSettings">Detection thresholds and recovery settings</a> ? <a href="{% url 'public_ips' %}">Public IP Monitoring</a></p>
-<section class="detection-history" aria-label="Detection event history">
-{% for event in events %}<article class="detection-event">
-<div class="panel-heading"><h3>{{ event.address }} ? {{ event.device_name }}</h3><span class="detection-badge" data-state="{{ event.highest_severity|slugify }}">{{ event.highest_severity }}</span></div>
-<p class="muted">{{ event.management_ip }} ? Device #{{ event.device_id_snapshot }} ? Assignment #{{ event.assignment_id_snapshot }}</p>
-<p>Triggering metrics: {% for metric in event.triggering_metrics %}{{ metric.label }} ({{ metric.severity }}){% if not forloop.last %}, {% endif %}{% empty %}?{% endfor %}</p>
-<dl><div><dt>Started</dt><dd>{{ event.started_at|date:"Y-m-d H:i:s T" }}</dd></div><div><dt>Ended</dt><dd>{% if event.ended_at %}{{ event.ended_at|date:"Y-m-d H:i:s T" }}{% else %}Open / recovery unconfirmed{% endif %}</dd></div><div><dt>Last observation</dt><dd>{{ event.last_observed_at|date:"Y-m-d H:i:s T" }}</dd></div><div><dt>Duration (seconds)</dt><dd>{{ event.duration_seconds }}</dd></div><div><dt>Peak Total PPS</dt><dd>{{ event.peak_total_pps|floatformat:2 }}</dd></div><div><dt>Peak Mbps</dt><dd>{{ event.peak_bandwidth_mbps|floatformat:6 }}</dd></div><div><dt>Peak TCP SYN PPS</dt><dd>{{ event.peak_syn_pps|floatformat:2 }}</dd></div><div><dt>Peak UDP PPS</dt><dd>{{ event.peak_udp_pps|floatformat:2 }}</dd></div></dl>
-</article>{% empty %}<div class="panel"><h3>No confirmed incidents</h3><p>No detection events have been recorded.</p></div>{% endfor %}
+<div class="dd-page" id="ddPage" data-data-url="{% url 'ddos_detection_data' %}" data-control-url="{% url 'ddos_detection_all_control' 'start' %}" data-can-control="{{ overview.can_control|yesno:'1,0' }}">
+{% csrf_token %}
+<section class="dd-title">
+    <div><h2>DDoS Detection</h2><p>Start or stop attack monitoring per MikroTik device</p></div>
+    <div class="dd-toolbar">
+        <div class="dd-filters" role="group" aria-label="Filter devices">
+            <button type="button" class="dd-filter is-active" data-filter="all" aria-pressed="true">All <span class="dd-count" data-count="all">0</span></button>
+            <button type="button" class="dd-filter" data-filter="cpu" aria-pressed="false">High CPU</button>
+            <button type="button" class="dd-filter" data-filter="attack" aria-pressed="false">Under attack</button>
+            <button type="button" class="dd-filter" data-filter="unmonitored" aria-pressed="false">Not monitored</button>
+        </div>
+        {% if overview.can_control %}<div class="dd-bulk"><button type="button" class="dd-btn dd-btn-start dd-btn-sm" data-bulk="start">Start all</button><button type="button" class="dd-btn dd-btn-sm" data-bulk="stop">Stop all</button></div>{% endif %}
+    </div>
 </section>
-<nav aria-label="History pages">{% if events.has_previous %}<a href="?page={{ events.previous_page_number }}">Previous</a>{% endif %} Page {{ events.number }} of {{ events.paginator.num_pages }} {% if events.has_next %}<a href="?page={{ events.next_page_number }}">Next</a>{% endif %}</nav>
+<p class="dd-status" id="ddStatus" role="status" aria-live="polite"></p>
+<section class="dd-summary" aria-label="Summary">
+    <article class="dd-card-stat"><span>Devices monitored</span><strong id="sumMonitored">-</strong></article>
+    <article class="dd-card-stat"><span>Not monitored</span><strong id="sumUnmonitored">-</strong></article>
+    <article class="dd-card-stat" data-tone="red"><span>High CPU (above 80%)</span><strong id="sumCpu">-</strong></article>
+    <article class="dd-card-stat" data-tone="red"><span>Devices under attack</span><strong id="sumAttack">-</strong></article>
+    <article class="dd-card-stat"><span>Public IPs protected</span><strong id="sumIps">-</strong></article>
+</section>
+<section class="dd-grid" id="ddGrid" aria-label="MikroTik devices"></section>
+<p class="dd-empty" id="ddEmpty" hidden></p>
+{{ overview|json_script:"ddInitial" }}
+</div>
 {% endblock %}

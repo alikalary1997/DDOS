@@ -70,12 +70,13 @@ class MonitoringUITests(SimpleTestCase):
         self.assertNotIn('Last traffic detected', html)
         self.assertEqual(html.count('data-raw="pps"'), 1)
         self.assertIn('these rates are historical, not live', html)
-        self.assertIn('data-monitor-start>', html)
+        self.assertNotIn('data-monitor-start', html)
 
     def test_existing_actions_and_filters_are_preserved(self):
         html = self.render()
-        for action in ("Retry provisioning", "Edit", "Delete", "Unassign", "Start Monitoring", "Stop Monitoring"):
+        for action in ("Retry provisioning", "Edit", "Delete", "Unassign"):
             self.assertIn(action, html)
+        self.assertNotIn("Start Monitoring", html)
         for field in ("ipSearch", "ipDeviceFilter", "ipStatusFilter"):
             self.assertIn('id="%s"' % field, html)
 

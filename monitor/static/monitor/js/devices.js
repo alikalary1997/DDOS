@@ -73,6 +73,8 @@
     document.querySelectorAll("[data-inspect-device]").forEach(button => {
         button.addEventListener("click", () => document.getElementById("deviceInspector" + button.dataset.inspectDevice)?.showModal());
     });
+    const inspectHash = /^#inspect-(\d+)$/.exec(window.location?.hash || "");
+    if (inspectHash) document.getElementById("deviceInspector" + inspectHash[1])?.showModal();
     document.querySelectorAll("[data-device-inspector]").forEach(inspector => {
         inspector.querySelectorAll("[data-close-inspector]").forEach(button => button.addEventListener("click", () => inspector.close()));
         inspector.addEventListener("close", () => document.querySelector('[data-inspect-device="' + inspector.dataset.deviceInspector + '"]')?.focus());

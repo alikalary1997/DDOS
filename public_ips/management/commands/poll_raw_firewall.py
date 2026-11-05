@@ -5,7 +5,7 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from devices.services.router_lock import RouterBusy, router_lock
-from public_ips.services.monitoring_scope import MonitoringScope, MonitoringScopeError
+from public_ips.services.monitoring_scope import DeviceMonitoringScope, MonitoringScope, MonitoringScopeError
 from public_ips.services.monitoring import RateCalculator, poll_device, polling_enabled
 from monitor.services.raw_settings import polling_interval
 
@@ -30,8 +30,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--device-id", type=int, required=True)
-        parser.add_argument("--assignment-id", type=int, required=True)
-        parser.add_argument("--public-ip", required=True)
+        parser.add_argument("--assignment-id", type=int, default=None)
+        parser.add_argument("--public-ip", default=None)
+        parser.add_argument("--all-device-ips", action="store_true",
+                            help="Monitor every verified public IP on the device (app-managed workers).")
         parser.add_argument("--duration-seconds", type=int, default=None,
                             help="Stop automatically after this many seconds; omit only for approved continuous operation.")
         parser.add_argument("--managed-token", default=None, help="Internal app worker generation.")
@@ -46,9 +48,11 @@ class Command(BaseCommand):
                 token = UUID(token)
             except ValueError:
                 raise CommandError("Invalid worker generation.") from None
-            if not MonitoringRun.objects.filter(pk=1, token=token, active=True,
-                device_id_snapshot=options["device_id"], assignment_id_snapshot=options["assignment_id"],
-                address=options["public_ip"]).exists():
+            matching = MonitoringRun.objects.filter(
+                pk=1, token=token, active=True, device_id_snapshot=options["device_id"])
+            if not options["all_device_ips"]:
+                matching = matching.filter(assignment_id_snapshot=options["assignment_id"], address=options["public_ip"])
+            if not matching.exists():
                 raise CommandError("Worker scope does not match the requested app target.")
         elif MonitoringRun.objects.filter(pk=1, active=True).exists():
             raise CommandError("Monitoring is controlled by the application. Stop it there first.")
@@ -59,12 +63,19 @@ class Command(BaseCommand):
         if duration is not None and duration <= 0:
             raise CommandError("Duration must be a positive number of seconds.")
         try:
-            scope = MonitoringScope(options["device_id"], options["assignment_id"], options["public_ip"])
+            if options["all_device_ips"]:
+                if not token:
+                    raise CommandError("--all-device-ips is only available to the application worker.")
+                scope = DeviceMonitoringScope(options["device_id"])
+            elif options["assignment_id"] is None or not options["public_ip"]:
+                raise CommandError("Provide --assignment-id and --public-ip.")
+            else:
+                scope = MonitoringScope(options["device_id"], options["assignment_id"], options["public_ip"])
             # Singleton across all worker processes on the same NetShield host.
             with router_lock(0):
                 scope.validate()
                 deadline = time.monotonic() + duration if duration is not None else None
-                self.stdout.write(f"Scoped RAW monitoring: device {scope.device_id}, assignment {scope.assignment_id}, IP {scope.address}.")
+                self.stdout.write(f"Scoped RAW monitoring: {scope}.")
                 while polling_enabled():
                     if token:
                         if not requested(token):

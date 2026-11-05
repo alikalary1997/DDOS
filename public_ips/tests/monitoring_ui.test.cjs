@@ -198,8 +198,6 @@ test('metrics update in place and retain the same displayed values when stopped'
         last_update: '2026-10-11T12:30:00Z', last_traffic: {pps: 10, mbps: 0.00224, syn_pps: 0, udp_pps: 10,
         last_update: '2026-10-11T12:29:50Z'}};
     await f.poll(sample);
-    assert.equal(f.start.hidden, true);
-    assert.equal(f.stop.hidden, false);
     const byteField = f.metrics.find(item => item.dataset.raw === 'bytes');
     const synField = f.metrics.find(item => item.dataset.raw === 'syn_pps');
     assert.equal(byteField.textContent, '85,712');
@@ -209,8 +207,6 @@ test('metrics update in place and retain the same displayed values when stopped'
     assert.equal(byteField.textContent, '955,712');
     assert.equal(synField.textContent, '125');
     await f.poll({...next, status: 'Not monitored', monitoring_enabled: false, monitoring_running: false, retained: true});
-    assert.equal(f.start.hidden, false);
-    assert.equal(f.stop.hidden, true);
     assert.equal(f.retained.hidden, false);
     assert.equal(f.metrics[0].textContent, 'Saved Sample');
     assert.equal(byteField.textContent, '955,712');

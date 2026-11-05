@@ -81,6 +81,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # The web app and the background workers share this file. WAL lets readers and one writer
+        # coexist, and a longer timeout stops brief write contention from raising "database is locked".
+        'OPTIONS': {'timeout': 30, 'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;'},
     }
 }
 

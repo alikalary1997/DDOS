@@ -43,7 +43,7 @@ def inventory_context(request, form=None, unavailable=False, edit_form=None, edi
     ))
     from .services.monitoring import cached_rows, polling_enabled
     snapshots = {} if unavailable else cached_rows()
-    from .services.monitoring_runtime import live_run, run_message
+    from .services.monitoring_runtime import covers, live_run, run_message
     from .models import MonitoringRun
     run = None if unavailable else live_run()
     last_run = None if unavailable else MonitoringRun.objects.filter(pk=1).first()
@@ -51,7 +51,7 @@ def inventory_context(request, form=None, unavailable=False, edit_form=None, edi
     detection = None if unavailable else DetectionPresentation()
     for row in rows:
         sample = snapshots.get(row["id"], {}) if row["provisioning_status"] == "verified" else {}
-        row["monitoring_running"] = bool(run and run.assignment_id_snapshot == row["id"])
+        row["monitoring_running"] = bool(run and covers(run, row["id"]))
         row["monitoring_status"] = sample.get("status", "Not monitored")
         row.update(traffic_fields(sample, row["address"]))
         row.update(detection.fields(row["id"], sample))
@@ -201,7 +201,7 @@ def raw_monitoring_data(request):
     from .services.monitoring import cached_rows
     try:
         snapshots = cached_rows()
-        from .services.monitoring_runtime import live_run, run_message
+        from .services.monitoring_runtime import covers, live_run, run_message
         from .models import MonitoringRun
         run = live_run()
         last_run = MonitoringRun.objects.filter(pk=1).first()
@@ -213,7 +213,7 @@ def raw_monitoring_data(request):
             items.append({
                 "id": ip["id"], "status": row.get("status", "Not monitored"),
                 "monitoring_enabled": ip["monitoring_enabled"],
-                "monitoring_running": bool(run and run.assignment_id_snapshot == ip["id"]),
+                "monitoring_running": bool(run and covers(run, ip["id"])),
                 "provisioning_status": ip["provisioning_status"], "provisioning_code": ip["provisioning_code"], "provisioning_message": ip["provisioning_message"],
                 "monitoring_message": run_message(ip["id"], last_run, row.get("message", "")),
                 **traffic_fields(row, ip["address"]),

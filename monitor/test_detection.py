@@ -333,7 +333,8 @@ class DetectionTests(TestCase):
             self.assertEqual(dashboard["ddos_status"], "Under Attack")
             self.assertContains(self.client.get(reverse("public_ips")), "Under Attack")
         history = self.client.get(reverse("ddos_detection"))
-        self.assertContains(history, "TCP SYN PPS")
+        # The page is now a device control view; incident rows are rendered from saved detection state.
+        self.assertContains(history, "Start or stop attack monitoring per MikroTik device")
         self.assertContains(history, "8.8.8.8")
         self.client.logout()
         self.assertEqual(self.client.get(reverse("ddos_detection")).status_code, 302)

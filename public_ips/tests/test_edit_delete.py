@@ -43,8 +43,9 @@ class PublicIPEditDeleteTests(TestCase):
         response = self.client.get(self.edit)
         self.assertContains(response, 'value="8.8.8.8"')
         self.assertContains(response, "Original description")
-        for text in ("ipSearch", "ipDeviceFilter", "ipStatusFilter", "Add Public IP", "Retry provisioning", "Start Monitoring", "Stop Monitoring", "Delete"):
+        for text in ("ipSearch", "ipDeviceFilter", "ipStatusFilter", "Add Public IP", "Retry provisioning", "Delete"):
             self.assertContains(response, text)
+        self.assertNotContains(response, "Start Monitoring")  # monitoring is started from DDoS Detection
         for secret in (self.secret, self.device.encrypted_password, self.device.username, os.environ["NETSHIELD_DEVICE_ENCRYPTION_KEY"]):
             self.assertNotIn(secret, response.content.decode())
 

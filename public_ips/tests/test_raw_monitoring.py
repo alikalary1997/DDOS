@@ -412,7 +412,10 @@ class RAWMonitoringTests(TestCase):
         with patch("public_ips.services.monitoring_runtime.launch") as launch:
             run = start(self.ip.pk)
             self.assertEqual(start(self.ip.pk).token, run.token)
-            other = PublicIP.objects.create(address="1.1.1.1", device=self.device,
+            other_device = Device(name="Other", management_ip="172.26.241.17", username="u",
+                                  incoming_monitoring_interface="uplink")
+            other_device.set_password("p"); other_device.save()
+            other = PublicIP.objects.create(address="1.1.1.1", device=other_device,
                                              provisioning_status="verified", monitoring_enabled=True)
             with self.assertRaises(ValidationError):
                 start(other.pk)
@@ -423,6 +426,36 @@ class RAWMonitoringTests(TestCase):
         self.assertEqual(self.ip.updated_at, version)
         self.assertFalse(MonitoringRun.objects.get().active)
         self.pool.assert_not_called()
+
+    def test_device_start_monitors_all_its_ips_in_one_worker(self):
+        from public_ips.services.monitoring_runtime import start_device, stop, covers
+        from public_ips.models import MonitoringRun
+        from django.core.management import call_command
+        import io
+        second = PublicIP.objects.create(address="1.1.1.1", device=self.device, provisioning_status="verified")
+        self.rows += [dict(row, id="*" + str(i + 4), packets="100", bytes="1000")
+                      for i, row in enumerate(expected_rules(second.address, "uplink"))]
+        with patch("public_ips.services.monitoring_runtime.launch") as launch:
+            run = start_device(self.device.pk)
+            self.assertEqual(start_device(self.device.pk).token, run.token)
+            launch.assert_called_once()
+        self.assertTrue(covers(run, self.ip.pk) and covers(run, second.pk))
+        cycles = []
+        def wait(started, deadline, managed_token):
+            cycles.append(started)
+            if len(cycles) == 1:
+                for row in self.rows:
+                    row.update(packets="200", bytes="2000")
+            else:
+                stop([self.ip.pk, second.pk])
+        with patch("public_ips.management.commands.poll_raw_firewall.wait_for_next_cycle", side_effect=wait),              patch("public_ips.services.monitoring.POLLING_RELEASED", False),              patch("public_ips.services.monitoring.time.monotonic", side_effect=[10, 20, 30, 40]):
+            call_command("poll_raw_firewall", device_id=self.device.pk, all_device_ips=True,
+                         managed_token=str(run.token), stdout=io.StringIO())
+        rows = cached_rows()
+        for ip in (self.ip, second):
+            self.assertEqual(rows[ip.pk]["packets"], 200)
+        self.assertEqual(self.pool.call_count, 2)  # one router session per cycle for both IPs
+        self.assertFalse(MonitoringRun.objects.get().active)
 
     def test_app_post_start_launches_worker_and_reader_cannot_start(self):
         from public_ips.models import MonitoringRun

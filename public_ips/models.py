@@ -82,12 +82,14 @@ class FirewallSample(models.Model):
 
 
 class MonitoringRun(models.Model):
-    """Administrator-controlled single worker, pinned to one assignment."""
+    """Administrator-controlled single worker, pinned to one device and all of its verified assignments."""
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
     token = models.UUIDField()
     active = models.BooleanField(default=False)
     device_id_snapshot = models.PositiveBigIntegerField()
     assignment_id_snapshot = models.PositiveBigIntegerField()
+    # Every assignment on the device that this run covers (assignment_id_snapshot is the first one).
+    assignment_ids = models.JSONField(default=list, blank=True)
     address = models.GenericIPAddressField(protocol="IPv4")
     started_at = models.DateTimeField()
     heartbeat_at = models.DateTimeField(null=True)

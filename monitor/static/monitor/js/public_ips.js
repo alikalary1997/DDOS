@@ -253,10 +253,6 @@
                     if (monitoringMessage) monitoringMessage.textContent = sample.monitoring_message || '';
                     const retainedNote = row.querySelector('[data-retained-note]');
                     if (retainedNote) retainedNote.hidden = !sample.retained;
-                    const start = row.querySelector('[data-monitor-start]');
-                    const stop = row.querySelector('[data-monitor-stop]');
-                    if (start) start.hidden = sample.monitoring_running === true;
-                    if (stop) stop.hidden = sample.monitoring_running !== true;
                     const label = row.querySelector("[data-provisioning-label]");
                     const message = row.querySelector("[data-provisioning-message]");
                     if (label) {
