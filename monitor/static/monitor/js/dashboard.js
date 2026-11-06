@@ -111,7 +111,7 @@
             const row=table.insertRow(), id=cell(row,"Device"); id.append(link(device.name,"/devices/"),element("small",device.management_ip,"mono"));
             const cpu=cell(row,"CPU");
             if(device.cpu_state==="ok" && numeric(device.cpu)) { const pct=Math.min(100,Math.round(device.cpu)), meter=element("span",undefined,"cpu-meter"), bar=element("span",undefined,"cpu-bar"), fill=element("i");
-                fill.style.width=pct+"%"; fill.dataset.level=pct>=90?"high":pct>=70?"warn":"ok"; bar.append(fill); meter.append(bar,element("span",pct+"%","mono")); cpu.append(meter); }
+                fill.style.width=pct+"%"; fill.dataset.level=pct>=90?"high":pct>=70?"warn":"ok"; bar.append(fill); const level=pct>=90?"high":pct>=70?"warn":"ok", pctText=element("span",pct+"%","mono cpu-pct"); pctText.dataset.level=level; meter.append(bar,pctText); cpu.append(meter); }
             else cpu.append(element("span",device.cpu_state==="stale"?"Stale":"No sensor","muted-value"));
             const up=cell(row,"Uptime"); up.className="mono"; if(device.uptime_text) up.textContent=device.uptime_text; else up.append(element("span","No sensor / stale","muted-value"));
             const nics=cell(row,"Interface Traffic");
@@ -120,8 +120,8 @@
                 const line=element("div",undefined,"nic-row"); line.append(element("span",nic.name,"nic-name mono"));
                 if(numeric(nic.in_mbps)&&numeric(nic.out_mbps)) {
                     const i=element("span",undefined,"nic-rate in"), o=element("span",undefined,"nic-rate out");
-                    i.append(element("i","In"),element("b",number(nic.in_mbps,3),"mono"),document.createTextNode(" Mbps"));
-                    o.append(element("i","Out"),element("b",number(nic.out_mbps,3),"mono"),document.createTextNode(" Mbps"));
+                    i.append(element("i","In"),element("b",number(nic.in_mbps,3),"mono"),element("span"," Mbps"));
+                    o.append(element("i","Out"),element("b",number(nic.out_mbps,3),"mono"),element("span"," Mbps"));
                     line.append(i,o);
                 } else line.append(element("span","No fresh sample","muted-value"));
                 nics.append(line);
@@ -129,7 +129,11 @@
             const pill=element("span",labels[device.status3]||"NO DATA","status-pill"); pill.dataset.state=device.status3||"no_data"; cell(row,"Status").append(pill);
         });
         const c=(data.overview||{}).device_status_counts||{};
-        text("deviceStatusCounts",(c.online||0)+" online \u00b7 "+(c.warning||0)+" warning \u00b7 "+(c.attack||0)+" attack"+(c.no_data?" \u00b7 "+c.no_data+" no data":""));
+        const legend=byId("deviceStatusCounts"); legend.replaceChildren();
+        [["online","online"],["warning","warning"],["attack","attack"],["no_data","no data"]].forEach(([key,label])=>{
+            if(key==="no_data" && !c.no_data) return;
+            const chip=element("span"); chip.dataset.state=key; chip.append(element("i"),element("span",(c[key]||0)+" "+label)); legend.append(chip);
+        });
     }
     function renderEvents() {
         const root=byId("recentEvents"); root.replaceChildren();

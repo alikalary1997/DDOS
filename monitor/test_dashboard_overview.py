@@ -96,7 +96,7 @@ class DashboardOverviewTests(TestCase):
         with patch("subprocess.Popen") as launch:
             response = self.client.get("/")
             self.assertEqual(response.status_code, 200)
-            for label in ("DDoS Detection Center", "MikroTik Devices", "Public IP Traffic", "Recent detection events",
+            for label in ("DDoS Detection Center", "MikroTik Devices", "Public IP Traffic", "Recent Alerts",
                           "System &amp; monitoring", "overview.css", "theme.js", "dashboardSearch"):
                 self.assertContains(response, label)
             for label in ("Flush Flowspec", "Scrubbing Active", "Stop Monitoring", "SYN Flood", "RADIUS"):
