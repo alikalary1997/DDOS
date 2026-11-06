@@ -88,17 +88,19 @@
         });
     }
     function renderIncidents(data) {
-        const table=byId("incidentsTable"); table.replaceChildren();
+        const list=byId("incidentsTable"); list.replaceChildren();
         const incidents=(data.incidents || []).filter(item=>["Warning","Under Attack"].includes(liveStatus(item)));
-        if(!incidents.length) empty(table,5,"No active detections","Only fresh, confirmed Warning and Under Attack samples appear here.");
+        if(!incidents.length) list.append(emptyCard("No active detections","Only fresh, confirmed Warning and Under Attack samples appear here."));
         incidents.forEach(item=>{
-            const row=table.insertRow(); row.dataset.state=statuses[item.ddos_status] || "unknown";
-            const target=cell(row,"Target Public IP"); target.append(link(item.address,item.inspect_url,"mono"),element("small",item.device_name));
-            cell(row,"Triggering Metrics").textContent=metrics(item.ddos_metrics) || "Threshold crossing";
-            const traffic=cell(row,"Current Traffic"); traffic.className="mono"; traffic.append(element("span",number(item.mbps,6)+" Mbps"),element("small",number(item.pps)+" PPS"));
-            const started=cell(row,"Started / Elapsed"); started.className="mono"; started.append(element("span",time(item.started_at)),element("small",duration(item.duration_seconds)));
-            cell(row,"Severity").append(badge(item.ddos_status));
+            const card=element("article",undefined,"incident-card"); card.dataset.state=statuses[item.ddos_status] || "unknown";
+            const top=element("div",undefined,"incident-top"); top.append(element("strong",(metrics(item.ddos_metrics) || "Threshold crossing").replaceAll(", "," \u00b7 ")),badge(item.ddos_status));
+            const grid=element("div",undefined,"incident-grid"), target=element("div"), rate=element("div");
+            target.append(element("span","Target"),link(item.address,item.inspect_url,"mono"));
+            rate.append(element("span","Rate"),element("strong",number(item.mbps,6)+" Mbps \u00b7 "+number(item.pps)+" PPS","mono")); grid.append(target,rate);
+            card.append(top,grid,element("small",item.device_name+" \u00b7 "+time(item.started_at)+" \u00b7 "+duration(item.duration_seconds))); list.append(card);
         });
+        const count=byId("incidentCount"); text("incidentCount",incidents.length+" ACTIVE"); count.dataset.count=String(incidents.length);
+        const attacks=byId("kpiAttacks"); if(attacks) attacks.dataset.active=incidents.length?"1":"0";
         byId("incidentPanel").dataset.state=incidents.some(item=>item.ddos_status==="Under Attack") ? "under-attack" : incidents.length ? "warning" : "quiet";
     }
     function renderDevices(data) {
@@ -154,7 +156,7 @@
         Object.entries(data.overview || {}).forEach(([key,value])=>text("overview-"+key,number(value,key==="total_mbps"?6:2)));
         document.querySelectorAll("[data-polling-interval]").forEach(node=>node.textContent=data.polling_interval);
         const system=data.system || {};
-        text("detectionMode",system.detection_enabled?"Passive Detection Enabled":"Detection disabled");
+        text("detectionMode",system.detection_enabled?"Detection engine active \u00b7 passive":"Detection disabled");
         health("healthWorker",system.worker_running?"Running":"No active app worker",system.worker_running);
         health("healthDetection",system.detection_enabled?"Enabled":"Disabled",system.detection_enabled);
         health("healthRouter",system.sampled_devices ? "Receiving data":"No fresh data",system.sampled_devices>0);
@@ -163,7 +165,7 @@
         text("overview-monitored_ips_2",number(ov.monitored_ips,0)); text("overview-total_gbps",numeric(ov.total_gbps)?number(ov.total_gbps,3):"\u2014");
         text("kpi-online_pct",ov.devices_total?Math.round(100*ov.devices_online/ov.devices_total)+"%":"\u2014"); text("kpi-targeted",number(ov.active_detections,0));
         text("kpi-attack_types",(ov.attack_types||[]).length?ov.attack_types.join(", "):"No active attacks");
-        text("kpi-network_status",ov.network_status||"UNKNOWN"); byId("kpi-network_status").dataset.state=(ov.network_status||"unknown").toLowerCase(); text("kpi-network_reason",ov.network_reason||"");
+        text("kpi-network_status",ov.network_status||"UNKNOWN"); byId("kpi-network_status").dataset.state=(ov.network_status||"unknown").toLowerCase(); byId("kpiNetwork").dataset.state=(ov.network_status||"unknown").toLowerCase(); text("kpi-network_reason",ov.network_reason||"");
         renderDevices(data);
         renderIncidents(data); renderIPs(); renderEvents(); renderTraffic(data.traffic_history);
     }
@@ -176,7 +178,7 @@
         ["healthWorker","healthDetection","healthRouter","healthDashboard"].forEach(id=>health(id,"Unknown",false));
         text("detectionMode","Detection status unavailable"); text("ipResults","Current data unavailable"); byId("incidentPanel").dataset.state="unknown";
         ["overview-monitored_ips_2","overview-total_gbps","overview-total_syn_pps","overview-total_udp_pps","kpi-online_pct","kpi-targeted","kpi-attack_types","kpi-network_status","kpi-network_reason"].forEach(id=>text(id,"—"));
-        byId("incidentsTable").replaceChildren(); empty(byId("incidentsTable"),5,"Detection data unavailable");
+        byId("incidentsTable").replaceChildren(); byId("incidentsTable").append(emptyCard("Detection data unavailable")); text("incidentCount","\u2014");
         byId("deviceTable")?.replaceChildren(); empty(byId("deviceTable"),5,"Device data unavailable");
         renderTraffic(null); renderIPs(); renderEvents();
     }
