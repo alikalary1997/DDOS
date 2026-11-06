@@ -278,3 +278,9 @@
 .overview-row-split .overview-event p,.overview-row-split .overview-event>small{line-height:1.5}
 .overview-row-split .overview-events{max-height:460px}
 .overview-row-split .overview-panel-heading{padding:18px 20px}
+
+/* clear alerts */
+#alertsClear{padding:5px 12px;font-size:12px;margin-left:8px}
+.overview-row-split .overview-panel-heading .overview-segments{margin-left:auto}
+.link-button{border:0;background:none;color:var(--blue);font:600 12px "Segoe UI",sans-serif;cursor:pointer;padding:0}
+.link-button[hidden]{display:none}

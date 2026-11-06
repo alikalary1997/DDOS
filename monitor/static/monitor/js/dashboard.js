@@ -5,6 +5,9 @@
     const search = byId("dashboardSearch");
     const refreshButton = byId("dashboardRefresh");
     let reading = false, latest = null, eventFilter = "all";
+    const CLEAR_KEY="netshield.alertsClearedAt";
+    const store=(()=>{ try { return window.localStorage || null; } catch(_) { return null; } })();
+    let clearedAt=Number(store?.getItem(CLEAR_KEY)) || 0;
     const statuses = {Normal:"normal", Warning:"warning", "Under Attack":"under-attack", Unknown:"unknown"};
     const metricLabels = {total_pps:"Total PPS", bandwidth_mbps:"Bandwidth", syn_pps:"TCP SYN PPS", udp_pps:"UDP PPS"};
     const numeric = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -138,8 +141,11 @@
     function renderEvents() {
         const root=byId("recentEvents"); root.replaceChildren();
         if(!latest) { root.append(element("div","Event history unavailable","overview-empty")); return; }
-        const items=(latest.recent_events || []).filter(item=>eventFilter==="all" || item.severity===eventFilter);
-        if(!items.length) root.append(element("div",eventFilter==="all" ? "No detection events recorded" : "No attack events in the latest incidents","overview-empty"));
+        const stamp=item=>Math.max(Date.parse(item.last_observed_at)||0,Date.parse(item.ended_at)||0,Date.parse(item.started_at)||0);
+        const visible=(latest.recent_events || []).filter(item=>!clearedAt || item.status==="Ongoing" || stamp(item)>clearedAt);
+        const restore=byId("alertsRestore"); if(restore) restore.hidden=!clearedAt;
+        const items=visible.filter(item=>eventFilter==="all" || item.severity===eventFilter);
+        if(!items.length) root.append(element("div",eventFilter==="all" ? (clearedAt ? "No alerts since you cleared the list" : "No detection events recorded") : "No attack events in the latest incidents","overview-empty"));
         items.forEach(item=>{
             const article=element("article",undefined,"overview-event"); article.dataset.state=item.status==="Recovered" ? "recovered" : statuses[item.severity] || "unknown";
             const heading=element("div"); const stamp=element("time",time(item.started_at)); if(item.started_at) stamp.dateTime=item.started_at;
@@ -203,6 +209,8 @@
         document.querySelectorAll("[data-event-filter]").forEach(item=>item.setAttribute("aria-pressed",String(item===button)));
         renderEvents();
     }));
+    byId("alertsClear")?.addEventListener("click",()=>{ clearedAt=Date.now(); try { store?.setItem(CLEAR_KEY,String(clearedAt)); } catch(_) {} renderEvents(); });
+    byId("alertsRestore")?.addEventListener("click",()=>{ clearedAt=0; try { store?.removeItem(CLEAR_KEY); } catch(_) {} renderEvents(); });
     refreshButton?.addEventListener("click",refresh);
     refresh(); window.setInterval(refresh,2000);
 })();
