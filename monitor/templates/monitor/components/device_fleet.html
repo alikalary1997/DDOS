@@ -11,7 +11,7 @@
 </section>
 <div id="connectionFeedback" class="preview-notice" role="status" hidden></div>
 <section class="panel inventory-panel fleet-panel" aria-labelledby="inventoryTitle">
-    <div class="panel-heading"><div><p class="eyebrow">DEVICE INVENTORY</p><h2 id="inventoryTitle">Device Management Fleet</h2></div><div class="noc-view-switch" role="group" aria-label="Inventory view"><button type="button" data-inventory-view="matrix" aria-pressed="true">Fleet Table</button><button type="button" data-inventory-view="grid" aria-pressed="false">Router Grid</button></div></div>
+    <div class="panel-heading"><div><p class="eyebrow">DEVICE INVENTORY</p><h2 id="inventoryTitle">Device Management Fleet</h2></div><div class="noc-view-switch" role="group" aria-label="Inventory view"><button type="button" data-inventory-view="matrix" aria-pressed="false">Fleet Table</button><button type="button" data-inventory-view="grid" aria-pressed="true">Router Grid</button></div></div>
     <div class="device-toolbar" role="search" aria-label="Search and filter devices">
         <label class="search-field"><span>Find a device</span><input type="search" id="deviceSearch" placeholder="Device name or IP address" aria-describedby="filterNote"></label>
         <label><span>Last API test</span><select id="statusFilter"><option value="">All results</option><option value="not_tested">Not Tested</option><option value="online">Last Test Successful</option><option value="offline">Last Test Failed</option><option value="disabled">Disabled</option></select></label>
@@ -20,7 +20,7 @@
         {% if can_add_devices %}<button type="button" class="primary-button" data-open-device disabled>+ Add Device</button>{% endif %}
     </div>
     <div class="fleet-context"><p id="filterNote">SNMP readings show their monitoring state. Open Actions to manage the device and its sensors.</p><div><span><strong data-summary="online">{{ online_devices|default_if_none:"—" }}</strong> API tests passed</span><span><strong data-summary="raw">{{ raw_enabled_devices|default_if_none:"—" }}</strong> RAW enabled</span><span class="sr-only" data-summary="offline">{{ offline_devices|default_if_none:"—" }}</span></div></div>
-    <div class="noc-inventory fleet-inventory" data-view="matrix" id="inventoryView" data-sensor-fleet-url="{% url 'device_sensor_data' %}" role="region" aria-label="Device inventory">
+    <div class="noc-inventory fleet-inventory" data-view="grid" id="inventoryView" data-sensor-fleet-url="{% url 'device_sensor_data' %}" role="region" aria-label="Device inventory">
     <table class="devices-table"><caption class="sr-only">Device name, IP Address, CPU, Interface Traffic and uptime</caption>
     <thead><tr><th scope="col">Device Name</th><th scope="col">IP Address</th><th scope="col">CPU</th><th scope="col">Interface Traffic</th><th scope="col">Uptime</th><th scope="col">Actions</th></tr></thead>
     <tbody id="deviceRows">{% for device in device_rows %}

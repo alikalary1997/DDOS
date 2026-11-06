@@ -50,3 +50,112 @@
 @media(max-width:760px){.overview-page .main-content{padding-left:14px;padding-right:14px}.overview-kpis{grid-template-columns:1fr 1fr;gap:10px}.overview-panel-heading{padding:17px 16px 14px}.overview-table-wrap{margin:0 16px}.overview-heading h2{font-size:14px}.overview-panel-foot{padding:12px 16px}.overview-search{padding:0 16px 12px}.overview-events{padding:0 16px 16px}.overview-health-grid{padding:0 16px 16px}.overview-system-note{padding:0 16px 16px}.overview-page .page-intro h2{font-size:24px}}
 @media(min-width:651px) and (max-width:1000px){.incident-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.incident-table tbody,.incident-table tr{display:block;width:100%}.incident-table tr{padding:10px 0;border-top:1px solid var(--border)}.incident-table td{display:grid;grid-template-columns:130px minmax(0,1fr);gap:3px 12px;width:100%;border:0;padding:5px 0!important}.incident-table td:before{content:attr(data-label);font:11px Consolas,monospace;color:var(--muted)}.incident-table td small{grid-column:2}.incident-table td .detection-badge,.incident-table td>a{justify-self:start}.incident-table td>a{grid-column:2}.incident-table td.overview-empty{display:block;padding:22px 0!important}.incident-table td.overview-empty:before{display:none}}
 @media(max-width:650px){.overview-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.overview-table tbody,.overview-table tr,.overview-table td{display:block;width:100%}.overview-table tr{padding:10px 0;border-top:1px solid var(--border)}.overview-table td{padding:5px 0!important;border:0;display:grid;grid-template-columns:110px minmax(0,1fr);column-gap:10px;font-size:12px}.overview-table td:before{content:attr(data-label);color:var(--muted);font:10px/1.7 Consolas,monospace}.overview-table td small,.overview-table td form{grid-column:2}.overview-table td.overview-empty{display:block;padding:20px 0!important}.overview-table td.overview-empty:before{display:none}.overview-table .detection-badge,.overview-table .overview-chip{justify-self:start}.overview-table td:last-child>a{grid-column:2;justify-self:start}.overview-kpi>strong{font-size:24px}.kpi-label{font-size:10px}.overview-kpi small{font-size:9px}}
+
+/* ---- Dashboard restyle (presentation only). Dark uses the reference palette; light keeps the shared theme tokens. ---- */
+:root:not([data-theme="light"]) .overview-page .main-content{--surface:#10161f;--surface-2:#0c1119;--border:#1a2433;--text:#e8edf4;--muted:#7c8aa0;--blue:#4f8dff;--teal:#5fd4c4;--green:#38c785;--amber:#f5a933;--red:#ff6868;--ov-in:#4f8dff;--ov-out:#5fd4c4;--ov-chip-bg:#0c1119}
+.overview-page .main-content{--teal:#14998a;--ov-in:var(--blue);--ov-out:var(--teal);--ov-chip-bg:var(--surface-2)}
+.overview-page .mono,.overview-page .overview-table .mono,.overview-kpi>strong,.traffic-stats dd,.incident-rates{font-family:Consolas,"Cascadia Mono",monospace}
+.overview-page .main-content{font-size:12px}
+.overview-kpis{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:14px}
+.overview-kpi{padding:14px 16px;border-radius:12px;box-shadow:none}
+.overview-kpi>strong{font-size:26px;margin:8px 0 4px}
+.kpi-label{flex-direction:row-reverse;justify-content:space-between;font-size:11px}
+.overview-panel{border-radius:12px;box-shadow:none}
+.overview-panel-heading{padding:14px 16px 12px}
+.overview-heading h2{font-size:13px}.overview-icon-box{width:30px;height:30px;border-radius:8px}
+.overview-icon-box .overview-icon{width:16px;height:16px}
+.overview-panel-foot{padding:10px 16px;background:transparent}
+.overview-panel-note{padding:0 16px 10px;color:var(--muted);font-size:10px}
+.overview-row{display:grid;gap:14px;margin-bottom:14px;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.overview-row-top{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.overview-table-wrap{margin:0 16px}
+.overview-table th{font:600 10px "Segoe UI",sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 8px;border-top:0}
+.overview-table td{padding:10px 8px;font-size:12px}
+.overview-table td:first-child,.overview-table th:first-child{padding-left:0}
+.fleet-table th:first-child{width:36%}.fleet-table th:nth-child(2){width:20%}.fleet-table th:nth-child(3){width:24%}.fleet-table th:nth-child(4){width:20%}
+.ip-table th:first-child{width:30%}.ip-table th:nth-child(2){width:15%}.ip-table th:nth-child(3){width:17%}.ip-table th:nth-child(4){width:15%}.ip-table th:nth-child(5){width:23%}
+.overview-search{padding:0 16px 10px}.overview-search input{background:var(--surface-2);border-radius:8px;padding:8px 10px}
+/* pill badges: colored dot + label */
+.detection-badge,.status-pill,.overview-chip[data-state]{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;border-radius:999px;padding:3px 9px;font:600 10px/1.4 "Segoe UI",sans-serif;background:var(--ov-chip-bg);color:var(--muted)}
+.overview-table .detection-badge{font-size:10px;padding:3px 9px}
+.detection-badge:before,.status-pill:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.detection-badge[data-state="normal"],.status-pill[data-state="receiving-samples"]{color:var(--green)}
+.detection-badge[data-state="warning"],.status-pill[data-state="stale"]{color:var(--amber)}
+.detection-badge[data-state="under-attack"],.status-pill[data-state="connection-failed"]{color:var(--red)}
+.status-pill{border-color:currentColor}.detection-badge{border-color:currentColor}
+/* CPU mini bar */
+.cpu-meter{display:flex;align-items:center;gap:8px}.cpu-bar{flex:1;min-width:34px;max-width:70px;height:5px;border-radius:3px;background:var(--border);overflow:hidden}.cpu-bar i{display:block;height:100%;background:var(--blue);border-radius:3px}
+.cpu-bar i[data-level="warn"]{background:var(--amber)}.cpu-bar i[data-level="high"]{background:var(--red)}.muted-value{color:var(--muted)}
+/* incident cards */
+.incident-panel{margin-bottom:0;border-top:1px solid var(--border)}.incident-panel[data-state="under-attack"]{border-color:var(--red)}.incident-panel[data-state="warning"]{border-color:var(--amber)}
+.incident-list{display:grid;gap:10px;padding:0 16px 12px;align-content:start;max-height:360px;overflow-y:auto;scrollbar-width:thin}
+.incident-card{border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:10px;padding:10px 12px;background:var(--surface-2)}
+.incident-card[data-state="under-attack"]{border-left-color:var(--red)}
+.incident-top,.incident-foot,.incident-rates{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.incident-card p{margin:5px 0;color:var(--muted);font-size:11px}.incident-rates{justify-content:flex-start;gap:16px;font-size:13px;font-weight:600}
+.incident-foot small{color:var(--muted);font-size:10px}
+.incident-list .overview-empty{display:flex;flex-direction:column;align-items:center;gap:2px;padding:28px 12px}.incident-list .overview-empty:before{content:"¹3";display:grid;place-items:center;width:30px;height:30px;margin-bottom:8px;border:1px solid var(--green);border-radius:50%;color:var(--green);font-size:15px}
+/* live traffic */
+.traffic-legend{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}.traffic-legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:8px}
+.dot.in{background:var(--ov-in)}.dot.out{background:var(--ov-out)}
+.traffic-chart{padding:0 16px;min-height:220px;display:flex;align-items:center;justify-content:center}
+.traffic-chart svg{width:100%;height:220px;display:block}.traffic-chart .axis{fill:var(--muted);font:10px Consolas,monospace}.traffic-chart .grid{stroke:var(--border);stroke-width:1}
+.traffic-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 16px 14px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.traffic-stats>div{padding:10px 12px;background:var(--surface-2);border-left:1px solid var(--border)}.traffic-stats>div:first-child{border-left:0}
+.traffic-stats dt{color:var(--muted);font-size:10px}.traffic-stats dd{margin:4px 0 0;font-size:15px;font-weight:600}.traffic-stats em{font-style:normal;font-size:10px;color:var(--muted);font-weight:400}
+/* health strip */
+.health-strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 12px}
+.health-strip>div{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.health-strip span{color:var(--muted);font-size:10px}.health-strip strong{display:flex;align-items:center;gap:7px;font:600 11px "Segoe UI",sans-serif}
+.health-strip strong:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.health-strip strong[data-state="active"]{color:var(--green)}.health-strip strong[data-state="active"]:before{background:var(--green)}
+.health-strip strong[data-state="error"]{color:var(--red)}.health-strip strong[data-state="error"]:before{background:var(--red)}
+.overview-system-note{padding:0 16px 14px}
+.overview-events{padding:0 16px 14px}
+@media(max-width:1250px){.overview-row,.overview-row-top{grid-template-columns:1fr}}
+@media(max-width:760px){.traffic-stats{grid-template-columns:1fr 1fr}.traffic-stats>div:nth-child(3){border-left:0}.traffic-stats>div:nth-child(n+3){border-top:1px solid var(--border)}.health-strip{grid-template-columns:1fr}.overview-kpis{grid-template-columns:1fr 1fr}.overview-table-wrap{margin:0 12px}.incident-list,.traffic-chart{padding-left:12px;padding-right:12px}}
+@media(max-width:650px){.cpu-bar{max-width:none}.overview-table td .cpu-meter{grid-column:2}}
+
+/* ---- Reference layout: 4 KPIs, full-width detection table, equal Fleet / Public IP columns. ---- */
+:root:not([data-theme="light"]) body.overview-page{--bg:#081426;background:#081426}
+:root:not([data-theme="light"]) .overview-page .main-content{--surface:#0d1b2b;--surface-2:#102238;--border:#1c344b;--text:#f1f5fc;--muted:#91a8c4;--blue:#318bfa;--green:#10dca0;--amber:#f5a623;--red:#ff4965;--ov-in:#318bfa;--ov-out:#10dca0;--ov-chip-bg:#102238}
+.overview-page .main-content{font-size:14px}
+.overview-page .page-intro h2{font-size:30px}
+.overview-page .muted{font-size:14px}
+.overview-kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.overview-kpi{display:flex;flex-direction:column;min-height:136px;padding:18px 20px}
+.kpi-label{font-size:13px}
+.overview-kpi>strong{font-size:32px;margin:10px 0 6px}
+.overview-kpi em{font-size:14px}.overview-kpi small{font-size:12px;margin-top:auto}
+.overview-panel{border-radius:12px}
+.overview-panel-heading{padding:18px 20px 14px}
+.overview-heading h2{font-size:17px}.overview-heading p{font-size:12px}
+.overview-icon-box{width:36px;height:36px}.overview-icon-box .overview-icon{width:19px;height:19px}
+.overview-button,.overview-inspect{font-size:13px;padding:9px 14px}
+.overview-chip,.overview-chip[data-state]{font-size:12px}
+.overview-table-wrap{margin:0 20px}
+.overview-table th{font-size:11px;padding:10px 10px}
+.overview-table td{font-size:13px;padding:13px 10px}
+.overview-table td:first-child,.overview-table th:first-child{padding-left:0}
+.overview-table small{font-size:12px}
+.overview-table .detection-badge,.detection-badge,.status-pill{font-size:12px}
+.overview-panel-foot{font-size:12px;padding:12px 20px}
+.overview-panel-note{font-size:12px}
+.overview-page .overview-empty{padding:34px 12px;font-size:13px}.overview-empty strong{font-size:15px}.overview-empty span{font-size:13px}
+.incident-panel{margin-bottom:16px}
+.incident-table th:nth-child(1){width:22%}.incident-table th:nth-child(2){width:26%}.incident-table th:nth-child(3){width:20%}.incident-table th:nth-child(4){width:18%}.incident-table th:nth-child(5){width:14%}
+.incident-table td.overview-empty{text-align:center}
+.incident-table td.overview-empty:before{content:"\2713";display:grid;place-items:center;width:34px;height:34px;margin:0 auto 10px;border:1px solid var(--green);border-radius:50%;color:var(--green);font-size:16px}
+.overview-row,.overview-row-top,.overview-row-pair{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.overview-row-pair>.overview-panel{min-height:420px}
+.overview-search{display:flex;gap:10px;padding:0 20px 12px}.overview-search label:first-child{flex:1;min-width:0}
+.overview-search input,.overview-search select{width:100%;height:38px;border:1px solid var(--border);border-radius:8px;padding:0 11px;background:var(--surface-2);color:var(--text);font:13px "Segoe UI",sans-serif}
+.fleet-table th:first-child{width:24%}.fleet-table th:nth-child(2){width:24%}.fleet-table th:nth-child(3){width:18%}.fleet-table th:nth-child(4){width:16%}.fleet-table th:nth-child(5){width:18%}
+.ip-table th:first-child{width:21%}.ip-table th:nth-child(2){width:19%}.ip-table th:nth-child(3){width:13%}.ip-table th:nth-child(4){width:15%}.ip-table th:nth-child(5){width:13%}.ip-table th:nth-child(6){width:19%}
+.status-pill[data-state="not-tested"],.status-pill[data-state="not-monitored"]{color:var(--muted)}
+.status-pill[data-state="disabled"]{color:var(--muted)}
+.overview-row-pair>.overview-panel>.overview-table-wrap{flex:1}
+.health-strip{grid-template-columns:repeat(4,1fr)}.health-strip span{font-size:12px}.health-strip strong{font-size:13px}
+.traffic-stats dt{font-size:12px}.traffic-stats dd{font-size:18px}
+@media(max-width:1250px){.overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-row,.overview-row-top,.overview-row-pair{grid-template-columns:1fr}.overview-row-pair>.overview-panel{min-height:0}.health-strip{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.overview-kpis{grid-template-columns:1fr}.overview-search{flex-wrap:wrap}.overview-page .page-intro h2{font-size:26px}}

@@ -39,12 +39,12 @@ test('dashboard shows real traffic and independent detection health beside the c
     assert.match(content(row.cells[0]),/8.8.8.8/);
     assert.equal(row.cells[0].children[0].href,'/public-ips/#ipAddress1');
     assert.equal(row.querySelector('[data-ddos-status]').textContent,'Warning');
-    assert.equal(row.cells[1].dataset.label,'UDP PPS');
-    assert.equal(row.cells[1].textContent,'0');
-    assert.equal(row.cells[2].dataset.label,'TCP SYN PPS');
-    assert.equal(row.cells[2].textContent,'12');
+    assert.equal(row.cells[2].dataset.label,'UDP PPS');
+    assert.equal(row.cells[2].textContent,'0');
+    assert.equal(row.cells[3].dataset.label,'TCP SYN PPS');
+    assert.equal(row.cells[3].textContent,'12');
     assert.equal(f.get('overview-total_mbps').textContent,'0.001');
-    assert.match(content(f.get('savedDevices')),/Receiving samples/);
+    assert.match(content(f.get('savedDevices')),/Receiving Samples/);
 });
 
 test('search filters IPs/devices and retained or missing data never becomes live zero',async()=>{
@@ -54,8 +54,8 @@ test('search filters IPs/devices and retained or missing data never becomes live
     const data=base();data.rules[0].monitoring_health='Stale';data.rules[0].ddos_status='Normal';
     await f.poll(data);
     assert.equal(f.get('rulesTable').children[0].querySelector('[data-ddos-status]').textContent,'Unknown');
-    assert.equal(f.get('rulesTable').children[0].cells[1].textContent,'\u2014');
     assert.equal(f.get('rulesTable').children[0].cells[2].textContent,'\u2014');
+    assert.equal(f.get('rulesTable').children[0].cells[3].textContent,'\u2014');
 });
 
 test('active incidents, duration, history filters and safe text render from real event payloads',async()=>{

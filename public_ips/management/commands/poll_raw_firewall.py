@@ -85,9 +85,16 @@ class Command(BaseCommand):
                         self.stdout.write("RAW polling stopped: duration limit reached.")
                         break
                     started = time.monotonic()
-                    close_old_connections()
-                    scope.validate()
-                    poll_device(scope.device_id, calculator, scope=scope)
+                    try:
+                        close_old_connections()
+                        scope.validate()
+                        poll_device(scope.device_id, calculator, scope=scope)
+                    except (MonitoringScopeError, RouterBusy, KeyboardInterrupt):
+                        raise
+                    except Exception as error:
+                        # A transient failure (DB lock, network hiccup) must not end monitoring.
+                        # Only the Stop button, or a real scope change, stops the worker.
+                        self.stderr.write(f"Monitoring cycle failed ({type(error).__name__}); retrying next cycle.")
                     if token:
                         heartbeat(token)
                         wait_for_next_cycle(started, deadline=deadline, managed_token=token)

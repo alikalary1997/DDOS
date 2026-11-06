@@ -96,7 +96,7 @@ class DashboardOverviewTests(TestCase):
         with patch("subprocess.Popen") as launch:
             response = self.client.get("/")
             self.assertEqual(response.status_code, 200)
-            for label in ("DDoS detection center", "MikroTik fleet", "Public IP traffic", "Recent detection events",
+            for label in ("DDoS Detection Center", "MikroTik Fleet", "Public IP Traffic", "Recent detection events",
                           "System &amp; monitoring", "overview.css", "theme.js", "dashboardSearch"):
                 self.assertContains(response, label)
             for label in ("Flush Flowspec", "Scrubbing Active", "Stop Monitoring", "SYN Flood", "RADIUS"):
@@ -108,3 +108,37 @@ class DashboardOverviewTests(TestCase):
             self.assertIn("#ipAddress", data["rules"][0]["inspect_url"])
             self.assertIsNone(data["rules"][0]["retry_url"])
             launch.assert_not_called()
+
+
+class SensorHistoryTests(TestCase):
+    def setUp(self):
+        from monitor.services import sensor_history
+        sensor_history._CACHE.update(at=0.0, value=None)
+
+    def test_no_sensor_history_is_reported_honestly_and_never_fabricated(self):
+        from monitor.services.sensor_history import traffic_history, device_cpu
+        history = traffic_history(use_cache=False)
+        self.assertFalse(history["available"])
+        self.assertEqual(history["points"], [])
+        self.assertEqual(device_cpu(), {})
+
+    def test_history_sums_enabled_traffic_sensors_and_cpu_uses_fresh_sample(self):
+        from sensors.models import Sensor, SensorSample
+        from monitor.services.sensor_history import traffic_history, device_cpu
+        with patch.dict(os.environ, {"NETSHIELD_DEVICE_ENCRYPTION_KEY": Fernet.generate_key().decode()}):
+            device = Device(name="R", management_ip="192.0.2.9", username="u"); device.set_password("x"); device.save()
+        now = timezone.now()
+        one = Sensor.objects.create(device=device, kind="traffic", name="a", interface_index=1, enabled=True)
+        two = Sensor.objects.create(device=device, kind="traffic", name="b", interface_index=2, enabled=True)
+        off = Sensor.objects.create(device=device, kind="traffic", name="c", interface_index=3, enabled=False)
+        cpu = Sensor.objects.create(device=device, kind="cpu", name="cpu", enabled=True)
+        for sensor, value in ((one, 1.0), (two, 2.0), (off, 99.0)):
+            SensorSample.objects.create(sensor=sensor, timestamp=now - timedelta(minutes=1), in_mbps=value, out_mbps=value * 2)
+        SensorSample.objects.create(sensor=cpu, timestamp=now - timedelta(seconds=5), cpu=42.0)
+        history = traffic_history(use_cache=False)
+        self.assertTrue(history["available"])
+        self.assertEqual(history["sensors"], 2)
+        self.assertEqual((history["current_in"], history["current_out"]), (3.0, 6.0))
+        self.assertEqual(device_cpu(), {device.pk: 42.0})
+        SensorSample.objects.filter(sensor=cpu).update(timestamp=now - timedelta(hours=1))
+        self.assertEqual(device_cpu(), {})

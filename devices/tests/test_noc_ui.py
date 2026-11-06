@@ -27,7 +27,7 @@ class DeviceNOCUITests(TestCase):
         self.assertContains(response, f'data-inspect-device="{self.device.pk}"', count=1)
         self.assertContains(response, f'aria-label="Actions for {self.device.name}"')
         self.assertContains(response, '<strong class="noc-name" data-cell="name">Actual router</strong>', html=True)
-        for text in ('data-view="matrix"', 'data-inventory-view="matrix"', 'data-inspector-tab="audit"',
+        for text in ('data-view="grid"', 'data-inventory-view="matrix"', 'data-inspector-tab="audit"',
                      'IP Address', 'Interface Traffic', 'Uptime', 'Configured sensors',
                      'Actual router', '10.3.15.122', 'Not Tested', 'Not available',
                      reverse("device_raw_provisioning", args=[self.device.pk]),

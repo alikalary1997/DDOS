@@ -8,6 +8,7 @@ from public_ips.services.monitoring_presentation import traffic_fields
 from public_ips.services.monitoring_runtime import live_run
 from monitor.models import DetectionEvent
 from .raw_settings import polling_interval
+from .sensor_history import device_cpu, traffic_history
 
 EMPTY_MESSAGE = "No devices or public IPs configured yet."
 
@@ -70,8 +71,10 @@ def dashboard_data(can_control=False):
                        "peak_pps": event.peak_total_pps, "peak_mbps": event.peak_bandwidth_mbps,
                        "status": "Recovered" if event.ended_at else "Ongoing" if live else "Unresolved",
                        "history_url": reverse("ddos_detection")})
+    cpu_by_device = device_cpu()
     for device in devices:
-        assigned = [row for row in rows if row["device_id"] == device["id"]]
+        device["cpu"] = cpu_by_device.get(device["id"])
+        assigned =[row for row in rows if row["device_id"] == device["id"]]
         live = [row for row in assigned if row["monitoring_health"] == "Active"]
         healths = {row["monitoring_health"] for row in assigned}
         device.update(assigned_ips=len(assigned), monitored_ips=len(live), pps=total(live, "pps"), mbps=total(live, "mbps"),
@@ -83,7 +86,8 @@ def dashboard_data(can_control=False):
             "polling_available": polling_enabled(), "can_control": can_control,
             "rules": rows, "devices": devices, "empty_message": EMPTY_MESSAGE,
             "incidents": incidents, "recent_events": recent,
-            "overview": {"total_pps": total(active, "pps"), "total_mbps": total(active, "mbps"),
+            "traffic_history": traffic_history(),
+            "overview": {"total_pps": total(active, "pps"), "total_syn_pps": total(active, "syn_pps"), "total_udp_pps": total(active, "udp_pps"), "total_mbps": total(active, "mbps"),
                          "active_detections": len(incidents), "monitored_ips": len(active),
                          "attack_ips": sum(row["ddos_status"] == "Under Attack" for row in rows),
                          "warning_ips": sum(row["ddos_status"] == "Warning" for row in rows),
