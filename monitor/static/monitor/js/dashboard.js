@@ -62,7 +62,7 @@
     function liveStatus(item) { return item.monitoring_health === "Active" && Object.hasOwn(statuses,item.ddos_status) ? item.ddos_status : "Unknown"; }
     const sortRank = {"Under Attack":0, Warning:1, Unknown:2, Normal:3};
     function renderIPs() {
-        const table=byId("rulesTable"); table.replaceChildren();
+        const table=byId("rulesTable"); if(!table) return; table.replaceChildren();
         if(!latest) { empty(table,6,"Current data unavailable"); return; }
         const term=(search?.value || "").trim().toLowerCase(), wanted=byId("ipFilter")?.value || "", order=byId("ipSort")?.value || "address";
         const items=latest.rules.filter(item=>(item.address+" "+item.device_name).toLowerCase().includes(term) && (!wanted || liveStatus(item)===wanted));
@@ -149,7 +149,7 @@
             root.append(article);
         });
     }
-    function health(id, label, active) { text(id,label); byId(id).dataset.state=active ? "active" : "unknown"; }
+    function health(id, label, active) { const node=byId(id); if(!node) return; text(id,label); node.dataset.state=active ? "active" : "unknown"; }
     function render(data) {
         latest=data;
         const live=data.monitoring;
