@@ -180,3 +180,9 @@
 .nic-rate b{font-size:15px;font-weight:600;color:var(--text)}
 .nic-rate.in i:before,.nic-rate.out i:before{content:"";display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%}
 .nic-rate.in i:before{background:var(--ov-in)}.nic-rate.out i:before{background:var(--ov-out)}
+/* devices table: header and cells share one alignment per column (left; Status right) */
+.devices3-table th,.devices3-table td{text-align:left;vertical-align:middle}
+.devices3-table th:last-child,.devices3-table td:last-child{text-align:right}
+.devices3-table .cpu-meter{justify-content:flex-start}
+.devices3-table .cpu-bar{flex:0 0 90px;max-width:none}
+.devices3-table .nic-row{justify-content:flex-start}
