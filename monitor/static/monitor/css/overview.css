@@ -254,3 +254,27 @@
 .overview-row-split .overview-event>small{grid-area:peak;font:12px Consolas,monospace;color:var(--muted)}
 .overview-row-split .overview-event[data-state="recovered"] .detection-badge{color:var(--blue)}
 @media(max-width:1250px){.overview-row-split{grid-template-columns:1fr!important}}
+
+/* ---- Spacing / wrapping polish: devices table + recent alerts ---- */
+.overview-row-split{grid-template-columns:minmax(0,1.75fr) minmax(0,1fr)!important}
+.devices3-table{min-width:0}
+.devices3-table th:nth-child(1){width:19%}.devices3-table th:nth-child(2){width:17%}.devices3-table th:nth-child(3){width:15%}.devices3-table th:nth-child(4){width:34%}.devices3-table th:nth-child(5){width:15%}
+.devices3-table th,.devices3-table td{white-space:nowrap;overflow-wrap:normal}
+.devices3-table td:first-child a{white-space:normal}
+.devices3-table .cpu-meter{flex-wrap:nowrap;gap:12px}.devices3-table .cpu-pct{white-space:nowrap;min-width:38px}
+.devices3-table .status-pill{white-space:nowrap;gap:8px;padding:5px 12px}
+.devices3-table td[data-label="Interface Traffic"]{white-space:normal}
+.nic-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;padding:5px 0}
+.nic-name{flex:none}
+.nic-rate{white-space:nowrap;gap:7px}
+.nic-rate b{margin-left:2px;min-width:52px;text-align:right}
+/* alerts: roomy two-column rows, badge never wraps */
+.overview-row-split .overview-event{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"badge title" "badge sub" "badge peak" "badge time";column-gap:18px;row-gap:4px;align-items:start;padding:16px 20px}
+.overview-row-split .overview-event .detection-badge{white-space:nowrap;min-width:112px;justify-content:center;align-self:start;margin-top:2px}
+.overview-row-split .overview-event[data-state] .detection-badge[data-state="under-attack"]{background:var(--red);color:#fff;border-color:transparent}
+.overview-row-split .overview-event[data-state] .detection-badge[data-state="warning"]{color:var(--amber)}
+.overview-row-split .overview-event time{grid-area:time;justify-self:start;text-align:left;max-width:none;margin-top:2px;font-size:12px}
+.overview-row-split .overview-event>a{font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+.overview-row-split .overview-event p,.overview-row-split .overview-event>small{line-height:1.5}
+.overview-row-split .overview-events{max-height:460px}
+.overview-row-split .overview-panel-heading{padding:18px 20px}
