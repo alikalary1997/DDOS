@@ -159,3 +159,24 @@
 .traffic-stats dt{font-size:12px}.traffic-stats dd{font-size:18px}
 @media(max-width:1250px){.overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-row,.overview-row-top,.overview-row-pair{grid-template-columns:1fr}.overview-row-pair>.overview-panel{min-height:0}.health-strip{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.overview-kpis{grid-template-columns:1fr}.overview-search{flex-wrap:wrap}.overview-page .page-intro h2{font-size:26px}}
+
+/* six-card KPI strip + devices table */
+.overview-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.overview-kpi{min-height:118px;padding:16px}.overview-kpi>strong{font-size:28px}
+.overview-kpi small{font-size:11px;line-height:1.4}
+#kpi-network_status{color:var(--green)}#kpi-network_status[data-state="degraded"]{color:var(--amber)}#kpi-network_status[data-state="attack"]{color:var(--red)}#kpi-network_status[data-state="unknown"]{color:var(--muted)}
+.status-pill[data-state="online"]{color:var(--green)}.status-pill[data-state="warning"]{color:var(--amber)}.status-pill[data-state="attack"]{color:var(--red)}.status-pill[data-state="no_data"]{color:var(--muted)}
+.overview-row-single{grid-template-columns:1fr!important}
+@media(max-width:1500px){.overview-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1250px){.overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.overview-kpis{grid-template-columns:1fr}}
+
+/* devices table: interface in/out */
+.devices3-table th:nth-child(1){width:20%}.devices3-table th:nth-child(2){width:16%}.devices3-table th:nth-child(3){width:16%}.devices3-table th:nth-child(4){width:34%}.devices3-table th:nth-child(5){width:14%}
+.nic-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:4px 0}
+.nic-name{min-width:54px;padding:2px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--muted);font-size:12px}
+.nic-rate{display:inline-flex;align-items:baseline;gap:6px;font-size:12px;color:var(--muted)}
+.nic-rate i{font-style:normal;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.nic-rate b{font-size:15px;font-weight:600;color:var(--text)}
+.nic-rate.in i:before,.nic-rate.out i:before{content:"";display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%}
+.nic-rate.in i:before{background:var(--ov-in)}.nic-rate.out i:before{background:var(--ov-out)}

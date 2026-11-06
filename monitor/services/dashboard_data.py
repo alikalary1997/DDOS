@@ -8,7 +8,7 @@ from public_ips.services.monitoring_presentation import traffic_fields
 from public_ips.services.monitoring_runtime import live_run
 from monitor.models import DetectionEvent
 from .raw_settings import polling_interval
-from .sensor_history import device_cpu, traffic_history
+from .sensor_history import device_cpu, device_telemetry, devices_with_cpu_sensor, traffic_history
 
 EMPTY_MESSAGE = "No devices or public IPs configured yet."
 
@@ -80,6 +80,33 @@ def dashboard_data(can_control=False):
         device.update(assigned_ips=len(assigned), monitored_ips=len(live), pps=total(live, "pps"), mbps=total(live, "mbps"),
                       monitoring_health="Disabled" if not device["enabled"] else "Receiving samples" if live else
                       "Connection Failed" if "Connection Failed" in healths else "Stale" if "Stale" in healths else "Not Monitored")
+    with_cpu = devices_with_cpu_sensor()
+    telemetry = device_telemetry()
+    for device in devices:
+        info = telemetry.get(device["id"], {})
+        device["interfaces"] = info.get("interfaces", [])
+        device["uptime_seconds"] = info.get("uptime_seconds")
+        device["uptime_text"] = info.get("uptime_text")
+        assigned = [row for row in rows if row["device_id"] == device["id"]]
+        device["cpu_state"] = "ok" if device["cpu"] is not None else "stale" if device["id"] in with_cpu else "no_sensor"
+        if any(row["ddos_status"] == "Under Attack" for row in assigned):
+            device["status3"] = "attack"
+        elif any(row["ddos_status"] == "Warning" for row in assigned) or device["monitoring_health"] in ("Stale", "Connection Failed")                 or device["last_connection_test_succeeded"] is False:
+            device["status3"] = "warning"
+        elif device["monitoring_health"] == "Receiving samples":
+            device["status3"] = "online"
+        else:
+            device["status3"] = "no_data"
+    status_counts = {key: sum(d["status3"] == key for d in devices) for key in ("online", "warning", "attack", "no_data")}
+    attack_types = sorted({m["label"] for row in incidents if row["ddos_status"] == "Under Attack" for m in row["ddos_metrics"] if m.get("label")})
+    if status_counts["attack"]:
+        network = ("ATTACK", f"{status_counts['attack']} device(s) under attack")
+    elif status_counts["warning"]:
+        network = ("DEGRADED", f"{status_counts['warning']} device(s) need attention")
+    elif not devices or status_counts["online"] == 0:
+        network = ("UNKNOWN", "No fresh monitoring data")
+    else:
+        network = ("HEALTHY", "No attacks or device faults detected")
     run = live_run()
     return {"monitoring": bool(active), "polling_requested": requested,
             "polling_interval": polling_interval(),
@@ -87,7 +114,10 @@ def dashboard_data(can_control=False):
             "rules": rows, "devices": devices, "empty_message": EMPTY_MESSAGE,
             "incidents": incidents, "recent_events": recent,
             "traffic_history": traffic_history(),
-            "overview": {"total_pps": total(active, "pps"), "total_syn_pps": total(active, "syn_pps"), "total_udp_pps": total(active, "udp_pps"), "total_mbps": total(active, "mbps"),
+            "overview": {"devices_total": len(devices), "devices_online": status_counts["online"], "device_status_counts": status_counts,
+                         "normal_ips": sum(row["ddos_status"] == "Normal" for row in rows), "attack_types": attack_types,
+                         "network_status": network[0], "network_reason": network[1],
+                         "total_pps": total(active, "pps"), "total_gbps": (total(active, "mbps") / 1000) if total(active, "mbps") is not None else None, "total_syn_pps": total(active, "syn_pps"), "total_udp_pps": total(active, "udp_pps"), "total_mbps": total(active, "mbps"),
                          "active_detections": len(incidents), "monitored_ips": len(active),
                          "attack_ips": sum(row["ddos_status"] == "Under Attack" for row in rows),
                          "warning_ips": sum(row["ddos_status"] == "Warning" for row in rows),

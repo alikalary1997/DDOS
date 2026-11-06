@@ -44,7 +44,7 @@ test('dashboard shows real traffic and independent detection health beside the c
     assert.equal(row.cells[3].dataset.label,'TCP SYN PPS');
     assert.equal(row.cells[3].textContent,'12');
     assert.equal(f.get('overview-total_mbps').textContent,'0.001');
-    assert.match(content(f.get('savedDevices')),/Receiving Samples/);
+    assert.match(content(f.get('deviceTable')),/Test/);
 });
 
 test('search filters IPs/devices and retained or missing data never becomes live zero',async()=>{

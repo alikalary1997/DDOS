@@ -101,20 +101,33 @@
         });
         byId("incidentPanel").dataset.state=incidents.some(item=>item.ddos_status==="Under Attack") ? "under-attack" : incidents.length ? "warning" : "quiet";
     }
-    function renderFleet(data) {
-        const table=byId("savedDevices"); table.replaceChildren();
-        if(!data.devices.length) empty(table,5,data.empty_message || "No devices configured");
-        const pill=(label,state)=>{ const node=element("span",label,"status-pill"); node.dataset.state=state; return node; };
+    function renderDevices(data) {
+        const table=byId("deviceTable"); if(!table) return; table.replaceChildren();
+        if(!data.devices.length) empty(table,5,"No devices configured yet.");
+        const labels={online:"ONLINE",warning:"WARNING",attack:"ATTACK",no_data:"NO DATA"};
         data.devices.forEach(device=>{
-            const row=table.insertRow(), identity=cell(row,"Device"); identity.append(link(device.name,"/devices/"),element("small",device.management_ip,"mono"));
-            const conn=cell(row,"Connection"), tested=Boolean(device.last_connection_test);
-            conn.append(!tested ? pill("Not tested","not-tested") : device.last_connection_test_succeeded ? pill("Online","receiving-samples") : pill("Connection Error","connection-failed"),
-                element("small",tested ? "Last API check "+time(device.last_connection_test) : "No API check yet"));
-            const traffic=cell(row,"Traffic"); traffic.append(element("strong",numeric(device.mbps)?number(device.mbps,6)+" Mbps":"\u2014","mono"),element("small",number(device.monitored_ips,0)+" / "+number(device.assigned_ips,0)+" IPs sampled"));
-            const cpu=cell(row,"CPU / Memory"); cpu.append(element("span",numeric(device.cpu)?Math.min(100,Math.round(device.cpu))+"%":"N/A","mono"),element("small","Memory N/A"));
-            const health=device.monitoring_health || "Not Monitored";
-            cell(row,"Sampling").append(pill(health==="Receiving samples"?"Receiving Samples":["Not Monitored","Stale"].includes(health)?"No Samples":health,health.toLowerCase().replaceAll(" ","-")));
+            const row=table.insertRow(), id=cell(row,"Device"); id.append(link(device.name,"/devices/"),element("small",device.management_ip,"mono"));
+            const cpu=cell(row,"CPU");
+            if(device.cpu_state==="ok" && numeric(device.cpu)) { const pct=Math.min(100,Math.round(device.cpu)), meter=element("span",undefined,"cpu-meter"), bar=element("span",undefined,"cpu-bar"), fill=element("i");
+                fill.style.width=pct+"%"; fill.dataset.level=pct>=90?"high":pct>=70?"warn":"ok"; bar.append(fill); meter.append(bar,element("span",pct+"%","mono")); cpu.append(meter); }
+            else cpu.append(element("span",device.cpu_state==="stale"?"Stale":"No sensor","muted-value"));
+            const up=cell(row,"Uptime"); up.className="mono"; if(device.uptime_text) up.textContent=device.uptime_text; else up.append(element("span","No sensor / stale","muted-value"));
+            const nics=cell(row,"Interface Traffic");
+            if(!(device.interfaces||[]).length) nics.append(element("span","No traffic sensor","muted-value"));
+            (device.interfaces||[]).forEach(nic=>{
+                const line=element("div",undefined,"nic-row"); line.append(element("span",nic.name,"nic-name mono"));
+                if(numeric(nic.in_mbps)&&numeric(nic.out_mbps)) {
+                    const i=element("span",undefined,"nic-rate in"), o=element("span",undefined,"nic-rate out");
+                    i.append(element("i","In"),element("b",number(nic.in_mbps,3),"mono"),document.createTextNode(" Mbps"));
+                    o.append(element("i","Out"),element("b",number(nic.out_mbps,3),"mono"),document.createTextNode(" Mbps"));
+                    line.append(i,o);
+                } else line.append(element("span","No fresh sample","muted-value"));
+                nics.append(line);
+            });
+            const pill=element("span",labels[device.status3]||"NO DATA","status-pill"); pill.dataset.state=device.status3||"no_data"; cell(row,"Status").append(pill);
         });
+        const c=(data.overview||{}).device_status_counts||{};
+        text("deviceStatusCounts",(c.online||0)+" online \u00b7 "+(c.warning||0)+" warning \u00b7 "+(c.attack||0)+" attack"+(c.no_data?" \u00b7 "+c.no_data+" no data":""));
     }
     function renderEvents() {
         const root=byId("recentEvents"); root.replaceChildren();
@@ -146,8 +159,13 @@
         health("healthDetection",system.detection_enabled?"Enabled":"Disabled",system.detection_enabled);
         health("healthRouter",system.sampled_devices ? "Receiving data":"No fresh data",system.sampled_devices>0);
         health("healthDashboard","Available",true);
-        text("overview-monitored_ips_2",number((data.overview||{}).monitored_ips,0));
-        renderIncidents(data); renderFleet(data); renderIPs(); renderEvents(); renderTraffic(data.traffic_history);
+        const ov=data.overview||{};
+        text("overview-monitored_ips_2",number(ov.monitored_ips,0)); text("overview-total_gbps",numeric(ov.total_gbps)?number(ov.total_gbps,3):"\u2014");
+        text("kpi-online_pct",ov.devices_total?Math.round(100*ov.devices_online/ov.devices_total)+"%":"\u2014"); text("kpi-targeted",number(ov.active_detections,0));
+        text("kpi-attack_types",(ov.attack_types||[]).length?ov.attack_types.join(", "):"No active attacks");
+        text("kpi-network_status",ov.network_status||"UNKNOWN"); byId("kpi-network_status").dataset.state=(ov.network_status||"unknown").toLowerCase(); text("kpi-network_reason",ov.network_reason||"");
+        renderDevices(data);
+        renderIncidents(data); renderIPs(); renderEvents(); renderTraffic(data.traffic_history);
     }
     function unavailable() {
         latest=null; text("error","Dashboard data unavailable. Check your connection or sign in again. Displayed live statuses have been cleared.");
@@ -157,9 +175,9 @@
         ["total_mbps","total_pps","active_detections","monitored_ips","attack_ips","warning_ips","unknown_ips"].forEach(key=>text("overview-"+key,"\u2014"));
         ["healthWorker","healthDetection","healthRouter","healthDashboard"].forEach(id=>health(id,"Unknown",false));
         text("detectionMode","Detection status unavailable"); text("ipResults","Current data unavailable"); byId("incidentPanel").dataset.state="unknown";
-        ["overview-monitored_ips_2","overview-total_syn_pps","overview-total_udp_pps"].forEach(id=>text(id,"—"));
+        ["overview-monitored_ips_2","overview-total_gbps","overview-total_syn_pps","overview-total_udp_pps","kpi-online_pct","kpi-targeted","kpi-attack_types","kpi-network_status","kpi-network_reason"].forEach(id=>text(id,"—"));
         byId("incidentsTable").replaceChildren(); empty(byId("incidentsTable"),5,"Detection data unavailable");
-        byId("savedDevices").replaceChildren(); empty(byId("savedDevices"),5,"Device data unavailable");
+        byId("deviceTable")?.replaceChildren(); empty(byId("deviceTable"),5,"Device data unavailable");
         renderTraffic(null); renderIPs(); renderEvents();
     }
     async function refresh() {

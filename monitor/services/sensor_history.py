@@ -57,3 +57,36 @@ def device_cpu():
         if sample and now - sample.timestamp <= timedelta(seconds=max(60, sensor.interval * 3)):
             cpu[sensor.device_id] = sample.cpu
     return cpu
+
+
+def devices_with_cpu_sensor():
+    """Device ids that have an enabled CPU sensor (to tell 'No sensor' from 'Stale')."""
+    return set(Sensor.objects.filter(kind="cpu", enabled=True).values_list("device_id", flat=True))
+
+
+def _uptime_text(seconds):
+    seconds = int(seconds)
+    days, rest = divmod(seconds, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    return (f"{days}d " if days else "") + f"{hours}h {minutes}m {secs}s"
+
+
+def device_telemetry():
+    """Fresh SNMP interface in/out and uptime per device (device_id -> dict). Never contacts a router."""
+    now = timezone.now()
+    result = {}
+    for sensor in Sensor.objects.filter(kind__in=("traffic", "uptime"), enabled=True).order_by("device_id", "interface_index"):
+        sample = SensorSample.objects.filter(sensor=sensor, valid=True).order_by("-timestamp").first()
+        fresh = bool(sample and now - sample.timestamp <= timedelta(seconds=max(60, sensor.interval * 3)))
+        entry = result.setdefault(sensor.device_id, {"interfaces": [], "uptime_seconds": None, "uptime_text": None})
+        if sensor.kind == "traffic":
+            usable = fresh and sample.in_mbps is not None and sample.out_mbps is not None and not sample.counter_reset
+            entry["interfaces"].append({"name": sensor.interface_name or f"if{sensor.interface_index}",
+                                        "status": sample.interface_status if fresh else "",
+                                        "in_mbps": sample.in_mbps if usable else None,
+                                        "out_mbps": sample.out_mbps if usable else None, "fresh": fresh})
+        elif fresh and sample.uptime_seconds is not None:
+            entry["uptime_seconds"] = sample.uptime_seconds
+            entry["uptime_text"] = _uptime_text(sample.uptime_seconds)
+    return result
