@@ -71,7 +71,7 @@ test('inspector opens without API requests and tabs support arrow-key navigation
     assert.equal(f.panels[0].hidden,true); assert.equal(f.requests.length,0);
 });
 
-test('device row clicks do not open the inspector; Actions opens it and regains focus',()=>{
+test('device row clicks do not open the inspector; device name opens it and regains focus',()=>{
     const f=fixture();
     for (const row of f.rows) row.events.click?.({target:new Element()});
     assert.notEqual(f.inspector.open,true);

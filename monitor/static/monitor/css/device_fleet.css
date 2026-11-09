@@ -38,7 +38,7 @@
 .fleet-device-heading>div{min-width:0}
 .fleet-router-icon{display:grid;place-items:center;flex:none;width:34px;height:34px;background:var(--ns-info-surface-1);color:var(--blue);border:1px solid var(--ns-info-border-5);border-radius:9px}
 .fleet-router-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5}
-.fleet-page .fleet-inventory .noc-name{font:750 15px/1.35 Inter,"Segoe UI",sans-serif;letter-spacing:-.2px;cursor:default}
+.fleet-page .fleet-inventory .noc-name{font:750 15px/1.35 Inter,"Segoe UI",sans-serif;letter-spacing:-.2px;cursor:pointer}
 .fleet-management-ip{display:block;margin-top:5px;font:11px/1.5 ui-monospace,Consolas,monospace;color:var(--muted)}
 .fleet-page .fleet-address .fleet-management-ip{font-size:13px;font-weight:600;color:var(--text);margin-top:5px}
 .fleet-identity-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:14px;color:var(--muted);font-size:9px}

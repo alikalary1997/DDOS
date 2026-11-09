@@ -25,8 +25,8 @@ class DeviceNOCUITests(TestCase):
             response = self.client.get(reverse("devices"))
         pool.assert_not_called()
         self.assertContains(response, f'data-inspect-device="{self.device.pk}"', count=1)
-        self.assertContains(response, f'aria-label="Actions for {self.device.name}"')
-        self.assertContains(response, '<strong class="noc-name" data-cell="name">Actual router</strong>', html=True)
+        self.assertContains(response, f'aria-label="Settings for {self.device.name}"')
+        self.assertContains(response, f'<button class="noc-name" type="button" data-inspect-device="{self.device.pk}" data-cell="name" aria-haspopup="dialog" aria-controls="deviceInspector{self.device.pk}">Actual router</button>', html=True)
         for text in ('data-view="grid"', 'data-inventory-view="matrix"', 'data-inspector-tab="audit"',
                      'IP Address', 'Interface Traffic', 'Uptime', 'Configured sensors',
                      'Actual router', '10.3.15.122', 'Not Tested', 'Not available',
