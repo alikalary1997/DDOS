@@ -101,6 +101,9 @@ class Poller:
                 # Keep the real 100% loss figure; latency stays None rather than 0.
                 values = {'packet_loss': result['packet_loss']}
                 raise ping.PingError(f"No reply to any probe ({result['packet_loss']:.0f}% packet loss).")
+            # Refuse to persist an "Active" sample that carries no measurement.
+            if result.get('packet_loss') is None:
+                raise ping.PingError('The ping probe returned no packet-loss figure.')
             values = result
         except ping.PingError as exc:
             error = str(exc)
