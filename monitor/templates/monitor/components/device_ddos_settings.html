@@ -1,0 +1,26 @@
+<section class="panel device-ddos-settings" id="deviceDDoSSettings" aria-labelledby="deviceDDoSSettingsTitle">
+    <div class="panel-heading"><div><h2 id="deviceDDoSSettingsTitle">DDoS Settings</h2><p class="panel-subtitle">Per-device warning and attack thresholds</p></div><span class="phase-badge">{% if has_ddos_override %}CUSTOM OVERRIDE{% else %}USING GLOBAL DEFAULTS{% endif %}</span></div>
+    <p class="settings-section-note" id="deviceDDoSThresholdNote">{% if has_ddos_override %}This device uses its own thresholds for every public IP assigned to it.{% else %}This device follows the global defaults.{% endif %} Initial values are examples, not validated production thresholds. Saving these settings does not activate detection or block traffic.</p>
+    <form method="post" action="{% url 'device_ddos_settings' device.id %}#deviceDDoSSettings">
+        {% csrf_token %}<input type="hidden" name="action" value="save">
+        {% if ddos_form.non_field_errors %}<div class="threshold-errors" role="alert">{{ ddos_form.non_field_errors }}</div>{% endif %}
+        <table class="ddos-thresholds-table" aria-describedby="deviceDDoSThresholdNote deviceDDoSThresholdValidation">
+            <caption class="sr-only">Per-device DDoS Detection Thresholds</caption>
+            <thead><tr><th scope="col">Metric</th><th scope="col">Warning</th><th scope="col">Attack</th></tr></thead>
+            <tbody>{% for row in ddos_form.threshold_rows %}
+                <tr><th scope="row">{{ row.label }}</th>
+                    <td>{{ row.warning }}{% if row.warning.errors %}<div class="threshold-errors" role="alert">{{ row.warning.errors }}</div>{% endif %}</td>
+                    <td>{{ row.attack }}{% if row.attack.errors %}<div class="threshold-errors" role="alert">{{ row.attack.errors }}</div>{% endif %}</td>
+                </tr>
+            {% endfor %}</tbody>
+        </table>
+        <p class="settings-section-note" id="deviceDDoSThresholdValidation">Warning must be zero or greater. Attack must be greater than Warning. All eight values are required; up to three decimal places are supported.</p>
+        <div class="settings-section-actions">{% if user.is_staff or user.is_superuser %}<button type="submit" class="primary-button">Save Thresholds</button>{% else %}<span>Administrator access is required to change thresholds.</span>{% endif %}</div>
+    </form>
+    {% if has_ddos_override %}{% if user.is_staff or user.is_superuser %}
+    <form method="post" action="{% url 'device_ddos_settings' device.id %}#deviceDDoSSettings">
+        {% csrf_token %}<input type="hidden" name="action" value="reset">
+        <div class="settings-section-actions"><button type="submit" class="secondary-button">Reset to default</button></div>
+    </form>
+    {% endif %}{% endif %}
+</section>

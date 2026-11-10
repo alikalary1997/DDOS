@@ -1,6 +1,6 @@
 """Read-only status projection. Unavailable traffic never becomes Normal."""
 from django.utils import timezone
-from monitor.models import DDoSDetectionSettings, DetectionPolicy, DetectionState
+from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy, DetectionState
 from public_ips.models import PublicIP
 from public_ips.services.monitoring import polling_enabled
 from public_ips.services.monitoring_runtime import covers, live_run
@@ -11,7 +11,8 @@ from .raw_settings import sample_freshness_seconds
 class DetectionPresentation:
     def __init__(self):
         self.policy = DetectionPolicy.objects.filter(pk=1).first()
-        self.thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+        self.global_thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+        self.overrides = {override.device_id: override for override in DeviceDDoSThreshold.objects.all()}
         self.states = {state.public_ip_id: state for state in DetectionState.objects.all()}
         self.ips = {ip.pk: ip for ip in PublicIP.objects.select_related("device").defer("device__username", "device__encrypted_password")}
         self.polling = polling_enabled()
@@ -33,12 +34,15 @@ class DetectionPresentation:
         result = {"monitoring_health": health, "ddos_status": "Unknown", "ddos_metrics": [],
                   "detection_enabled": bool(ip and ip.detection_enabled),
                   "ddos_message": "Detection is disabled for this assignment."}
-        if not ip or not authorized(self.policy, ip) or not self.thresholds:
+        if not ip or not authorized(self.policy, ip):
+            return result
+        thresholds = self.overrides.get(ip.device_id, self.global_thresholds)
+        if not thresholds:
             return result
         state = self.states.get(assignment_id)
         result["ddos_message"] = "Waiting for fresh, valid detection samples."
         if (health == "Active" and state and state.last_valid_at == at and state.profile_key == profile_key(ip)
-                and state.configuration_key == configuration_key(self.thresholds, self.policy)):
+                and state.configuration_key == configuration_key(thresholds, self.policy)):
             result.update(ddos_status=state.confirmed_status, ddos_metrics=state.triggering_metrics,
                           ddos_message="" if state.confirmed_status != "Unknown" else "Confirming consecutive samples.")
         return result

@@ -47,16 +47,53 @@ def fleet_data(request):
 
 def context(device):
     profile = SNMPProfile.objects.filter(device=device).first()
+    from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold
+    from monitor.forms import DeviceDDoSThresholdForm
+    override = DeviceDDoSThreshold.objects.filter(device=device).first()
+    if override:
+        ddos_form = DeviceDDoSThresholdForm(instance=override)
+    else:
+        initial = {}
+        global_settings = DDoSDetectionSettings.objects.filter(pk=1).first()
+        if global_settings:
+            initial = {field: getattr(global_settings, field) for field in DeviceDDoSThresholdForm.Meta.fields}
+        ddos_form = DeviceDDoSThresholdForm(initial=initial)
     return {'device': device, 'profile_ready': bool(profile and profile.validated_ip == device.management_ip),
             'profile_form': ProfileForm(initial={'port': profile.port if profile else 161}),
             'sensor_form': AddSensorForm(), 'sensors': Sensor.objects.filter(device=device),
-            'polling_authorized': authorized(), 'active_page': 'devices'}
+            'polling_authorized': authorized(), 'active_page': 'devices',
+            'ddos_form': ddos_form, 'has_ddos_override': bool(override)}
 
 
 @login_required
 @require_GET
 def inventory(request, device_id):
     return render(request, 'sensors/inventory.html', context(device_for(device_id)))
+
+
+@administrator
+@require_POST
+def ddos_settings(request, device_id):
+    device = device_for(device_id)
+    from monitor.models import DeviceDDoSThreshold
+    from monitor.forms import DeviceDDoSThresholdForm
+    if request.POST.get('action') == 'reset':
+        DeviceDDoSThreshold.objects.filter(device=device).delete()
+        messages.success(request, 'DDoS thresholds reset to the global defaults.')
+        return redirect('device_sensors', device_id=device.pk)
+    override = DeviceDDoSThreshold.objects.filter(device=device).first()
+    form = DeviceDDoSThresholdForm(request.POST, instance=override)
+    if form.is_valid():
+        instance = form.save(commit=False)
+        instance.device = device
+        instance.save()
+        messages.success(request, 'DDoS thresholds saved for this device. Detection activation was not changed.')
+        return redirect('device_sensors', device_id=device.pk)
+    ctx = context(device)
+    ctx['ddos_form'] = form
+    ctx['has_ddos_override'] = bool(override)
+    messages.error(request, 'Thresholds were not saved. Correct the errors below.')
+    return render(request, 'sensors/inventory.html', ctx, status=400)
 
 
 @administrator

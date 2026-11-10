@@ -44,6 +44,41 @@ class DDoSDetectionSettings(models.Model):
             )]
 
 
+class DeviceDDoSThreshold(models.Model):
+    """Per-device threshold override. The absence of a row means the device follows
+    the global DDoSDetectionSettings defaults (no copied values)."""
+    device = models.OneToOneField("devices.Device", on_delete=models.CASCADE, related_name="ddos_threshold")
+    total_pps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=10000, validators=[MinValueValidator(0)])
+    total_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=50000, validators=[MinValueValidator(0)])
+    bandwidth_mbps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=100, validators=[MinValueValidator(0)])
+    bandwidth_mbps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=500, validators=[MinValueValidator(0)])
+    syn_pps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=2000, validators=[MinValueValidator(0)])
+    syn_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=10000, validators=[MinValueValidator(0)])
+    udp_pps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=5000, validators=[MinValueValidator(0)])
+    udp_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=20000, validators=[MinValueValidator(0)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        for metric, label in DETECTION_METRICS:
+            warning, attack = getattr(self, metric + "_warning"), getattr(self, metric + "_attack")
+            try:
+                if warning is not None and attack is not None and attack <= warning:
+                    errors[metric + "_attack"] = f"{label}: Attack must be greater than Warning."
+            except (TypeError, ValueError, ArithmeticError):
+                continue
+        if errors:
+            raise ValidationError(errors)
+
+    class Meta:
+        constraints = [
+            constraint for metric, _ in DETECTION_METRICS for constraint in (
+                models.CheckConstraint(condition=models.Q(**{metric + "_warning__gte": 0}), name=f"ddos_device_{metric}_warning_nonnegative"),
+                models.CheckConstraint(condition=models.Q(**{metric + "_attack__gt": models.F(metric + "_warning")}), name=f"ddos_device_{metric}_attack_above_warning"),
+            )]
+
+
 class RAWMonitoringSettings(models.Model):
     """One server-wide configuration; separate from browser refresh preferences."""
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)

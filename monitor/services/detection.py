@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from monitor.models import DETECTION_METRICS, DDoSDetectionSettings, DetectionPolicy, DetectionState, DetectionEvent
+from monitor.models import DETECTION_METRICS, DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy, DetectionState, DetectionEvent
 from monitor.services.raw_settings import sample_freshness_seconds
 from public_ips.models import PublicIP
 from public_ips.services.monitoring_presentation import traffic_fields
@@ -64,17 +64,19 @@ def process_sample(sample):
     policy = DetectionPolicy.objects.select_for_update().filter(pk=1, enabled=True).first()
     if not policy:
         return
-    thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
-    if not thresholds or not isinstance(sample.rows, list):
+    global_thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+    if not global_thresholds or not isinstance(sample.rows, list):
         return
+    overrides = {override.device_id: override for override in DeviceDDoSThreshold.objects.all()}
     now = timezone.now()
-    config = configuration_key(thresholds, policy)
     for row in sample.rows:
         if not isinstance(row, dict):
             continue
         ip = PublicIP.objects.select_related("device").defer("device__username", "device__encrypted_password").filter(pk=row.get("id"), device_id=sample.device_id).first()
         if not ip or not authorized(policy, ip):
             continue
+        thresholds = overrides.get(ip.device_id, global_thresholds)
+        config = configuration_key(thresholds, policy)
         at = timestamp(row.get("attempted_at"))
         if not at:
             # Invalid attempts break confirmation, even when their timestamp is unusable.
