@@ -109,6 +109,29 @@ class CpuThresholdDetectionTests(TestCase):
         with self.assertRaises(Exception):
             settings.full_clean()
 
+    def test_low_percentage_thresholds_drive_detection_and_dashboard_colour(self):
+        # Explicit 5% warning / 45% attack: 50% CPU must be Under Attack, not just high.
+        settings = DDoSDetectionSettings.objects.get(pk=1)
+        settings.cpu_warning = 5; settings.cpu_attack = 45; settings.save()
+        self.cpu_sensor(50)
+        self.assertEqual(self.repeat(3).confirmed_status, "Under Attack")
+        self.assertEqual(DetectionEvent.objects.get().highest_severity, "Under Attack")
+
+        from monitor.services.dashboard_data import dashboard_data
+        device = [d for d in dashboard_data()["devices"] if d["id"] == self.device.pk][0]
+        self.assertEqual(device["cpu"], 50)
+        self.assertEqual(device["cpu_warning_threshold"], 5.0)
+        self.assertEqual(device["cpu_attack_threshold"], 45.0)
+        self.assertEqual(device["status3"], "attack")
+
+        # Lower the reading between the two thresholds: dashboard must degrade to warning.
+        self.cpu_sensor(20)
+        device = [d for d in dashboard_data()["devices"] if d["id"] == self.device.pk][0]
+        self.assertEqual(device["status3"], "warning")
+        # Below warning: CPU no longer elevates the device.
+        self.cpu_sensor(1)
+        self.assertNotEqual(dashboard_data()["devices"][0]["status3"], "attack")
+
 
 class CpuThresholdFormTests(TestCase):
     def setUp(self):

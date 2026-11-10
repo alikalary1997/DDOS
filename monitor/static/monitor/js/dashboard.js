@@ -114,7 +114,10 @@
             const row=table.insertRow(), id=cell(row,"Device"); id.append(link(device.name,"/devices/"),element("small",device.management_ip,"mono"));
             const cpu=cell(row,"CPU");
             if(device.cpu_state==="ok" && numeric(device.cpu)) { const pct=Math.min(100,Math.round(device.cpu)), meter=element("span",undefined,"cpu-meter"), bar=element("span",undefined,"cpu-bar"), fill=element("i");
-                fill.style.width=pct+"%"; fill.dataset.level=pct>=90?"high":pct>=70?"warn":"ok"; bar.append(fill); const level=pct>=90?"high":pct>=70?"warn":"ok", pctText=element("span",pct+"%","mono cpu-pct"); pctText.dataset.level=level; meter.append(bar,pctText); cpu.append(meter); }
+                // Colour follows the saved CPU detection thresholds (per-device override, else global).
+                const cv=numeric(device.cpu_warning_threshold)?device.cpu_warning_threshold:null, ca=numeric(device.cpu_attack_threshold)?device.cpu_attack_threshold:null;
+                const level=ca!==null&&device.cpu>=ca?"high":cv!==null&&device.cpu>=cv?"warn":"ok";
+                fill.style.width=pct+"%"; fill.dataset.level=level; bar.append(fill); const pctText=element("span",pct+"%","mono cpu-pct"); pctText.dataset.level=level; meter.append(bar,pctText); cpu.append(meter); }
             else cpu.append(element("span",device.cpu_state==="stale"?"Stale":"No sensor","muted-value"));
             const up=cell(row,"Uptime"); up.className="mono"; if(device.uptime_text) up.textContent=device.uptime_text; else up.append(element("span","No sensor / stale","muted-value"));
             const nics=cell(row,"Interface Traffic");

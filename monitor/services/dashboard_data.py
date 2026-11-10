@@ -6,7 +6,7 @@ from public_ips.models import PublicIP
 from public_ips.services.monitoring import cached_rows, polling_enabled
 from public_ips.services.monitoring_presentation import traffic_fields
 from public_ips.services.monitoring_runtime import live_run
-from monitor.models import DetectionEvent
+from monitor.models import DDoSDetectionSettings, DetectionEvent, DeviceDDoSThreshold
 from .raw_settings import polling_interval
 from .sensor_history import device_cpu, device_telemetry, devices_with_cpu_sensor, traffic_history
 
@@ -72,15 +72,26 @@ def dashboard_data(can_control=False):
                        "status": "Recovered" if event.ended_at else "Ongoing" if live else "Unresolved",
                        "history_url": reverse("ddos_detection")})
     cpu_by_device = device_cpu()
+    cpu_sensors = devices_with_cpu_sensor()
+    # CPU colours follow the saved detection thresholds (per-device override, else global).
+    global_thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+    cpu_thresholds = {device_id: (cpu_warning, cpu_attack)
+                      for device_id, cpu_warning, cpu_attack
+                      in DeviceDDoSThreshold.objects.values_list("device_id", "cpu_warning", "cpu_attack")}
     for device in devices:
         device["cpu"] = cpu_by_device.get(device["id"])
+        warning, attack = cpu_thresholds.get(device["id"], (
+            global_thresholds.cpu_warning if global_thresholds else None,
+            global_thresholds.cpu_attack if global_thresholds else None))
+        device["cpu_warning_threshold"] = float(warning) if warning is not None else None
+        device["cpu_attack_threshold"] = float(attack) if attack is not None else None
+        device["cpu_state"] = "ok" if device["cpu"] is not None else "stale" if device["id"] in cpu_sensors else "no_sensor"
         assigned =[row for row in rows if row["device_id"] == device["id"]]
         live = [row for row in assigned if row["monitoring_health"] == "Active"]
         healths = {row["monitoring_health"] for row in assigned}
         device.update(assigned_ips=len(assigned), monitored_ips=len(live), pps=total(live, "pps"), mbps=total(live, "mbps"),
                       monitoring_health="Disabled" if not device["enabled"] else "Receiving samples" if live else
                       "Connection Failed" if "Connection Failed" in healths else "Stale" if "Stale" in healths else "Not Monitored")
-    with_cpu = devices_with_cpu_sensor()
     telemetry = device_telemetry()
     for device in devices:
         info = telemetry.get(device["id"], {})
@@ -88,10 +99,17 @@ def dashboard_data(can_control=False):
         device["uptime_seconds"] = info.get("uptime_seconds")
         device["uptime_text"] = info.get("uptime_text")
         assigned = [row for row in rows if row["device_id"] == device["id"]]
-        device["cpu_state"] = "ok" if device["cpu"] is not None else "stale" if device["id"] in with_cpu else "no_sensor"
-        if any(row["ddos_status"] == "Under Attack" for row in assigned):
+        cpu_level = None
+        if device["cpu"] is not None:
+            if device["cpu_attack_threshold"] is not None and device["cpu"] >= device["cpu_attack_threshold"]:
+                cpu_level = "attack"
+            elif device["cpu_warning_threshold"] is not None and device["cpu"] >= device["cpu_warning_threshold"]:
+                cpu_level = "warning"
+        if any(row["ddos_status"] == "Under Attack" for row in assigned) or cpu_level == "attack":
             device["status3"] = "attack"
-        elif any(row["ddos_status"] == "Warning" for row in assigned) or device["monitoring_health"] in ("Stale", "Connection Failed")                 or device["last_connection_test_succeeded"] is False:
+        elif (any(row["ddos_status"] == "Warning" for row in assigned) or cpu_level == "warning"
+              or device["monitoring_health"] in ("Stale", "Connection Failed")
+              or device["last_connection_test_succeeded"] is False):
             device["status3"] = "warning"
         elif device["monitoring_health"] == "Receiving samples":
             device["status3"] = "online"
