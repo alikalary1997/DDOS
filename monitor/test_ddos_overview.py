@@ -54,6 +54,27 @@ class DDoSOverviewTests(TestCase):
         self.assertTrue(device["attacked"]); self.assertFalse(device["monitored"])
         self.assertTrue(device["ips"][0]["attacked"])
 
+    def test_live_warning_is_reported_as_warning_not_attack(self):
+        rows = [{"id": self.ip.pk, "address": self.ip.address, "device_id": self.device.pk, "device_name": "Edge 1",
+                 "monitoring_health": "Active", "ddos_status": "Warning"}]
+        from monitor.services import ddos_overview
+        with patch.object(ddos_overview, "dashboard_data", return_value={"rules": rows}), \
+                patch.object(ddos_overview, "fleet_snapshot", return_value={}):
+            device = [d for d in ddos_overview.overview()["devices"] if d["id"] == self.device.pk][0]
+        self.assertFalse(device["attacked"]); self.assertTrue(device["warning"])
+        self.assertEqual(device["ips"][0]["status"], "Warning")
+        self.assertFalse(device["ips"][0]["attacked"]); self.assertTrue(device["ips"][0]["warning"])
+
+    def test_unmonitored_device_keeps_open_warning(self):
+        event = DetectionEvent.objects.create(
+            public_ip=self.ip, device=self.device, assignment_id_snapshot=self.ip.pk, device_id_snapshot=self.device.pk,
+            address=self.ip.address, device_name="Edge 1", management_ip="192.0.2.10", profile_key="p",
+            started_at=timezone.now(), last_observed_at=timezone.now(), highest_severity="Warning")
+        DetectionState.objects.create(public_ip=self.ip, profile_key="p", confirmed_status="Warning", event=event)
+        device = self.devices()[0]
+        self.assertFalse(device["attacked"]); self.assertTrue(device["warning"])
+        self.assertEqual(device["ips"][0]["status"], "Warning")
+
     def test_control_requires_post_csrf_session_and_admin(self):
         self.assertEqual(self.client.get(f"/ddos-detection/devices/{self.device.pk}/start/").status_code, 405)
         self.client.logout()

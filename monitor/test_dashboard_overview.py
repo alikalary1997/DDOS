@@ -78,6 +78,14 @@ class DashboardOverviewTests(TestCase):
         self.assertIsNone(data["overview"]["total_pps"])
         self.assertEqual(data["devices"][0]["monitoring_health"], "Stale")
 
+    def test_warning_incident_appears_in_detection_center(self):
+        for _ in range(3):
+            self.sample(pps=30000)
+        data = dashboard_data()
+        self.assertEqual(data["overview"]["warning_ips"], 1)
+        self.assertEqual(data["overview"]["attack_ips"], 0)
+        self.assertEqual([row["ddos_status"] for row in data["incidents"]], ["Warning"])
+
     def test_recovered_and_deleted_assignment_events_keep_real_history(self):
         for _ in range(3):
             self.sample(pps=50000)

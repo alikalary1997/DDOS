@@ -70,10 +70,10 @@ def overview(can_control=False):
     rows_by_device = {}
     for row in data["rules"]:
         rows_by_device.setdefault(row["device_id"], []).append(row)
-    # Retained, unresolved attack states: an unmonitored device keeps its open incident.
-    open_attack = set(DetectionState.objects.filter(
-        confirmed_status="Under Attack", event__isnull=False, event__ended_at__isnull=True
-    ).values_list("public_ip_id", flat=True))
+    # Retained, unresolved incident states: an unmonitored device keeps its open incident.
+    open_states = dict(DetectionState.objects.filter(
+        confirmed_status__in=("Warning", "Under Attack"), event__isnull=False, event__ended_at__isnull=True
+    ).values_list("public_ip_id", "confirmed_status"))
     sensors = fleet_snapshot()
     thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
     devices = []
@@ -84,16 +84,20 @@ def overview(can_control=False):
         for row in rows_by_device.get(device["id"], []):
             monitored = row["monitoring_health"] != "Not Monitored"
             if monitored:
-                attacked = row["monitoring_health"] == "Active" and row["ddos_status"] == "Under Attack"
+                # Only a live, fresh sample may drive the current status shown on this page.
+                status = row["ddos_status"] if row["monitoring_health"] == "Active" else "Unknown"
             else:
-                attacked = row["id"] in open_attack
-            ips.append({"id": row["id"], "address": row["address"], "monitored": monitored, "attacked": attacked,
+                # Retained incident on an unmonitored assignment keeps its last confirmed severity.
+                status = open_states.get(row["id"], "Unknown")
+            ips.append({"id": row["id"], "address": row["address"], "monitored": monitored,
+                        "status": status, "attacked": status == "Under Attack", "warning": status == "Warning",
                         "health": row["monitoring_health"]})
         monitored = any(ip["monitored"] for ip in ips)
         devices.append({
             "id": device["id"], "name": device["name"], "management_ip": device["management_ip"],
             "enabled": device["enabled"], "monitored": monitored,
             "attacked": any(ip["attacked"] for ip in ips),
+            "warning": (not any(ip["attacked"] for ip in ips)) and any(ip["warning"] for ip in ips),
             "metrics": metrics, "sensors_url": reverse("devices") + f"#inspect-{device['id']}", "ips": ips})
     return {
         "can_control": can_control, "generated_at": now,

@@ -17,10 +17,11 @@
         const cpu = live ? d.metrics.cpu.value : null;
         const known = cpu !== null;
         const state = d.attacked ? (d.monitored ? ["UNDER ATTACK", "red"] : ["ATTACK - UNMONITORED", "red"])
+            : d.warning ? ["WARNING", "orange"]
             : d.monitored ? ["MONITORING", "green"] : ["NOT MONITORED", "gray"];
         const highCpu = known && cpu >= data.high_cpu, warnCpu = known && cpu >= data.warn_cpu && !highCpu;
         const unprotected = d.monitored ? [] : d.ips.filter((ip) => ip.attacked);
-        const border = highCpu ? "red" : (warnCpu || unprotected.length) ? "orange" : "";
+        const border = highCpu ? "red" : (warnCpu || unprotected.length || d.warning) ? "orange" : "";
         return {known, cpu, state, highCpu, warnCpu, unprotected, border};
     };
     const matches = (d) => {
@@ -73,6 +74,7 @@
     }
     function ipTag(ip) {
         if (ip.attacked) return ip.monitored ? ["UNDER ATTACK", "red"] : ["UNPROTECTED", "red"];
+        if (ip.warning) return ["WARNING", "orange"];
         return ip.monitored ? ["PROTECTED", "green"] : ["NOT MONITORED", "gray"];
     }
     const deviceUrl = (id, action) => `${page.dataset.controlUrl.replace(/all\/start\/$/, "")}devices/${id}/${action}/`;

@@ -1,8 +1,8 @@
 {% extends "monitor/base.html" %}
 {% load static %}
 {% block title %}DDoS Detection{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/ddos_detection.css' %}?v=20261105-devcards1">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/ddos_detection.js' %}?v=20261105-devcards1" defer></script>{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/ddos_detection.css' %}?v=20261110-warning1">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/ddos_detection.js' %}?v=20261110-warning1" defer></script>{% endblock %}
 {% block footer_note %}Detection only &middot; no automatic mitigation{% endblock %}
 {% block content %}
 <div class="dd-page" id="ddPage" data-data-url="{% url 'ddos_detection_data' %}" data-control-url="{% url 'ddos_detection_all_control' 'start' %}" data-can-control="{{ overview.can_control|yesno:'1,0' }}">
