@@ -4,7 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.utils import timezone
 from devices.services.credentials import decrypt_password, CredentialError
-from . import snmp
+from . import ping, snmp
 from .models import Sensor, SensorSample, SensorRuntime, SNMPProfile
 
 
@@ -42,6 +42,8 @@ class Poller:
     def poll(self, sensor):
         if not authorized() or not sensor.enabled:
             return
+        if sensor.kind == 'ping':
+            return self.poll_ping(sensor)
         profile = SNMPProfile.objects.filter(device_id=sensor.device_id).first()
         signature = (sensor.revision, sensor.device.management_ip, profile.revision if profile else None)
         values, error = {}, ''
@@ -84,6 +86,32 @@ class Poller:
                 self.baselines.pop(sensor.pk, None)
                 return
             SensorSample.objects.create(sensor=current, timestamp=stamp, valid=not error, error=error, **stored)
+            updates = {'last_attempt': stamp, 'error': error}
+            if not error:
+                updates['last_success'] = stamp
+            Sensor.objects.filter(pk=current.pk).update(**updates)
+
+
+    def poll_ping(self, sensor):
+        # ICMP echo needs no SNMP profile; it is still gated by the device allowlist.
+        values, error = {}, ''
+        try:
+            result = ping.probe(sensor.device)
+            if result['ping_ms'] is None:
+                # Keep the real 100% loss figure; latency stays None rather than 0.
+                values = {'packet_loss': result['packet_loss']}
+                raise ping.PingError(f"No reply to any probe ({result['packet_loss']:.0f}% packet loss).")
+            values = result
+        except ping.PingError as exc:
+            error = str(exc)
+        stamp = timezone.now()
+        with transaction.atomic():
+            # Discard in-flight results after stop/edit/delete or a management-IP change.
+            current = Sensor.objects.select_for_update().filter(pk=sensor.pk, enabled=True, revision=sensor.revision,
+                device__enabled=True, device__management_ip=sensor.device.management_ip).first()
+            if not current or not authorized():
+                return
+            SensorSample.objects.create(sensor=current, timestamp=stamp, valid=not error, error=error, **values)
             updates = {'last_attempt': stamp, 'error': error}
             if not error:
                 updates['last_success'] = stamp

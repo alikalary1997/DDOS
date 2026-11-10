@@ -14,7 +14,7 @@ from django.views.decorators.debug import sensitive_post_parameters, sensitive_v
 from django.views.decorators.http import require_POST, require_GET
 from devices.models import Device
 from devices.services.credentials import encrypt_password, decrypt_password, CredentialError
-from . import snmp
+from . import ping, snmp
 from .forms import ProfileForm, AddSensorForm, EditSensorForm
 from .models import SNMPProfile, Sensor, SensorRuntime
 from .polling import authorized, format_uptime
@@ -118,8 +118,8 @@ def profile(request, device_id):
                 SNMPProfile.objects.update_or_create(device=device, defaults={
                     'community': ciphertext, 'port': port, 'validated_ip': device.management_ip,
                     'tested_at': timezone.now(), 'revision': existing.revision + 1 if existing else 1})
-                Sensor.objects.filter(device=device).update(enabled=False, revision=F('revision') + 1)
-            messages.success(request, 'SNMP connection verified. Credentials saved encrypted; sensors remain stopped.')
+                Sensor.objects.filter(device=device).exclude(kind='ping').update(enabled=False, revision=F('revision') + 1)
+            messages.success(request, 'SNMP connection verified. Credentials saved encrypted; SNMP sensors remain stopped. Ping sensors are unaffected by SNMP credentials.')
             return redirect('device_sensors', device_id=device.pk)
         except snmp.SNMPError as error:
             form.add_error(None, str(error))
@@ -163,9 +163,20 @@ def detect(request, device_id):
     device = device_for(device_id)
     ctx = context(device)
     kind = request.POST.get('kind')
-    if kind not in ('cpu', 'uptime'):
-        return JsonResponse({'error': 'Choose CPU or Uptime.'}, status=400)
+    if kind not in ('cpu', 'uptime', 'ping'):
+        return JsonResponse({'error': 'Choose CPU, Uptime or Ping.'}, status=400)
     ctx['sensor_form'] = AddSensorForm(initial={'kind': kind, 'interval': 10})
+    if kind == 'ping':
+        # A one-off ICMP probe: needs no SNMP credentials and creates no sensor.
+        try:
+            reading = ping.probe(device)
+            if reading['ping_ms'] is None:
+                raise ping.PingError('Ping detected no reply (100% packet loss).')
+            ctx['sensor_success'] = (f"Ping Sensor detected: {reading['ping_ms']:.1f} ms, "
+                                     f"{reading['packet_loss']:g}% loss. You can now add this sensor.")
+        except ping.PingError as error:
+            ctx['sensor_error'] = str(error)
+        return render(request, 'sensors/inventory.html', ctx, status=400 if ctx.get('sensor_error') else 200)
     try:
         profile = saved_profile(device)
         reading = snmp.read(device, decrypt_password(profile.community), profile.port, 'sample', SimpleNamespace(kind=kind))
@@ -184,8 +195,14 @@ def add(request, device_id):
     device = device_for(device_id)
     ctx = context(device)
     interfaces = []
+    kind = request.POST.get('kind')
     try:
-        profile = saved_profile(device)
+        # Ping sensors use ICMP only: they are validated by the device allowlist at
+        # probe time and never require saved SNMP credentials.
+        profile = None if kind == 'ping' else saved_profile(device)
+        if kind == 'ping':
+            # Validate the management address against the allowlist before anything is saved.
+            ping.check_target(device)
         if request.POST.get('kind') == 'traffic':
             payload = signing.loads(request.POST.get('discovery', ''), salt='snmp-discovery', max_age=600)
             if (payload['device'], payload['ip'], payload['revision'], payload['user']) != (device.pk, device.management_ip, profile.revision, request.user.pk):
@@ -212,6 +229,8 @@ def add(request, device_id):
                 except StartupError as error:
                     messages.error(request, f'Sensors saved, but monitoring could not start. {error}')
                 return redirect('device_sensors', device_id=device.pk)
+    except ping.PingError as error:
+        ctx['sensor_error'] = str(error)
     except (signing.BadSignature, KeyError, TypeError):
         ctx['sensor_error'] = 'Interface selection expired or changed. Discover interfaces again.'
     except snmp.SNMPError as error:
@@ -239,7 +258,7 @@ def control(request, device_id, sensor_id, action):
         sensor.delete()
         messages.success(request, 'Sensor and its historical samples deleted from NetShield.')
     elif action in ('start', 'stop'):
-        if action == 'start':
+        if action == 'start' and sensor.kind != 'ping':
             try:
                 saved_profile(device_for(device_id))
             except snmp.SNMPError as error:
@@ -248,7 +267,7 @@ def control(request, device_id, sensor_id, action):
         if action == 'start':
             try:
                 start_sensors([sensor.pk])
-                messages.success(request, 'Sensor started. Waiting for a valid SNMP reading.')
+                messages.success(request, 'Sensor started. Waiting for a valid ping reply.' if sensor.kind == 'ping' else 'Sensor started. Waiting for a valid SNMP reading.')
             except StartupError as error:
                 messages.error(request, str(error))
         else:
@@ -284,13 +303,17 @@ def data(request, device_id):
         row = {'id': sensor.pk, 'status': status, 'last_success': sensor.last_success,
                'error': sensor.error, 'kind': sensor.kind, 'interval': sensor.interval,
                'cpu': None, 'uptime': None, 'in_mbps': None, 'out_mbps': None,
+               'ping_ms': None, 'packet_loss': None,
                'interface_status': None, 'restart_detected': False, 'counter_reset': False,
                'history': [{'timestamp': s.timestamp, 'cpu': s.cpu, 'in_mbps': s.in_mbps, 'out_mbps': s.out_mbps,
                             'uptime': format_uptime(s.uptime_seconds), 'restart_detected': s.restart_detected,
+                            'ping_ms': s.ping_ms if s.valid else None,
+                            'packet_loss': s.packet_loss if s.valid else None,
                             'valid': s.valid} for s in samples]}
         if last and last.valid:
             row.update(cpu=last.cpu, uptime=format_uptime(last.uptime_seconds), in_mbps=last.in_mbps,
                        out_mbps=last.out_mbps, interface_status=last.interface_status,
+                       ping_ms=last.ping_ms, packet_loss=last.packet_loss,
                        restart_detected=last.restart_detected, counter_reset=last.counter_reset)
         row['restart_count'] = sensor.samples.filter(restart_detected=True).count()
         rows.append(row)

@@ -131,6 +131,7 @@ def inventory_context(request, form=None, unavailable=False):
             row['snmp_cpu'] = next((s for s in row['snmp_sensors'] if s['kind'] == 'cpu'), None)
             row['snmp_uptime'] = next((s for s in row['snmp_sensors'] if s['kind'] == 'uptime'), None)
             row['snmp_traffic'] = [s for s in row['snmp_sensors'] if s['kind'] == 'traffic']
+            row['snmp_ping'] = [s for s in row['snmp_sensors'] if s['kind'] == 'ping']
             summary = summarize_sensors(row['snmp_sensors'])
             row['sensor_health'] = ('No sensors' if not summary['total'] else 'Needs attention' if summary['attention']
                 else f"{summary['active']} active" if summary['active'] else 'Waiting for data' if summary['enabled'] else 'Stopped')

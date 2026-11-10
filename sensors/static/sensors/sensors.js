@@ -116,13 +116,13 @@
         const svg = card.querySelector('[data-chart]');
         if (!svg) return;
         svg.replaceChildren();
-        const keys = sensor.kind === 'cpu' ? ['cpu'] : ['in_mbps', 'out_mbps'];
+        const keys = sensor.kind === 'cpu' ? ['cpu'] : sensor.kind === 'ping' ? ['ping_ms'] : ['in_mbps', 'out_mbps'];
         const sets = keys.map(key => segments(sensor.history, key, sensor.interval));
         const points = sets.flat(2);
         card.querySelector('[data-chart-note]').textContent = points.length ? 'Time along the horizontal axis; gaps indicate missing readings.' : 'No valid historical rates yet.';
         if (!points.length) return;
         const low = Math.min(...points.map(p => p.time)), high = Math.max(...points.map(p => p.time));
-        const peak = Math.max(sensor.kind === 'cpu' ? 100 : .001, ...points.map(p => p.value));
+        const peak = Math.max(sensor.kind === 'cpu' || sensor.kind === 'ping' ? 100 : .001, ...points.map(p => p.value));
         svg.append(node('path', {d: 'M45 15V145H580', fill: 'none', stroke: 'currentColor', opacity: '.2'}));
         for (const [index, groups] of sets.entries()) {
             for (const group of groups) {
@@ -148,12 +148,14 @@
         if (sensor.counter_reset) note += ' Counter reset detected; calculating a new baseline.';
         if (sensor.restart_detected) note += ' Device uptime reset detected.';
         if (sensor.kind === 'traffic') note += ' In ' + rate(sensor.in_mbps) + ' / Out ' + rate(sensor.out_mbps);
+        if (sensor.kind === 'ping') note += ' Latency ' + (sensor.ping_ms ?? '—') + ' ms, loss ' + (sensor.packet_loss ?? '—') + '%';
         card.querySelector('[data-sample-note]').textContent = note;
         const body = card.querySelector('[data-history]'); body.replaceChildren();
         for (const sample of [...sensor.history].reverse()) {
             const row = body.insertRow();
             row.insertCell().textContent = new Date(sample.timestamp).toLocaleString();
             row.insertCell().textContent = sensor.kind === 'cpu' ? format(sample.cpu) + ' %' :
+                sensor.kind === 'ping' ? (sample.ping_ms ?? '—') + ' ms / ' + (sample.packet_loss ?? '—') + '% loss' :
                 sensor.kind === 'uptime' ? sample.uptime ?? '—' : 'In ' + rate(sample.in_mbps) + ' / Out ' + rate(sample.out_mbps);
             row.insertCell().textContent = sample.valid ? (sample.restart_detected ? 'Uptime reset' : 'Valid') : 'Read failed';
         }
