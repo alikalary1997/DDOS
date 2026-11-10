@@ -7,10 +7,24 @@ from public_ips.services.monitoring import cached_rows, polling_enabled
 from public_ips.services.monitoring_presentation import traffic_fields
 from public_ips.services.monitoring_runtime import live_run
 from monitor.models import DDoSDetectionSettings, DetectionEvent, DeviceDDoSThreshold
+from sensors.models import Sensor, SensorSample
 from .raw_settings import polling_interval
 from .sensor_history import device_cpu, device_telemetry, devices_with_cpu_sensor, traffic_history
 
 EMPTY_MESSAGE = "No devices or public IPs configured yet."
+
+
+def _ping_state_by_device(now):
+    """Device uptime per its ping sensor: 'reachable' / 'unreachable' / None when unknown.
+    Only a fresh, valid sample counts; a missing or stale ping is unknown, never offline."""
+    state = {}
+    for sensor in Sensor.objects.filter(kind="ping", enabled=True):
+        sample = SensorSample.objects.filter(sensor=sensor, valid=True).order_by("-timestamp", "-pk").first()
+        if not sample or (now - sample.timestamp).total_seconds() > max(60, sensor.interval * 3):
+            continue
+        # 100% loss means no reply at all: the device is unreachable.
+        state[sensor.device_id] = "unreachable" if (sample.packet_loss or 0) >= 100 else "reachable"
+    return state
 
 
 def dashboard_data(can_control=False):
@@ -93,6 +107,7 @@ def dashboard_data(can_control=False):
                       monitoring_health="Disabled" if not device["enabled"] else "Receiving samples" if live else
                       "Connection Failed" if "Connection Failed" in healths else "Stale" if "Stale" in healths else "Not Monitored")
     telemetry = device_telemetry()
+    ping_state = _ping_state_by_device(timezone.now())
     for device in devices:
         info = telemetry.get(device["id"], {})
         device["interfaces"] = info.get("interfaces", [])
@@ -111,10 +126,18 @@ def dashboard_data(can_control=False):
               or device["monitoring_health"] in ("Stale", "Connection Failed")
               or device["last_connection_test_succeeded"] is False):
             device["status3"] = "warning"
-        elif device["monitoring_health"] == "Receiving samples":
-            device["status3"] = "online"
         else:
-            device["status3"] = "no_data"
+            # Reachability comes from the device's own ping sensor when one is reporting.
+            reachable = ping_state.get(device["id"], "unknown")
+            device["ping_state"] = reachable
+            if reachable == "reachable":
+                device["status3"] = "online"
+            elif reachable == "unreachable":
+                device["status3"] = "no_data"
+            elif device["monitoring_health"] == "Receiving samples":
+                device["status3"] = "online"
+            else:
+                device["status3"] = "no_data"
     status_counts = {key: sum(d["status3"] == key for d in devices) for key in ("online", "warning", "attack", "no_data")}
     attack_types = sorted({m["label"] for row in incidents if row["ddos_status"] == "Under Attack" for m in row["ddos_metrics"] if m.get("label")})
     if status_counts["attack"]:

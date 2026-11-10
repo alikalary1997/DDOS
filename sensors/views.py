@@ -47,7 +47,7 @@ def fleet_data(request):
 
 def context(device):
     profile = SNMPProfile.objects.filter(device=device).first()
-    from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold
+    from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold, DeviceDDoSProtection
     from monitor.forms import DeviceDDoSThresholdForm
     override = DeviceDDoSThreshold.objects.filter(device=device).first()
     if override:
@@ -58,17 +58,59 @@ def context(device):
         if global_settings:
             initial = {field: getattr(global_settings, field) for field in DeviceDDoSThresholdForm.Meta.fields}
         ddos_form = DeviceDDoSThresholdForm(initial=initial)
+    protection = DeviceDDoSProtection.objects.filter(device=device).prefetch_related("rules").first()
     return {'device': device, 'profile_ready': bool(profile and profile.validated_ip == device.management_ip),
             'profile_form': ProfileForm(initial={'port': profile.port if profile else 161}),
             'sensor_form': AddSensorForm(), 'sensors': Sensor.objects.filter(device=device),
             'polling_authorized': authorized(), 'active_page': 'devices',
-            'ddos_form': ddos_form, 'has_ddos_override': bool(override)}
+            'ddos_form': ddos_form, 'has_ddos_override': bool(override),
+            'protection': protection, 'protection_rules': list(protection.rules.all()) if protection else [],
+            'sos_public': protection.sos_public if protection else ''}
 
 
 @login_required
 @require_GET
 def inventory(request, device_id):
     return render(request, 'sensors/inventory.html', context(device_for(device_id)))
+
+
+@administrator
+@require_POST
+def ddos_protection(request, device_id):
+    """Persist this device's DDoS Protection NAT list and SOS Public value (storage only)."""
+    device = device_for(device_id)
+    from decimal import Decimal, InvalidOperation
+    from monitor.models import DeviceDDoSProtection, DeviceDDoSProtectionRule
+    names = request.POST.getlist('rule_name')
+    values = request.POST.getlist('rule_value')
+    rows, errors = [], []
+    for index, (name, raw) in enumerate(zip(names, values)):
+        name, raw = name.strip(), raw.strip()
+        if not name and not raw:
+            continue  # an untouched blank row is simply dropped
+        value = None
+        if raw:
+            try:
+                value = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                errors.append(f"Row {index + 1}: Value must be a number.")
+        rows.append((name, value))
+    if errors:
+        for message in errors:
+            messages.error(request, message)
+        ctx = context(device)
+        ctx['sos_public'] = request.POST.get('sos_public', '').strip()
+        return render(request, 'sensors/inventory.html', ctx, status=400)
+    with transaction.atomic():
+        protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
+        protection.sos_public = request.POST.get('sos_public', '').strip()
+        protection.save()
+        protection.rules.all().delete()
+        DeviceDDoSProtectionRule.objects.bulk_create([
+            DeviceDDoSProtectionRule(protection=protection, position=position, name=name, value=value)
+            for position, (name, value) in enumerate(rows)])
+    messages.success(request, 'DDoS Protection settings saved for this device.')
+    return redirect('device_sensors', device_id=device.pk)
 
 
 @administrator

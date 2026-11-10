@@ -94,6 +94,28 @@ class DeviceDDoSThreshold(models.Model):
         ]
 
 
+class DeviceDDoSProtection(models.Model):
+    """Per-device DDoS Protection settings: a free-form NAT list and an SOS Public value.
+
+    Storage only: nothing reads these yet. The NAT list is a related model
+    (DeviceDDoSProtectionRule) rather than a JSON blob, so future backend logic can query,
+    reference and edit individual entries."""
+    device = models.OneToOneField("devices.Device", on_delete=models.CASCADE, related_name="ddos_protection")
+    sos_public = models.CharField(max_length=255, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class DeviceDDoSProtectionRule(models.Model):
+    """One editable (name, value) row of a device's DDoS Protection NAT list."""
+    protection = models.ForeignKey(DeviceDDoSProtection, on_delete=models.CASCADE, related_name="rules")
+    position = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=120, blank=True, default="")
+    value = models.DecimalField(max_digits=15, decimal_places=3, null=True, blank=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+
+
 class RAWMonitoringSettings(models.Model):
     """One server-wide configuration; separate from browser refresh preferences."""
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)

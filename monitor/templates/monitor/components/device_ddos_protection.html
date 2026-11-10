@@ -1,0 +1,53 @@
+<section class="panel device-ddos-settings" id="deviceDDoSProtection" aria-labelledby="deviceDDoSProtectionTitle">
+    <div class="panel-heading"><div><h2 id="deviceDDoSProtectionTitle">DDoS Protection</h2><p class="panel-subtitle">NAT entries and SOS Public for this device</p></div><span class="phase-badge">SAVED CONFIGURATION</span></div>
+    <p class="settings-section-note" id="deviceDDoSProtectionNote">These values are stored for this device only. Saving them does not start, stop or change detection, and does not block traffic.</p>
+    <form method="post" action="{% url 'device_ddos_protection' device.id %}#deviceDDoSProtection" id="deviceProtectionForm">
+        {% csrf_token %}
+        <table class="ddos-thresholds-table" id="natRulesTable" aria-describedby="deviceDDoSProtectionNote">
+            <caption class="sr-only">NAT list: name and value per row</caption>
+            <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
+            <tbody id="natRulesBody">
+            {% for rule in protection_rules %}
+                <tr>
+                    <td><input type="text" name="rule_name" value="{{ rule.name }}" maxlength="120" aria-label="NAT row {{ forloop.counter }} name"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}></td>
+                    <td><input type="number" name="rule_value" value="{% if rule.value is not None %}{{ rule.value|floatformat:"-3" }}{% endif %}" step="0.001" inputmode="decimal" aria-label="NAT row {{ forloop.counter }} value"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}></td>
+                    <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row {{ forloop.counter }}"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}>&times;</button></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <template id="natRuleTemplate"><tr>
+            <td><input type="text" name="rule_name" maxlength="120" aria-label="New NAT row name"></td>
+            <td><input type="number" name="rule_value" step="0.001" inputmode="decimal" aria-label="New NAT row value"></td>
+            <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row">&times;</button></td>
+        </tr></template>
+        {% if user.is_staff or user.is_superuser %}<div class="settings-section-actions"><button type="button" class="secondary-button" id="addNatRule">+ Add Row</button></div>{% endif %}
+        <div class="settings-fields" style="margin-top:18px">
+            <label for="sosPublic"><span>SOS Public</span><input id="sosPublic" type="text" name="sos_public" value="{{ sos_public }}" maxlength="255" autocomplete="off" aria-describedby="deviceDDoSProtectionNote"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}></label>
+        </div>
+        <div class="settings-section-actions">{% if user.is_staff or user.is_superuser %}<button type="submit" class="primary-button">Save DDoS Protection</button>{% else %}<span>Administrator access is required to change these settings.</span>{% endif %}</div>
+    </form>
+</section>
+<script>
+(() => {
+    "use strict";
+    const body = document.getElementById("natRulesBody");
+    const template = document.getElementById("natRuleTemplate");
+    const add = document.getElementById("addNatRule");
+    if (!body || !template) return;
+    const renumber = () => [...body.querySelectorAll("tr")].forEach((row, index) => {
+        const cells = row.querySelectorAll("input");
+        if (cells[0]) cells[0].setAttribute("aria-label", `NAT row ${index + 1} name`);
+        if (cells[1]) cells[1].setAttribute("aria-label", `NAT row ${index + 1} value`);
+        const remove = row.querySelector("[data-remove-rule]");
+        if (remove) remove.setAttribute("aria-label", `Remove NAT row ${index + 1}`);
+    });
+    add?.addEventListener("click", () => { body.append(template.content.cloneNode(true)); renumber(); });
+    body.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-remove-rule]");
+        if (!button) return;
+        button.closest("tr").remove();
+        renumber();
+    });
+})();
+</script>

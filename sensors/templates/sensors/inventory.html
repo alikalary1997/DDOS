@@ -18,6 +18,7 @@
 {% if user.is_staff or user.is_superuser %}<footer><form method="post" action="{% url 'sensor_control' device.id sensor.id 'start' %}">{% csrf_token %}<button class="primary-button"{% if sensor.enabled %} disabled{% endif %}>Start</button></form><form method="post" action="{% url 'sensor_control' device.id sensor.id 'stop' %}">{% csrf_token %}<button class="secondary-button"{% if not sensor.enabled %} disabled{% endif %}>Stop</button></form><a class="secondary-button" href="{% url 'sensor_edit' device.id sensor.id %}">Edit</a><details><summary>Delete</summary><p>Delete this sensor and all its historical samples?</p><form method="post" action="{% url 'sensor_control' device.id sensor.id 'delete' %}">{% csrf_token %}<button class="secondary-button">Confirm delete</button></form></details></footer>{% endif %}</article>
 {% empty %}<div class="panel"><h3>No sensors yet</h3><p>Use Add Sensor to configure monitoring for {{ device.name }}.</p></div>{% endfor %}</section>
 {% include "monitor/components/device_ddos_settings.html" %}
+{% include "monitor/components/device_ddos_protection.html" %}
 {% endblock %}
 
 {% block dialogs %}
