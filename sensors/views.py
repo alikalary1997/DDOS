@@ -79,36 +79,17 @@ def inventory(request, device_id):
 def ddos_protection(request, device_id):
     """Persist this device's DDoS Protection NAT list and SOS Public value (storage only)."""
     device = device_for(device_id)
-    from decimal import Decimal, InvalidOperation
     from monitor.models import DeviceDDoSProtection, DeviceDDoSProtectionRule
-    names = request.POST.getlist('rule_name')
-    values = request.POST.getlist('rule_value')
-    rows, errors = [], []
-    for index, (name, raw) in enumerate(zip(names, values)):
-        name, raw = name.strip(), raw.strip()
-        if not name and not raw:
-            continue  # an untouched blank row is simply dropped
-        value = None
-        if raw:
-            try:
-                value = Decimal(raw)
-            except (InvalidOperation, ValueError):
-                errors.append(f"Row {index + 1}: Value must be a number.")
-        rows.append((name, value))
-    if errors:
-        for message in errors:
-            messages.error(request, message)
-        ctx = context(device)
-        ctx['sos_public'] = request.POST.get('sos_public', '').strip()
-        return render(request, 'sensors/inventory.html', ctx, status=400)
+    # Name-only list: blank rows are simply dropped.
+    rows = [name.strip() for name in request.POST.getlist('rule_name') if name.strip()]
     with transaction.atomic():
         protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
         protection.sos_public = request.POST.get('sos_public', '').strip()
         protection.save()
         protection.rules.all().delete()
         DeviceDDoSProtectionRule.objects.bulk_create([
-            DeviceDDoSProtectionRule(protection=protection, position=position, name=name, value=value)
-            for position, (name, value) in enumerate(rows)])
+            DeviceDDoSProtectionRule(protection=protection, position=position, name=name)
+            for position, name in enumerate(rows)])
     messages.success(request, 'DDoS Protection settings saved for this device.')
     return redirect('device_sensors', device_id=device.pk)
 
