@@ -10,19 +10,26 @@
     let filter = "all", busy = false;
     const expanded = new Set();
 
-    const cpuLevel = (cpu) => cpu >= data.high_cpu ? "red" : cpu >= data.warn_cpu ? "orange" : "green";
+    // Per-device limits come from the saved CPU thresholds; fall back to the legacy global values.
+    const num = (value) => typeof value === "number" && Number.isFinite(value);
+    const cpuLevel = (cpu, d) => (cpu >= (num(d.cpu_attack) ? d.cpu_attack : data.high_cpu) ? "red"
+        : cpu >= (num(d.cpu_warning) ? d.cpu_warning : data.warn_cpu) ? "orange" : "green");
     const view = (d) => {
         // Only a live (running, fresh) reading may drive warnings, filters and counts.
         const live = d.metrics.cpu.state === "ok" && d.metrics.cpu.mode === "live";
         const cpu = live ? d.metrics.cpu.value : null;
         const known = cpu !== null;
+        // CPU colour follows the saved CPU thresholds, exactly like the dashboard.
+        const cpuTone = known ? cpuLevel(cpu, d) : "";
+        const cpuAttack = cpuTone === "red", cpuWarn = cpuTone === "orange";
         const state = d.attacked ? (d.monitored ? ["UNDER ATTACK", "red"] : ["ATTACK - UNMONITORED", "red"])
-            : d.warning ? ["WARNING", "orange"]
+            : cpuAttack ? ["HIGH CPU", "red"]
+            : d.warning || cpuWarn ? ["WARNING", "orange"]
             : d.monitored ? ["MONITORING", "green"] : ["NOT MONITORED", "gray"];
-        const highCpu = known && cpu >= data.high_cpu, warnCpu = known && cpu >= data.warn_cpu && !highCpu;
+        const highCpu = cpuAttack, warnCpu = cpuWarn;
         const unprotected = d.monitored ? [] : d.ips.filter((ip) => ip.attacked);
         const border = highCpu ? "red" : (warnCpu || unprotected.length || d.warning) ? "orange" : "";
-        return {known, cpu, state, highCpu, warnCpu, unprotected, border};
+        return {known, cpu, cpuTone, highCpu, warnCpu, state, border, unprotected};
     };
     const matches = (d) => {
         const v = view(d);
@@ -86,12 +93,12 @@
         node.append(el("div", {className: "dd-head"},
             el("div", {className: "dd-name"}, el("b", {text: d.name}), el("span", {className: "dd-badge", dataset: {tone: v.state[1]}, text: v.state[0]})),
             el("span", {className: "dd-ip", text: d.management_ip})));
-        if (v.highCpu) node.append(el("p", {className: "dd-warn", dataset: {tone: "red"}, text: `CPU at ${Math.round(v.cpu)}%. High load can hide or worsen an attack. Check this device.`}));
-        else if (v.warnCpu) node.append(el("p", {className: "dd-warn", dataset: {tone: "orange"}, text: `CPU is above ${data.warn_cpu}%. Keep an eye on this device.`}));
+        if (v.highCpu) node.append(el("p", {className: "dd-warn", dataset: {tone: "red"}, text: `CPU at ${Math.round(v.cpu)}%, above the ${d.cpu_attack}% attack limit. High load can hide or worsen an attack. Check this device.`}));
+        else if (v.warnCpu) node.append(el("p", {className: "dd-warn", dataset: {tone: "orange"}, text: `CPU at ${Math.round(v.cpu)}%, above the ${d.cpu_warning}% warning limit. Keep an eye on this device.`}));
         for (const ip of v.unprotected) node.append(el("p", {className: "dd-warn", dataset: {tone: "red"}},
             el("b", {text: ip.address}), " is under attack but this device is not monitored. Start monitoring."));
         const m = d.metrics, scale = data.bandwidth_scale_mbps;
-        node.append(metric("CPU", m.cpu, d.sensors_url, (e) => `${Math.round(e.value)}%`, v.known ? v.cpu : null, v.known ? cpuLevel(v.cpu) : ""));
+        node.append(metric("CPU", m.cpu, d.sensors_url, (e) => `${Math.round(e.value)}%`, v.known ? v.cpu : null, v.known ? v.cpuTone : ""));
         node.append(metric("Bandwidth", m.traffic, d.sensors_url, (e) => rate(e.value), scale ? (m.traffic.value / scale) * 100 : null, "", m.traffic.state === "ok" ? trafficTip(m.traffic) : ""));
         node.append(metric("Uptime", m.uptime, d.sensors_url, (e) => uptimeText(e.value), null));
         const actions = el("div", {className: "dd-actions"});

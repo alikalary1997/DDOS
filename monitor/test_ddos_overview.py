@@ -75,6 +75,17 @@ class DDoSOverviewTests(TestCase):
         self.assertFalse(device["attacked"]); self.assertTrue(device["warning"])
         self.assertEqual(device["ips"][0]["status"], "Warning")
 
+    def test_cpu_thresholds_are_exposed_per_device(self):
+        from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold
+        settings = DDoSDetectionSettings.objects.get(pk=1)
+        settings.cpu_warning = 5; settings.cpu_attack = 45; settings.save()
+        device = self.devices()[0]
+        self.assertEqual((device["cpu_warning"], device["cpu_attack"]), (5.0, 45.0))
+        # A per-device override wins over the global default, exactly like the dashboard.
+        DeviceDDoSThreshold.objects.create(device=self.device, cpu_warning=4, cpu_attack=8)
+        device = self.devices()[0]
+        self.assertEqual((device["cpu_warning"], device["cpu_attack"]), (4.0, 8.0))
+
     def test_control_requires_post_csrf_session_and_admin(self):
         self.assertEqual(self.client.get(f"/ddos-detection/devices/{self.device.pk}/start/").status_code, 405)
         self.client.logout()

@@ -13,7 +13,7 @@ from django.utils import timezone
 from devices.models import Device
 from public_ips.models import PublicIP
 from sensors.presentation import fleet_snapshot
-from monitor.models import DDoSDetectionSettings, DetectionState
+from monitor.models import DDoSDetectionSettings, DetectionState, DeviceDDoSThreshold
 from .dashboard_data import dashboard_data
 
 HIGH_CPU = 80
@@ -74,12 +74,15 @@ def overview(can_control=False):
     open_states = dict(DetectionState.objects.filter(
         confirmed_status__in=("Warning", "Under Attack"), event__isnull=False, event__ended_at__isnull=True
     ).values_list("public_ip_id", "confirmed_status"))
-    sensors = fleet_snapshot()
-    thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+    sensor_fleet = fleet_snapshot()
+    global_thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
+    cpu_thresholds = {device_id: (cpu_warning, cpu_attack)
+                      for device_id, cpu_warning, cpu_attack
+                      in DeviceDDoSThreshold.objects.values_list("device_id", "cpu_warning", "cpu_attack")}
     devices = []
     for device in Device.objects.filter(device_type="mikrotik").values(
             "id", "name", "management_ip", "enabled"):
-        metrics = _device_metrics(sensors.get(device["id"], []), now)
+        metrics = _device_metrics(sensor_fleet.get(device["id"], []), now)
         ips = []
         for row in rows_by_device.get(device["id"], []):
             monitored = row["monitoring_health"] != "Not Monitored"
@@ -93,15 +96,21 @@ def overview(can_control=False):
                         "status": status, "attacked": status == "Under Attack", "warning": status == "Warning",
                         "health": row["monitoring_health"]})
         monitored = any(ip["monitored"] for ip in ips)
+        # CPU limits come from the device's own override, else the global default.
+        cpu_warning, cpu_attack = cpu_thresholds.get(device["id"], (
+            global_thresholds.cpu_warning if global_thresholds else None,
+            global_thresholds.cpu_attack if global_thresholds else None))
         devices.append({
             "id": device["id"], "name": device["name"], "management_ip": device["management_ip"],
             "enabled": device["enabled"], "monitored": monitored,
             "attacked": any(ip["attacked"] for ip in ips),
             "warning": (not any(ip["attacked"] for ip in ips)) and any(ip["warning"] for ip in ips),
+            "cpu_warning": float(cpu_warning) if cpu_warning is not None else None,
+            "cpu_attack": float(cpu_attack) if cpu_attack is not None else None,
             "metrics": metrics, "sensors_url": reverse("devices") + f"#inspect-{device['id']}", "ips": ips})
     return {
         "can_control": can_control, "generated_at": now,
-        "bandwidth_scale_mbps": float(thresholds.bandwidth_mbps_attack) if thresholds else None,
+        "bandwidth_scale_mbps": float(global_thresholds.bandwidth_mbps_attack) if global_thresholds else None,
         "high_cpu": HIGH_CPU, "warn_cpu": WARN_CPU, "devices": devices}
 
 

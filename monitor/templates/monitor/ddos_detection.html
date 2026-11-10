@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}DDoS Detection{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/ddos_detection.css' %}?v=20261110-warning1">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/ddos_detection.js' %}?v=20261110-warning1" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/ddos_detection.js' %}?v=20261110-cputhresh1" defer></script>{% endblock %}
 {% block footer_note %}Detection only &middot; no automatic mitigation{% endblock %}
 {% block content %}
 <div class="dd-page" id="ddPage" data-data-url="{% url 'ddos_detection_data' %}" data-control-url="{% url 'ddos_detection_all_control' 'start' %}" data-can-control="{{ overview.can_control|yesno:'1,0' }}">
@@ -23,7 +23,7 @@
 <section class="dd-summary" aria-label="Summary">
     <article class="dd-card-stat"><span>Devices monitored</span><strong id="sumMonitored">-</strong></article>
     <article class="dd-card-stat"><span>Not monitored</span><strong id="sumUnmonitored">-</strong></article>
-    <article class="dd-card-stat" data-tone="red"><span>High CPU (above 80%)</span><strong id="sumCpu">-</strong></article>
+    <article class="dd-card-stat" data-tone="red"><span>High CPU (at or above each device's attack limit)</span><strong id="sumCpu">-</strong></article>
     <article class="dd-card-stat" data-tone="red"><span>Devices under attack</span><strong id="sumAttack">-</strong></article>
     <article class="dd-card-stat"><span>Public IPs protected</span><strong id="sumIps">-</strong></article>
 </section>
