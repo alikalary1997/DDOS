@@ -9,7 +9,7 @@
     const store=(()=>{ try { return window.localStorage || null; } catch(_) { return null; } })();
     let clearedAt=Number(store?.getItem(CLEAR_KEY)) || 0;
     const statuses = {Normal:"normal", Warning:"warning", "Under Attack":"under-attack", Unknown:"unknown"};
-    const metricLabels = {total_pps:"Total PPS", bandwidth_mbps:"Bandwidth", syn_pps:"TCP SYN PPS", udp_pps:"UDP PPS"};
+    const metricLabels = {total_pps:"Total PPS", bandwidth_mbps:"Bandwidth", syn_pps:"TCP SYN PPS", udp_pps:"UDP PPS", cpu:"CPU (%)"};
     const numeric = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
     const number = (value, places=2) => numeric(value) ? value.toLocaleString(undefined, {maximumFractionDigits:places}) : "\u2014";
     const time = value => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString(undefined, {month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",timeZoneName:"short"}) : "\u2014";

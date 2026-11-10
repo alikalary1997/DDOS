@@ -8,6 +8,11 @@ DEFAULT_POLLING_INTERVAL = 5
 DETECTION_METRICS = (("total_pps", "Total PPS"), ("bandwidth_mbps", "Bandwidth (Mbps)"),
                      ("syn_pps", "TCP SYN PPS"), ("udp_pps", "UDP PPS"))
 
+# RAW-sample metrics. CPU is evaluated separately: it comes from the device's CPU sensor.
+CPU_METRIC = ("cpu", "CPU (%)")
+# Every threshold row, in display order, used by both settings forms and the engine.
+THRESHOLD_METRICS = DETECTION_METRICS + (CPU_METRIC,)
+
 
 class DDoSDetectionSettings(models.Model):
     """Persistent thresholds; evaluated only when detection is explicitly enabled."""
@@ -20,12 +25,14 @@ class DDoSDetectionSettings(models.Model):
     syn_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=10000, validators=[MinValueValidator(0)])
     udp_pps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=5000, validators=[MinValueValidator(0)])
     udp_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=20000, validators=[MinValueValidator(0)])
+    cpu_warning = models.DecimalField(max_digits=6, decimal_places=3, default=70, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    cpu_attack = models.DecimalField(max_digits=6, decimal_places=3, default=90, validators=[MinValueValidator(0), MaxValueValidator(100)])
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
         super().clean()
         errors = {}
-        for metric, label in DETECTION_METRICS:
+        for metric, label in THRESHOLD_METRICS:
             warning, attack = getattr(self, metric + "_warning"), getattr(self, metric + "_attack")
             # Field validation reports malformed and nonfinite values separately.
             try:
@@ -38,10 +45,13 @@ class DDoSDetectionSettings(models.Model):
 
     class Meta:
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name="ddos_settings_singleton")] + [
-            constraint for metric, _ in DETECTION_METRICS for constraint in (
+            constraint for metric, _ in THRESHOLD_METRICS for constraint in (
                 models.CheckConstraint(condition=models.Q(**{metric + "_warning__gte": 0}), name=f"ddos_{metric}_warning_nonnegative"),
                 models.CheckConstraint(condition=models.Q(**{metric + "_attack__gt": models.F(metric + "_warning")}), name=f"ddos_{metric}_attack_above_warning"),
-            )]
+            )] + [
+            models.CheckConstraint(condition=models.Q(cpu_warning__lte=100), name="ddos_cpu_warning_max"),
+            models.CheckConstraint(condition=models.Q(cpu_attack__lte=100), name="ddos_cpu_attack_max"),
+        ]
 
 
 class DeviceDDoSThreshold(models.Model):
@@ -56,12 +66,14 @@ class DeviceDDoSThreshold(models.Model):
     syn_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=10000, validators=[MinValueValidator(0)])
     udp_pps_warning = models.DecimalField(max_digits=15, decimal_places=3, default=5000, validators=[MinValueValidator(0)])
     udp_pps_attack = models.DecimalField(max_digits=15, decimal_places=3, default=20000, validators=[MinValueValidator(0)])
+    cpu_warning = models.DecimalField(max_digits=6, decimal_places=3, default=70, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    cpu_attack = models.DecimalField(max_digits=6, decimal_places=3, default=90, validators=[MinValueValidator(0), MaxValueValidator(100)])
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
         super().clean()
         errors = {}
-        for metric, label in DETECTION_METRICS:
+        for metric, label in THRESHOLD_METRICS:
             warning, attack = getattr(self, metric + "_warning"), getattr(self, metric + "_attack")
             try:
                 if warning is not None and attack is not None and attack <= warning:
@@ -73,10 +85,13 @@ class DeviceDDoSThreshold(models.Model):
 
     class Meta:
         constraints = [
-            constraint for metric, _ in DETECTION_METRICS for constraint in (
+            constraint for metric, _ in THRESHOLD_METRICS for constraint in (
                 models.CheckConstraint(condition=models.Q(**{metric + "_warning__gte": 0}), name=f"ddos_device_{metric}_warning_nonnegative"),
                 models.CheckConstraint(condition=models.Q(**{metric + "_attack__gt": models.F(metric + "_warning")}), name=f"ddos_device_{metric}_attack_above_warning"),
-            )]
+            )] + [
+            models.CheckConstraint(condition=models.Q(cpu_warning__lte=100), name="ddos_device_cpu_warning_max"),
+            models.CheckConstraint(condition=models.Q(cpu_attack__lte=100), name="ddos_device_cpu_attack_max"),
+        ]
 
 
 class RAWMonitoringSettings(models.Model):
@@ -129,6 +144,7 @@ class DetectionEvent(models.Model):
     peak_bandwidth_mbps = models.FloatField(default=0)
     peak_syn_pps = models.FloatField(default=0)
     peak_udp_pps = models.FloatField(default=0)
+    peak_cpu = models.FloatField(default=0)
     highest_severity = models.CharField(max_length=20)
 
     @property

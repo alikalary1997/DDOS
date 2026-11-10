@@ -14,7 +14,7 @@
                 </tr>
             {% endfor %}</tbody>
         </table>
-        <p class="settings-section-note" id="deviceDDoSThresholdValidation">Warning must be zero or greater. Attack must be greater than Warning. All eight values are required; up to three decimal places are supported.</p>
+        <p class="settings-section-note" id="deviceDDoSThresholdValidation">Warning must be zero or greater. Attack must be greater than Warning. All values are required; up to three decimal places are supported. CPU values are percentages (0–100), read from the device's CPU sensor; a missing or stale CPU reading is reported as Unknown.</p>
         <div class="settings-section-actions">{% if user.is_staff or user.is_superuser %}<button type="submit" class="primary-button">Save Thresholds</button>{% else %}<span>Administrator access is required to change thresholds.</span>{% endif %}</div>
     </form>
     {% if has_ddos_override %}{% if user.is_staff or user.is_superuser %}

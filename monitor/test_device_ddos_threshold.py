@@ -87,16 +87,17 @@ class DeviceDDoSThresholdUITests(TestCase):
         self.values = {"total_pps_warning": "9000", "total_pps_attack": "45000",
                        "bandwidth_mbps_warning": "95.125", "bandwidth_mbps_attack": "450.5",
                        "syn_pps_warning": "1500", "syn_pps_attack": "9000",
-                       "udp_pps_warning": "4000", "udp_pps_attack": "19000"}
+                       "udp_pps_warning": "4000", "udp_pps_attack": "19000",
+                       "cpu_warning": "70", "cpu_attack": "90"}
 
     def test_section_renders_with_global_defaults(self):
         response = self.client.get(self.url)
         self.assertContains(response, "DDoS Settings")
         self.assertContains(response, "USING GLOBAL DEFAULTS")
         self.assertContains(response, "not validated production thresholds")
-        for label in ("Total PPS", "Bandwidth (Mbps)", "TCP SYN PPS", "UDP PPS"):
+        for label in ("Total PPS", "Bandwidth (Mbps)", "TCP SYN PPS", "UDP PPS", "CPU (%)"):
             self.assertContains(response, label)
-        self.assertEqual(len(response.context["ddos_form"].fields), 8)
+        self.assertEqual(len(response.context["ddos_form"].fields), 10)
         # The global default is pre-filled, but no override row exists yet.
         self.assertEqual(Decimal(response.context["ddos_form"]["syn_pps_warning"].value()), Decimal("2000"))
         self.assertFalse(DeviceDDoSThreshold.objects.filter(device=self.device).exists())

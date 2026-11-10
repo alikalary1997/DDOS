@@ -10,7 +10,7 @@ from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from monitor.models import DETECTION_METRICS, DDoSDetectionSettings, RAWMonitoringSettings
+from monitor.models import DETECTION_METRICS, THRESHOLD_METRICS, DDoSDetectionSettings, RAWMonitoringSettings
 
 
 class DDoSSettingsTests(TestCase):
@@ -22,7 +22,8 @@ class DDoSSettingsTests(TestCase):
         self.values = {"total_pps_warning": "10000", "total_pps_attack": "50000",
                        "bandwidth_mbps_warning": "100", "bandwidth_mbps_attack": "500",
                        "syn_pps_warning": "2000", "syn_pps_attack": "10000",
-                       "udp_pps_warning": "5000", "udp_pps_attack": "20000"}
+                       "udp_pps_warning": "5000", "udp_pps_attack": "20000",
+                       "cpu_warning": "70", "cpu_attack": "90"}
 
     def post(self, values=None):
         return self.client.post(self.url, {"settings_section": "ddos", **(values if values is not None else self.values)})
@@ -37,7 +38,7 @@ class DDoSSettingsTests(TestCase):
         response = self.client.get(self.url)
         self.assertContains(response, "not validated production thresholds")
         self.assertContains(response, "Save Changes")
-        self.assertEqual(len(response.context["ddos_settings_form"].fields), 8)
+        self.assertEqual(len(response.context["ddos_settings_form"].fields), 10)
         class Forms(HTMLParser):
             current = None
             nested = False
@@ -57,11 +58,12 @@ class DDoSSettingsTests(TestCase):
         self.assertFalse(parser.nested)
         self.assertEqual(set(parser.fields), set(self.values))
 
-    def test_all_eight_values_persist_and_syn_1500_survives_refresh(self):
+    def test_all_values_persist_and_syn_1500_survives_refresh(self):
         values = {"total_pps_warning": "9000", "total_pps_attack": "45000",
                   "bandwidth_mbps_warning": "95.125", "bandwidth_mbps_attack": "450.5",
                   "syn_pps_warning": "1500", "syn_pps_attack": "9000",
-                  "udp_pps_warning": "4000", "udp_pps_attack": "19000"}
+                  "udp_pps_warning": "4000", "udp_pps_attack": "19000",
+                  "cpu_warning": "65", "cpu_attack": "85"}
         interval = RAWMonitoringSettings.objects.get(pk=1).polling_interval
         with patch("routeros_api.RouterOsApiPool") as pool, patch("subprocess.Popen") as launch:
             self.assertRedirects(self.post(values), self.url + "#detectionSettings")
@@ -89,7 +91,7 @@ class DDoSSettingsTests(TestCase):
         self.assertEqual(self.saved(), before)
 
     def test_attack_must_exceed_warning_for_each_metric_and_zero_warning_is_valid(self):
-        for metric, _ in DETECTION_METRICS:
+        for metric, _ in THRESHOLD_METRICS:
             for attack in ("10", "9"):
                 response = self.post({**self.values, metric + "_warning": "10", metric + "_attack": attack})
                 self.assertEqual(response.status_code, 400)
@@ -120,7 +122,7 @@ class DDoSSettingsTests(TestCase):
         self.assertEqual(DDoSDetectionSettings.objects.count(), 1)
 
     def test_database_constraints_protect_warning_attack_and_singleton(self):
-        for metric, _ in DETECTION_METRICS:
+        for metric, _ in THRESHOLD_METRICS:
             for values in ({metric + "_warning": -1}, {metric + "_attack": 0}):
                 with self.assertRaises(IntegrityError), transaction.atomic():
                     DDoSDetectionSettings.objects.filter(pk=1).update(**values)

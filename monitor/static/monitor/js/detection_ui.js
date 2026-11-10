@@ -1,7 +1,7 @@
 (() => {
     "use strict";
     const states = {Normal: "normal", Warning: "warning", "Under Attack": "under-attack", Unknown: "unknown"};
-    const labels = {total_pps: "Total PPS", bandwidth_mbps: "Bandwidth (Mbps)", syn_pps: "TCP SYN PPS", udp_pps: "UDP PPS"};
+    const labels = {total_pps: "Total PPS", bandwidth_mbps: "Bandwidth (Mbps)", syn_pps: "TCP SYN PPS", udp_pps: "UDP PPS", cpu: "CPU (%)"};
     function render(root, data) {
         const status = data.monitoring_health === "Active" && states[data.ddos_status] ? data.ddos_status : "Unknown";
         const badge = root.querySelector("[data-ddos-status]");

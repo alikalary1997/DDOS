@@ -8,10 +8,11 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from monitor.models import DETECTION_METRICS, DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy, DetectionState, DetectionEvent
+from monitor.models import DETECTION_METRICS, CPU_METRIC, DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy, DetectionState, DetectionEvent
 from monitor.services.raw_settings import sample_freshness_seconds
 from public_ips.models import PublicIP
 from public_ips.services.monitoring_presentation import traffic_fields
+from sensors.models import Sensor, SensorSample
 
 COUNTS = ("warning_count", "attack_count", "warning_recovery_count", "attack_recovery_count")
 RANK = {"Unknown": -1, "Normal": 0, "Warning": 1, "Under Attack": 2}
@@ -44,6 +45,18 @@ def values_for(row, address):
     result = {"total_pps": values["pps"], "bandwidth_mbps": values["mbps"],
               "syn_pps": values["syn_pps"], "udp_pps": values["udp_pps"]}
     return result if all(value is not None for value in result.values()) else None
+
+
+def fresh_cpu(device_id, now):
+    """Latest fresh CPU percentage from an enabled CPU sensor, or None when unknown.
+    Never guesses 0%: a missing sensor or a stale reading is reported as None."""
+    sensor = Sensor.objects.filter(device_id=device_id, kind="cpu", enabled=True).order_by("pk").first()
+    if not sensor:
+        return None
+    sample = SensorSample.objects.filter(sensor=sensor, valid=True, cpu__isnull=False).order_by("-timestamp", "-pk").first()
+    if not sample or (now - sample.timestamp).total_seconds() > max(60, sensor.interval * 3):
+        return None
+    return sample.cpu
 
 
 def reset_counts(state):
@@ -114,13 +127,24 @@ def process_sample(sample):
             state.last_valid_at = None
             state.save()
             continue
+        # CPU comes from the device's CPU sensor, not the RAW sample. Unknown values are
+        # excluded from thresholds entirely rather than being treated as 0% or Normal.
+        cpu = fresh_cpu(ip.device_id, now)
+        if cpu is not None:
+            values[CPU_METRIC[0]] = cpu
         state.last_valid_at = at
         warning = [name for name, _ in DETECTION_METRICS if Decimal(str(values[name])) >= getattr(thresholds, name + "_warning")]
         attack = [name for name, _ in DETECTION_METRICS if Decimal(str(values[name])) >= getattr(thresholds, name + "_attack")]
+        cpu_label = CPU_METRIC[1]
+        if cpu is not None and Decimal(str(cpu)) >= thresholds.cpu_warning:
+            warning.append(CPU_METRIC[0])
+            if Decimal(str(cpu)) >= thresholds.cpu_attack:
+                attack.append(CPU_METRIC[0])
         factor = Decimal(100 - policy.hysteresis_percent) / 100
         def below(level):
-            return all(Decimal(str(values[name])) < getattr(thresholds, name + "_" + level) * factor
-                       for name, _ in DETECTION_METRICS)
+            return (all(Decimal(str(values[name])) < getattr(thresholds, name + "_" + level) * factor
+                        for name, _ in DETECTION_METRICS)
+                    and (cpu is None or Decimal(str(cpu)) < getattr(thresholds, "cpu_" + level) * factor))
         for name, condition in zip(COUNTS, (bool(warning), bool(attack), below("warning"), below("attack"))):
             setattr(state, name, min(getattr(state, name) + 1, 100) if condition else 0)
         if warning:
@@ -143,6 +167,9 @@ def process_sample(sample):
             status = "Normal"
         triggers = [{"metric": name, "label": label, "severity": "Under Attack" if name in attack else "Warning"}
                     for name, label in DETECTION_METRICS if name in warning]
+        if CPU_METRIC[0] in warning:
+            triggers.append({"metric": CPU_METRIC[0], "label": cpu_label,
+                             "severity": "Under Attack" if CPU_METRIC[0] in attack else "Warning"})
         if status in ("Warning", "Under Attack") and not state.event_id:
             state.event, _ = DetectionEvent.objects.get_or_create(
                 assignment_id_snapshot=ip.pk, profile_key=key, ended_at__isnull=True,

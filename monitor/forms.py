@@ -1,5 +1,5 @@
 from django import forms
-from .models import DEFAULT_POLLING_INTERVAL, POLLING_INTERVALS, DETECTION_METRICS, DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy
+from .models import DEFAULT_POLLING_INTERVAL, POLLING_INTERVALS, DETECTION_METRICS, THRESHOLD_METRICS, DDoSDetectionSettings, DeviceDDoSThreshold, DetectionPolicy
 
 
 class DetectionPolicyForm(forms.ModelForm):
@@ -13,41 +13,47 @@ class DetectionPolicyForm(forms.ModelForm):
 class DDoSDetectionSettingsForm(forms.ModelForm):
     class Meta:
         model = DDoSDetectionSettings
-        fields = [metric + "_" + level for metric, _ in DETECTION_METRICS for level in ("warning", "attack")]
+        fields = [metric + "_" + level for metric, _ in THRESHOLD_METRICS for level in ("warning", "attack")]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for metric, label in DETECTION_METRICS:
+        for metric, label in THRESHOLD_METRICS:
+            percent = metric == "cpu"
             for level in ("warning", "attack"):
                 field = self.fields[metric + "_" + level]
                 field.label = f"{label} {level.title()}"
                 field.widget.attrs.update({"min": "0", "step": "0.001", "inputmode": "decimal",
                                            "aria-label": field.label})
+                if percent:
+                    field.widget.attrs["max"] = "100"
 
     @property
     def threshold_rows(self):
         return [{"label": label, "warning": self[metric + "_warning"], "attack": self[metric + "_attack"]}
-                for metric, label in DETECTION_METRICS]
+                for metric, label in THRESHOLD_METRICS]
 
 
 class DeviceDDoSThresholdForm(forms.ModelForm):
     class Meta:
         model = DeviceDDoSThreshold
-        fields = [metric + "_" + level for metric, _ in DETECTION_METRICS for level in ("warning", "attack")]
+        fields = [metric + "_" + level for metric, _ in THRESHOLD_METRICS for level in ("warning", "attack")]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for metric, label in DETECTION_METRICS:
+        for metric, label in THRESHOLD_METRICS:
+            percent = metric == "cpu"
             for level in ("warning", "attack"):
                 field = self.fields[metric + "_" + level]
                 field.label = f"{label} {level.title()}"
                 field.widget.attrs.update({"min": "0", "step": "0.001", "inputmode": "decimal",
                                            "aria-label": field.label})
+                if percent:
+                    field.widget.attrs["max"] = "100"
 
     @property
     def threshold_rows(self):
         return [{"label": label, "warning": self[metric + "_warning"], "attack": self[metric + "_attack"]}
-                for metric, label in DETECTION_METRICS]
+                for metric, label in THRESHOLD_METRICS]
 
 
 class RAWMonitoringSettingsForm(forms.Form):
