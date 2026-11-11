@@ -1,2 +1,9 @@
 {# The device inspector now opens through the device name; this links directly to SNMP sensor settings. #}
+<div class="device-protection">
+    <form method="post" action="{% url 'device_ddos_protection_toggle' device.id %}" class="device-protection-form">
+        {% csrf_token %}
+        <input type="hidden" name="enabled" value="{% if device.ddos_protection_enabled %}0{% else %}1{% endif %}">
+        <button type="submit" class="device-protection-button" data-state="{% if device.ddos_protection_enabled %}enabled{% else %}disabled{% endif %}" aria-pressed="{% if device.ddos_protection_enabled %}true{% else %}false{% endif %}" title="Click to {% if device.ddos_protection_enabled %}disable{% else %}enable{% endif %} DDoS Protection for {{ device.name }}">Protection <strong>{% if device.ddos_protection_enabled %}Enabled{% else %}Disabled{% endif %}</strong></button>
+    </form>
+</div>
 <a class="noc-inspect" href="{% url 'device_sensors' device.id %}" aria-label="Settings for {{ device.name }}">Settings</a>

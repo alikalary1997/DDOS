@@ -65,6 +65,7 @@ def context(device):
             'polling_authorized': authorized(), 'active_page': 'devices',
             'ddos_form': ddos_form, 'has_ddos_override': bool(override),
             'protection': protection, 'protection_rules': list(protection.rules.all()) if protection else [],
+            'protection_enabled': bool(protection and protection.enabled),
             'sos_public': protection.sos_public if protection else ''}
 
 
@@ -72,6 +73,22 @@ def context(device):
 @require_GET
 def inventory(request, device_id):
     return render(request, 'sensors/inventory.html', context(device_for(device_id)))
+
+
+@administrator
+@require_POST
+def ddos_protection_toggle(request, device_id):
+    """Flip the DDoS Protection enabled flag for this device (storage only, no behaviour)."""
+    device = device_for(device_id)
+    from monitor.models import DeviceDDoSProtection
+    with transaction.atomic():
+        protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
+        requested = request.POST.get('enabled')
+        # Explicit target value keeps repeated clicks idempotent.
+        protection.enabled = (not protection.enabled) if requested is None else requested == '1'
+        protection.save(update_fields=['enabled', 'updated_at'])
+    messages.success(request, f"DDoS Protection {'enabled' if protection.enabled else 'disabled'} for {device.name}.")
+    return redirect('devices')
 
 
 @administrator

@@ -3,7 +3,7 @@
 {% block title %}Devices | NetShield{% endblock %}
 {% block body_class %}devices-page fleet-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261012-actions-only">{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261110-protection">{% endblock %}
 {% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=4-auto-start" defer></script><script src="{% static 'sensors/fleet.js' %}?v=20261012-live-resume" defer></script><script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261012-actions-only" defer></script>{% endblock %}
 {% block content %}{% include "monitor/components/device_fleet.html" %}{% endblock %}
 {% block footer_note %}Device inventory{% endblock %}

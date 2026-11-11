@@ -102,6 +102,8 @@ class DeviceDDoSProtection(models.Model):
     reference and edit individual entries."""
     device = models.OneToOneField("devices.Device", on_delete=models.CASCADE, related_name="ddos_protection")
     sos_public = models.CharField(max_length=255, blank=True, default="")
+    # UI-only toggle: nothing in detection reads this yet.
+    enabled = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 

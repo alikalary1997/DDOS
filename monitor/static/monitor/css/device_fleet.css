@@ -76,6 +76,12 @@
 .fleet-page .fleet-inventory .noc-card-actions{grid-row:auto;display:table-cell;margin:0}
 .fleet-page .fleet-inventory .noc-inspect{width:100%;justify-content:space-between;font-size:11px;padding:7px 9px!important;margin:0 0 6px!important;border:1px solid var(--border)!important;border-radius:6px;background:var(--surface)!important}
 .fleet-page .fleet-inventory .device-actions summary{font-size:10px;padding:6px 8px;background:var(--surface-2)}
+/* Per-device DDoS Protection toggle. Green = enabled, red = disabled. */
+.device-protection-form{margin:0 0 6px}.device-protection-button{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;font-size:11px;padding:7px 9px;border-radius:6px;border:1px solid currentColor;background:var(--surface);cursor:pointer;font-weight:500}
+.device-protection-button strong{font-weight:700;letter-spacing:.02em}
+.device-protection-button[data-state=enabled]{color:var(--green);background:var(--ns-success-surface-1)}
+.device-protection-button[data-state=disabled]{color:var(--red);background:var(--ns-danger-surface-1)}
+.device-protection-button:hover{filter:brightness(1.08)}
 .fleet-panel-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;color:var(--muted);font-size:10px;line-height:1.6}
 .fleet-page .fleet-inventory[data-view=grid] tbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:0 18px 18px}
 .fleet-page .fleet-inventory[data-view=grid] tr[data-device-row]{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:20px;border-radius:12px}
