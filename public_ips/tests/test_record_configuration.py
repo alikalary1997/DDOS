@@ -50,6 +50,7 @@ class RecordConfigurationTests(TestCase):
             yield self.api
         self.provision_session = patch("public_ips.services.provisioning.router_session", side_effect=session).start()
         self.cleanup_session = patch("public_ips.services.cleanup.router_session", side_effect=session).start()
+        self.rules_session = patch("public_ips.services.rule_deletion.router_session", side_effect=session).start()
         self.addCleanup(patch.stopall)
 
     def add_rule(self, **arguments):
@@ -113,7 +114,7 @@ class RecordConfigurationTests(TestCase):
     def test_approved_public_ip_delete_view_cleans_rules_and_preserves_unrelated_ip(self):
         ip_id = self.ip.pk
         response = self.client.post(reverse("public_ip_delete", args=[ip_id]), {"confirm": "yes"}, follow=True)
-        self.assertContains(response, "Associated monitoring rule cleanup verified.")
+        self.assertContains(response, "RAW monitoring rules removed")
         self.assertFalse(PublicIP.objects.filter(pk=ip_id).exists())
         self.assertTrue(PublicIP.objects.filter(pk=self.unrelated.pk).exists())
         self.assertEqual([row["id"] for row in self.rows], ["*F"])

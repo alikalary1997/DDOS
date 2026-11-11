@@ -308,20 +308,18 @@ def delete_public_ip(request, public_ip_id):
         return redirect("public_ips")
     from devices.services.router_lock import RouterBusy
     from .services.assignments import locked_assignment, delete_assignment
+    from .services.rule_deletion import cleanup_before_removal
     try:
         with locked_assignment(public_ip_id) as current:
-            review = delete_assignment(current, request.user)
-        from .services.provisioning import writes_enabled
-        messages.success(request, "Public IP deleted successfully. NetShield polling stopped; " + (
-            "audit history retained; associated router rule cleanup will be verified separately."
-            if writes_enabled() and review.cleanup_required else "router rules and audit history were retained."))
-        if writes_enabled() and review.cleanup_required:
-            from .services.cleanup import cleanup_review
-            try:
-                result = cleanup_review(review.pk, request.user)
-                (messages.success if result.success else messages.warning)(request, result.message)
-            except DatabaseError:
-                messages.warning(request, "Public IP deletion was saved. Router cleanup audit could not be saved; the review is retained for retry.")
+            # Router cleanup happens first: if it fails the public IP stays in NetShield.
+            blocker, removed = cleanup_before_removal(current, request.user)
+            if blocker:
+                messages.error(request, blocker)
+                return redirect("public_ips")
+            delete_assignment(current, request.user)
+        messages.success(request, "Public IP deleted successfully. " + (
+            f"RAW monitoring rules removed ({', '.join(removed)}); " if removed
+            else "No RAW monitoring rules needed removal; ") + "polling stopped; audit history retained.")
     except RouterBusy:
         messages.error(request, "This device or assignment is busy. Please retry shortly.")
     except DatabaseError:
@@ -353,10 +351,20 @@ def unassign_public_ip(request, public_ip_id):
         raise PermissionDenied("Administrator access is required.")
     from devices.services.router_lock import RouterBusy
     from .services.assignments import locked_assignment, unassign_assignment
+    from .services.rule_deletion import cleanup_before_removal
+    ip = get_object_or_404(PublicIP, pk=public_ip_id)
     try:
         with locked_assignment(public_ip_id) as current:
+            # Router cleanup is part of the operation: if it fails nothing is unassigned.
+            blocker, removed = cleanup_before_removal(current, request.user)
+            if blocker:
+                messages.error(request, blocker)
+                return redirect("public_ips")
             changed = unassign_assignment(current, request.user)
-        messages.success(request, "Public IP unassigned. Record retained; polling stopped. Provisioning review required; router cleanup has not been performed." if changed else "Public IP is already unassigned.")
+        messages.success(request, ("Public IP unassigned. " + (
+            f"RAW monitoring rules removed ({', '.join(removed)}); " if removed
+            else "No RAW monitoring rules needed removal; ") + "polling stopped.")
+            if changed else "Public IP is already unassigned.")
     except RouterBusy:
         messages.error(request, "This device or assignment is busy. Please retry shortly.")
     except DatabaseError:
