@@ -20,6 +20,21 @@ def locked_assignment(public_ip_id, new_device_id=None):
             yield current
 
 
+@contextmanager
+def locked_for_removal(public_ip_id):
+    """Router lock for a removal, WITHOUT an open DB transaction.
+
+    Router cleanup must happen outside transaction.atomic(): holding SQLite's write lock for
+    the duration of a MikroTik API round-trip makes any other writer fail with
+    "database is locked". The caller opens its own short transaction afterwards.
+    """
+    original = get_object_or_404(PublicIP, pk=public_ip_id)
+    with ExitStack() as stack:
+        if original.device_id is not None:
+            stack.enter_context(router_lock(original.device_id))
+        yield original
+
+
 def clear_assignment_samples(public_ip_id, device_ids):
     for sample in FirewallSample.objects.select_for_update().filter(device_id__in=device_ids - {None}):
         rows = [row for row in sample.rows if not isinstance(row, dict) or row.get("id") != public_ip_id]

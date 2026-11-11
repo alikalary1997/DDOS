@@ -309,13 +309,23 @@ def delete_public_ip(request, public_ip_id):
     from devices.services.router_lock import RouterBusy
     from .services.assignments import locked_assignment, delete_assignment
     from .services.rule_deletion import cleanup_before_removal
+    ip = get_object_or_404(PublicIP, pk=public_ip_id)
     try:
-        with locked_assignment(public_ip_id) as current:
-            # Router cleanup happens first: if it fails the public IP stays in NetShield.
-            blocker, removed = cleanup_before_removal(current, request.user)
+        # Cleanup talks to the router: keep it OUTSIDE transaction.atomic() so the
+        # SQLite write lock is not held during the API round-trip.
+        from .services.assignments import locked_for_removal
+        with locked_for_removal(public_ip_id) as current:
+            if current.provisioning_status in ("pending", "connecting"):
+                raise RouterBusy("The assignment is busy. Please retry shortly.")
+            blocker, removed = cleanup_before_removal(ip, request.user)
             if blocker:
                 messages.error(request, blocker)
                 return redirect("public_ips")
+        with transaction.atomic():
+            # Re-check under the row lock: a provisioning run could have started meanwhile.
+            current = get_object_or_404(PublicIP.objects.select_for_update(), pk=public_ip_id)
+            if current.provisioning_status in ("pending", "connecting"):
+                raise RouterBusy("The assignment is busy. Please retry shortly.")
             delete_assignment(current, request.user)
         messages.success(request, "Public IP deleted successfully. " + (
             f"RAW monitoring rules removed ({', '.join(removed)}); " if removed
@@ -354,12 +364,20 @@ def unassign_public_ip(request, public_ip_id):
     from .services.rule_deletion import cleanup_before_removal
     ip = get_object_or_404(PublicIP, pk=public_ip_id)
     try:
-        with locked_assignment(public_ip_id) as current:
-            # Router cleanup is part of the operation: if it fails nothing is unassigned.
-            blocker, removed = cleanup_before_removal(current, request.user)
+        # Cleanup talks to the router: keep it OUTSIDE transaction.atomic() so the
+        # SQLite write lock is not held during the API round-trip.
+        from .services.assignments import locked_for_removal
+        with locked_for_removal(public_ip_id) as current:
+            if current.provisioning_status in ("pending", "connecting"):
+                raise RouterBusy("The assignment is busy. Please retry shortly.")
+            blocker, removed = cleanup_before_removal(ip, request.user)
             if blocker:
                 messages.error(request, blocker)
                 return redirect("public_ips")
+        with transaction.atomic():
+            current = get_object_or_404(PublicIP.objects.select_for_update(), pk=public_ip_id)
+            if current.provisioning_status in ("pending", "connecting"):
+                raise RouterBusy("The assignment is busy. Please retry shortly.")
             changed = unassign_assignment(current, request.user)
         messages.success(request, ("Public IP unassigned. " + (
             f"RAW monitoring rules removed ({', '.join(removed)}); " if removed
