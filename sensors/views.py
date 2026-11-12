@@ -121,20 +121,31 @@ def ddos_protection(request, device_id):
     protection_enabled = request.POST.get('protection_enabled') == '1'
     with transaction.atomic():
         protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
+        previous_sos = (protection.sos_public or '').strip()
         protection.sos_public = sos_public
         protection.enabled = protection_enabled
         protection.save(update_fields=['sos_public', 'enabled', 'updated_at'])
-        # Keep the switch latch for unchanged entries so a re-save never re-arms failover.
-        switched = {rule.name: (rule.switched_at, rule.switched_from) for rule in protection.rules.all()}
+        # Keep the switch latch only while the Sos Public target is unchanged AND the entry is
+        # still switched to it. A changed SOS Public means every entry must be re-evaluated:
+        # otherwise an entry latched under the old address could never fail over to the new one.
+        changed_target = (previous_sos or '') != sos_public
+        keep = {}
+        if not changed_target:
+            for rule in protection.rules.all():
+                if rule.switched_at and (rule.switched_from or '') != sos_public:
+                    keep[rule.name] = (rule.switched_at, rule.switched_from)
         protection.rules.all().delete()
         DeviceDDoSProtectionRule.objects.bulk_create([
             DeviceDDoSProtectionRule(
                 protection=protection, position=position, name=row['name'], value=row['value'],
                 sos_public=sos_public,
                 protection_enabled=protection_enabled,
-                switched_at=None if not protection_enabled else switched.get(row['name'], (None, ''))[0],
-                switched_from='' if not protection_enabled else switched.get(row['name'], (None, ''))[1])
+                switched_at=None if not protection_enabled else keep.get(row['name'], (None, ''))[0],
+                switched_from='' if not protection_enabled else keep.get(row['name'], (None, ''))[1])
             for position, row in enumerate(rows)])
+    messages.success(request, 'DDoS Protection settings saved for this device.' + (
+        ' The SOS Public address changed, so all entries are re-armed for failover.' if changed_target else ''))
+    return redirect('device_sensors', device_id=device.pk)
     messages.success(request, 'DDoS Protection settings saved for this device.')
     return redirect('device_sensors', device_id=device.pk)
 

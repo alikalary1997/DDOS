@@ -70,16 +70,13 @@ def overview(can_control=False):
     rows_by_device = {}
     for row in data["rules"]:
         rows_by_device.setdefault(row["device_id"], []).append(row)
-    # Retained, unresolved incident states: an unmonitored device keeps its open incident,
-    # but only while it is genuinely unresolved. An incident that recovered, or whose
-    # assignment is no longer monitored at all, must not keep saying "Under Attack" forever.
-    retained = {}
-    for state in DetectionState.objects.select_related("event").filter(
-            confirmed_status__in=("Warning", "Under Attack")).exclude(public_ip=None):
-        # Current confirmed status wins; a recovered state (Normal/Unknown) no longer retains.
-        if state.confirmed_status in ("Warning", "Under Attack"):
-            retained[state.public_ip_id] = state.confirmed_status
-    open_states = retained
+    # Retained incident for an unmonitored assignment, so a real ongoing attack is not hidden
+    # when polling is stopped. Only a genuinely unresolved incident qualifies: it must still have
+    # an open DetectionEvent. Otherwise a stale state (no event, no valid reading) would show
+    # "ATTACK - UNMONITORED" forever after the attack ended.
+    open_states = dict(DetectionState.objects.filter(
+        confirmed_status__in=("Warning", "Under Attack"), event__isnull=False, event__ended_at__isnull=True
+    ).values_list("public_ip_id", "confirmed_status"))
     sensor_fleet = fleet_snapshot()
     global_thresholds = DDoSDetectionSettings.objects.filter(pk=1).first()
     cpu_thresholds = {device_id: (cpu_warning, cpu_attack)

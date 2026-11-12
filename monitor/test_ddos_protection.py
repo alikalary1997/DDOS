@@ -106,6 +106,23 @@ class DDoSProtectionTests(TestCase):
         self.assertIsNone(self.protection().rules.get().switched_at)
         self.assertContains(self.client.get(self.page_url), "Protection off")
 
+    def test_changing_sos_public_rearms_every_entry(self):
+        """Regression: a latch from an older SOS address blocked every later switch."""
+        self.save(["iQ-25-01", "iQ-30-01"], values=["25", "30"], sos="199.199.199.199", protection=True)
+        DeviceDDoSProtectionRule.objects.filter(protection=self.protection()).exclude(name="iQ-25-01").update(
+            switched_at=timezone.now(), switched_from="185.166.27.19")
+        self.save(["iQ-25-01", "iQ-30-01"], values=["25", "30"], sos="185.166.24.24", protection=True)
+        rules = self.protection().rules
+        self.assertEqual(rules.filter(switched_at__isnull=False).count(), 0)
+        self.assertEqual({r.sos_public for r in rules.all()}, {"185.166.24.24"})
+
+    def test_resaving_with_same_sos_keeps_the_latch(self):
+        self.save(["iQ-25-01"], values=["25"], sos="185.166.24.24", protection=True)
+        rule = self.protection().rules.get()
+        rule.switched_at = timezone.now(); rule.switched_from = "185.166.24.24"; rule.save()
+        self.assertContains(self.client.get(self.page_url), "Switched to SOS Public")
+        self.save(["iQ-25-01"], values=["25"], sos="185.166.24.24", protection=True)
+
     def test_reader_cannot_save(self):
         self.client.force_login(get_user_model().objects.create_user(username="protect-reader"))
         self.assertEqual(self.save(["1"], values=["25"]).status_code, 403)
