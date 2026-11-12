@@ -110,3 +110,16 @@ def stop(assignment_ids):
         MonitoringRun.objects.filter(pk=1, device_id_snapshot__in=device_ids).update(
             active=False, stopped_at=timezone.now())
         PublicIP.objects.filter(pk__in=assignment_ids).update(monitoring_enabled=False)
+        # Stop sampling means detection can no longer be confirmed: clear the confirmed status
+        # and close open incidents. Otherwise a stale "Under Attack" would be shown forever
+        # on the DDoS Detection page while the Public IP table already reports Unknown.
+        from monitor.models import DetectionState, DetectionEvent
+        now = timezone.now()
+        stale = DetectionState.objects.filter(public_ip_id__in=assignment_ids)
+        DetectionEvent.objects.filter(
+            id__in=stale.exclude(event=None).values_list("event_id", flat=True), ended_at__isnull=True
+        ).update(ended_at=now)
+        stale.update(confirmed_status="Unknown", warning_count=0, attack_count=0,
+                     warning_recovery_count=0, attack_recovery_count=0,
+                     last_valid_at=None, pending_since=None, pending_peaks={},
+                     triggering_metrics=[], event=None)

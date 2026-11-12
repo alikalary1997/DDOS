@@ -427,6 +427,29 @@ class RAWMonitoringTests(TestCase):
         self.assertFalse(MonitoringRun.objects.get().active)
         self.pool.assert_not_called()
 
+    def test_stop_clears_a_confirmed_attack_so_it_does_not_stick(self):
+        """Regression: a stopped assignment used to keep showing ATTACK - UNMONITORED forever."""
+        from public_ips.services.monitoring_runtime import stop
+        from monitor.models import DetectionEvent, DetectionState
+        from monitor.services.dashboard_data import dashboard_data
+        from django.utils import timezone
+        event = DetectionEvent.objects.create(
+            public_ip=self.ip, device=self.device, assignment_id_snapshot=self.ip.pk,
+            device_id_snapshot=self.device.pk, address=self.ip.address, device_name=self.device.name,
+            management_ip=self.device.management_ip, profile_key="p", started_at=timezone.now(),
+            last_observed_at=timezone.now(), highest_severity="Under Attack")
+        DetectionState.objects.create(public_ip=self.ip, profile_key="p", confirmed_status="Under Attack",
+                                     attack_count=100, event=event)
+        stop([self.ip.pk])
+        state = DetectionState.objects.get(public_ip=self.ip)
+        self.assertEqual(state.confirmed_status, "Unknown")
+        self.assertIsNone(state.event_id)
+        self.assertEqual(state.attack_count, 0)
+        event.refresh_from_db()
+        self.assertIsNotNone(event.ended_at)          # incident closed, history kept
+        row = [r for r in dashboard_data()["rules"] if r["id"] == self.ip.pk][0]
+        self.assertEqual(row["ddos_status"], "Unknown")
+
     def test_device_start_monitors_all_its_ips_in_one_worker(self):
         from public_ips.services.monitoring_runtime import start_device, stop, covers
         from public_ips.models import MonitoringRun

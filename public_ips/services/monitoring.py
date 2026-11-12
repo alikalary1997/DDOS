@@ -87,7 +87,14 @@ def poll_device(device_id, calculator, *, scope=None):
         # Read assignments and persist success/error samples under the same lock
         # as deletion. A stale worker ID must never reconnect or recreate a cache.
         with router_lock(device_id):
-            return _poll_locked_device(device_id, calculator, scope=scope)
+            # The sample write below fires the detection + NAT failover signal while this lock
+            # is held, so the failover check must not try to acquire it again.
+            from monitor.signals import POLL_LOCK_HELD
+            token = POLL_LOCK_HELD.set(True)
+            try:
+                return _poll_locked_device(device_id, calculator, scope=scope)
+            finally:
+                POLL_LOCK_HELD.reset(token)
     except RouterBusy:
         return []
 

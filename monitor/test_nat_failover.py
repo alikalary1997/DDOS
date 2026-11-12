@@ -164,6 +164,32 @@ class NatFailoverTests(TestCase):
         nat.set.assert_not_called()
         self.assertEqual(logs, [])
 
+    def test_switches_while_the_polling_cycle_holds_the_router_lock(self):
+        """Regression: the signal fires inside the poller's router_lock.
+
+        Re-acquiring the lock there raised RouterBusy, so a real attack never switched.
+        """
+        from devices.services.router_lock import router_lock
+        from monitor.signals import POLL_LOCK_HELD
+        from public_ips.models import FirewallSample
+
+        self.set_state("Under Attack")
+        self.protection.rules.exclude(name="iQ-25-01").delete()
+        api, nat = self.fake_api()
+        sample = FirewallSample.objects.create(device=self.device, status="not_monitored", rows=[])
+        with patch("monitor.services.nat_failover.router_session", return_value=self.session_for(api).return_value):
+            with router_lock(self.device.pk):            # simulate the polling worker
+                token = POLL_LOCK_HELD.set(True)          # and its signal to the failover check
+                try:
+                    sample.status = "sampled"
+                    sample.save()                         # fires detection + failover
+                finally:
+                    POLL_LOCK_HELD.reset(token)
+        self.assertEqual(len(nat.set.call_args_list), 1)
+        self.assertEqual(nat.set.call_args_list[0].kwargs["id"], "*1")
+        self.assertEqual(self.to_address("iQ-25-01"), SOS)
+        self.assertEqual(NatFailoverLog.objects.filter(result="switched").count(), 1)
+
     def test_log_records_old_and_new_addresses(self):
         self.protection.rules.exclude(name="iQ-25-01").delete()
         self.set_state("Under Attack")
