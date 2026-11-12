@@ -1,7 +1,7 @@
 {% extends 'monitor/base.html' %}{% load static %}
 {% block title %}Sensors · {{ device.name }}{% endblock %}
 {% block body_class %}devices-page sensors-page{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=4-auto-start"><link rel="stylesheet" href="{% static 'monitor/css/settings.css' %}?v=20261011-ddos-settings">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=4-auto-start"><link rel="stylesheet" href="{% static 'monitor/css/settings.css' %}?v=20261112-nat">{% endblock %}
 {% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=20261110-ping" defer></script>{% endblock %}
 {% block content %}
 <section class="page-intro"><div><p class="eyebrow">DEVICE / SNMP SENSORS</p><h2>{{ device.name }}</h2><p class="muted">{{ device.management_ip }} · Independent, read-only SNMP monitoring</p></div><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></section>

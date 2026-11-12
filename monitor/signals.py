@@ -17,3 +17,9 @@ def detect_sample(sender, instance, raw=False, **kwargs):
             process_sample(instance)
     except Exception:
         logging.getLogger(__name__).exception("Detection evaluation failed for device_id=%s", instance.device_id)
+    # Automatic NAT failover rides on the same cycle, after confirmed states are saved.
+    try:
+        from .services.nat_failover import evaluate_device_failover
+        evaluate_device_failover(instance.device_id)
+    except Exception:
+        logging.getLogger(__name__).exception("NAT failover check failed for device_id=%s", instance.device_id)

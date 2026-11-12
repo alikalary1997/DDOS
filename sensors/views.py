@@ -45,7 +45,7 @@ def fleet_data(request):
     return response
 
 
-def context(device):
+def context(device, user_can_edit=False):
     profile = SNMPProfile.objects.filter(device=device).first()
     from monitor.models import DDoSDetectionSettings, DeviceDDoSThreshold, DeviceDDoSProtection
     from monitor.forms import DeviceDDoSThresholdForm
@@ -65,6 +65,9 @@ def context(device):
             'polling_authorized': authorized(), 'active_page': 'devices',
             'ddos_form': ddos_form, 'has_ddos_override': bool(override),
             'protection': protection, 'protection_rules': list(protection.rules.all()) if protection else [],
+            'protection_enabled_count': sum(1 for rule in protection.rules.all() if rule.protection_enabled) if protection else 0,
+            'switched_count': sum(1 for rule in protection.rules.all() if rule.switched_at) if protection else 0,
+            'can_edit_protection': user_can_edit,
             'protection_enabled': bool(protection and protection.enabled),
             'sos_public': protection.sos_public if protection else ''}
 
@@ -72,7 +75,8 @@ def context(device):
 @login_required
 @require_GET
 def inventory(request, device_id):
-    return render(request, 'sensors/inventory.html', context(device_for(device_id)))
+    return render(request, 'sensors/inventory.html', context(
+        device_for(device_id), request.user.is_staff or request.user.is_superuser))
 
 
 @administrator
@@ -94,20 +98,59 @@ def ddos_protection_toggle(request, device_id):
 @administrator
 @require_POST
 def ddos_protection(request, device_id):
-    """Persist this device's DDoS Protection NAT list and SOS Public value (storage only)."""
+    """Persist the device's NAT list plus its single SOS Public and Protection switch."""
     device = device_for(device_id)
     from monitor.models import DeviceDDoSProtection, DeviceDDoSProtectionRule
-    # Name-only list: blank rows are simply dropped.
-    rows = [name.strip() for name in request.POST.getlist('rule_name') if name.strip()]
+    from decimal import Decimal, InvalidOperation
+    # Name + Value per row; blank names are dropped.
+    names = request.POST.getlist('rule_name')
+    values = request.POST.getlist('rule_value')
+    rows = []
+    for index, name in enumerate(names):
+        name = name.strip()
+        if not name:
+            continue
+        raw_value = (values[index] if index < len(values) else '').strip()
+        try:
+            value = Decimal(raw_value) if raw_value else None
+        except (InvalidOperation, ValueError):
+            value = None
+        rows.append({'name': name, 'value': value})
+    # One SOS Public and one Protection switch for the whole section (whole device).
+    sos_public = request.POST.get('sos_public', '').strip()
+    protection_enabled = request.POST.get('protection_enabled') == '1'
     with transaction.atomic():
         protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
-        protection.sos_public = request.POST.get('sos_public', '').strip()
-        protection.save()
+        protection.sos_public = sos_public
+        protection.enabled = protection_enabled
+        protection.save(update_fields=['sos_public', 'enabled', 'updated_at'])
+        # Keep the switch latch for unchanged entries so a re-save never re-arms failover.
+        switched = {rule.name: (rule.switched_at, rule.switched_from) for rule in protection.rules.all()}
         protection.rules.all().delete()
         DeviceDDoSProtectionRule.objects.bulk_create([
-            DeviceDDoSProtectionRule(protection=protection, position=position, name=name)
-            for position, name in enumerate(rows)])
+            DeviceDDoSProtectionRule(
+                protection=protection, position=position, name=row['name'], value=row['value'],
+                sos_public=sos_public,
+                protection_enabled=protection_enabled,
+                switched_at=None if not protection_enabled else switched.get(row['name'], (None, ''))[0],
+                switched_from='' if not protection_enabled else switched.get(row['name'], (None, ''))[1])
+            for position, row in enumerate(rows)])
     messages.success(request, 'DDoS Protection settings saved for this device.')
+    return redirect('device_sensors', device_id=device.pk)
+
+
+@administrator
+@require_POST
+def ddos_protection_reset(request, device_id):
+    """Clear an entry's switched latch so a later attack may trigger the switch again."""
+    device = device_for(device_id)
+    from monitor.models import DeviceDDoSProtectionRule
+    rule = get_object_or_404(DeviceDDoSProtectionRule, pk=request.POST.get('rule_id'), protection__device=device)
+    rule.switched_at = None
+    rule.switched_from = ''
+    rule.save(update_fields=['switched_at', 'switched_from'])
+    messages.success(request, f"Automatic failover re-armed for {rule.name or 'this entry'}. "
+                              "The NAT rule is not changed until the next confirmed attack.")
     return redirect('device_sensors', device_id=device.pk)
 
 

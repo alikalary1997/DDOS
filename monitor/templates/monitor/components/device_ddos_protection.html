@@ -1,29 +1,34 @@
 <section class="panel device-ddos-settings" id="deviceDDoSProtection" aria-labelledby="deviceDDoSProtectionTitle">
-    <div class="panel-heading"><div><h2 id="deviceDDoSProtectionTitle">DDoS Protection</h2><p class="panel-subtitle">NAT entries and SOS Public for this device</p></div><span class="phase-badge">SAVED CONFIGURATION</span></div>
-    <p class="settings-section-note" id="deviceDDoSProtectionNote">These values are stored for this device only. Saving them does not start, stop or change detection, and does not block traffic.</p>
+    <div class="panel-heading"><div><h2 id="deviceDDoSProtectionTitle">DDoS Protection</h2><p class="panel-subtitle">NAT failover entries and SOS Public for this device</p></div><span class="phase-badge">{% if protection_enabled %}PROTECTION ON{% else %}PROTECTION OFF{% endif %}</span></div>
+    <p class="settings-section-note" id="deviceDDoSProtectionNote">Each entry matches a RouterOS NAT rule by its comment. While Protection is on and this device's public IP is confirmed Under Attack, every matching rule's <code>to-addresses</code> is switched to the SOS Public address. It is never switched back automatically. Saving does not block traffic or change detection.</p>
     <form method="post" action="{% url 'device_ddos_protection' device.id %}#deviceDDoSProtection" id="deviceProtectionForm">
         {% csrf_token %}
         <table class="ddos-thresholds-table" id="natRulesTable" aria-describedby="deviceDDoSProtectionNote">
-            <caption class="sr-only">NAT list: one name per row</caption>
-            <thead><tr><th scope="col">Name</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
+            <caption class="sr-only">NAT entries: name and value per row</caption>
+            <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
             <tbody id="natRulesBody">
             {% for rule in protection_rules %}
                 <tr>
-                    <td><input type="text" name="rule_name" value="{{ rule.name }}" maxlength="120" aria-label="NAT row {{ forloop.counter }} name"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}></td>
-                    <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row {{ forloop.counter }}"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}>&times;</button></td>
+                    <td><input type="text" name="rule_name" value="{{ rule.name }}" maxlength="120" aria-label="NAT row {{ forloop.counter }} name"{% if not can_edit_protection %} disabled{% endif %}></td>
+                    <td><input type="number" name="rule_value" value="{% if rule.value is not None %}{{ rule.value|floatformat:"-3" }}{% endif %}" step="0.001" inputmode="decimal" aria-label="NAT row {{ forloop.counter }} value"{% if not can_edit_protection %} disabled{% endif %}></td>
+                    <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row {{ forloop.counter }}"{% if not can_edit_protection %} disabled{% endif %}>&times;</button></td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
         <template id="natRuleTemplate"><tr>
             <td><input type="text" name="rule_name" maxlength="120" aria-label="New NAT row name"></td>
+            <td><input type="number" name="rule_value" step="0.001" inputmode="decimal" aria-label="New NAT row value"></td>
             <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row">&times;</button></td>
         </tr></template>
-        {% if user.is_staff or user.is_superuser %}<div class="settings-section-actions"><button type="button" class="secondary-button" id="addNatRule">+ Add Row</button></div>{% endif %}
+        {% if can_edit_protection %}<div class="settings-section-actions"><button type="button" class="secondary-button" id="addNatRule">+ Add Row</button></div>{% endif %}
+
         <div class="settings-fields" style="margin-top:18px">
-            <label for="sosPublic"><span>SOS Public</span><input id="sosPublic" type="text" name="sos_public" value="{{ sos_public }}" maxlength="255" autocomplete="off" aria-describedby="deviceDDoSProtectionNote"{% if not user.is_staff and not user.is_superuser %} disabled{% endif %}></label>
+            <label for="sosPublic"><span>SOS Public</span><input id="sosPublic" type="text" name="sos_public" value="{{ sos_public }}" maxlength="255" autocomplete="off" aria-describedby="deviceDDoSProtectionNote"{% if not can_edit_protection %} disabled{% endif %}></label>
+            <label class="nat-toggle-field"><span>Protection</span><span class="nat-toggle"><input type="checkbox" name="protection_enabled" value="1" aria-label="Protection for this device"{% if protection_enabled %} checked{% endif %}{% if not can_edit_protection %} disabled{% endif %}><span class="nat-toggle-track" aria-hidden="true"></span><span class="nat-toggle-text">{% if protection_enabled %}On{% else %}Off{% endif %}</span></span></label>
         </div>
-        <div class="settings-section-actions">{% if user.is_staff or user.is_superuser %}<button type="submit" class="primary-button">Save DDoS Protection</button>{% else %}<span>Administrator access is required to change these settings.</span>{% endif %}</div>
+        <p class="settings-section-note" id="deviceDDoSProtectionStatus">Status: <span class="nat-status" data-state="{% if switched_count %}switched{% elif protection_enabled %}active{% else %}off{% endif %}">{% if switched_count %}Switched to SOS Public ({{ switched_count }} entr{{ switched_count|pluralize:"y,ies" }}){% elif protection_enabled %}Protection on &middot; active on primary{% else %}Protection off{% endif %}</span></p>
+        <div class="settings-section-actions">{% if can_edit_protection %}<button type="submit" class="primary-button">Save DDoS Protection</button>{% else %}<span>Administrator access is required to change these settings.</span>{% endif %}</div>
     </form>
 </section>
 <script>
@@ -34,10 +39,16 @@
     const add = document.getElementById("addNatRule");
     if (!body || !template) return;
     const renumber = () => [...body.querySelectorAll("tr")].forEach((row, index) => {
-        const input = row.querySelector("input");
-        if (input) input.setAttribute("aria-label", `NAT row ${index + 1} name`);
+        const inputs = row.querySelectorAll("input");
+        if (inputs[0]) inputs[0].setAttribute("aria-label", `NAT row ${index + 1} name`);
+        if (inputs[1]) inputs[1].setAttribute("aria-label", `NAT row ${index + 1} value`);
         const remove = row.querySelector("[data-remove-rule]");
         if (remove) remove.setAttribute("aria-label", `Remove NAT row ${index + 1}`);
+    });
+    const protection = document.querySelector('input[name="protection_enabled"]');
+    protection?.addEventListener("change", () => {
+        const label = protection.closest(".nat-toggle")?.querySelector(".nat-toggle-text");
+        if (label) label.textContent = protection.checked ? "On" : "Off";
     });
     add?.addEventListener("click", () => { body.append(template.content.cloneNode(true)); renumber(); });
     body.addEventListener("click", (event) => {
@@ -46,5 +57,6 @@
         button.closest("tr").remove();
         renumber();
     });
+    renumber();
 })();
 </script>

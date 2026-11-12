@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 
 POLLING_INTERVALS = (2, 5, 10, 15, 30, 60)
 DEFAULT_POLLING_INTERVAL = 5
@@ -95,27 +96,58 @@ class DeviceDDoSThreshold(models.Model):
 
 
 class DeviceDDoSProtection(models.Model):
-    """Per-device DDoS Protection settings: a free-form NAT list and an SOS Public value.
+    """Legacy container for a device's DDoS Protection NAT list.
 
-    Storage only: nothing reads these yet. The NAT list is a related model
-    (DeviceDDoSProtectionRule) rather than a JSON blob, so future backend logic can query,
-    reference and edit individual entries."""
+    SOS Public and the Protection toggle are now PER ENTRY (see DeviceDDoSProtectionRule).
+    The device-level fields are kept only so existing rows migrate cleanly and the older
+    per-device settings screen keeps rendering."""
     device = models.OneToOneField("devices.Device", on_delete=models.CASCADE, related_name="ddos_protection")
+    # Deprecated: superseded by DeviceDDoSProtectionRule.sos_public.
     sos_public = models.CharField(max_length=255, blank=True, default="")
-    # UI-only toggle: nothing in detection reads this yet.
+    # Deprecated: superseded by DeviceDDoSProtectionRule.protection_enabled.
     enabled = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 
 class DeviceDDoSProtectionRule(models.Model):
-    """One editable (name, value) row of a device's DDoS Protection NAT list."""
+    """One NAT entry of a device's DDoS Protection list.
+
+    `name` matches the RouterOS NAT rule's comment exactly (e.g. "iQ-25-01").
+    `sos_public` is the failover target for this entry; `protection_enabled` turns the
+    automatic failover on for this entry only."""
     protection = models.ForeignKey(DeviceDDoSProtection, on_delete=models.CASCADE, related_name="rules")
     position = models.PositiveIntegerField(default=0)
     name = models.CharField(max_length=120, blank=True, default="")
     value = models.DecimalField(max_digits=15, decimal_places=3, null=True, blank=True)
+    sos_public = models.CharField(max_length=255, blank=True, default="")
+    protection_enabled = models.BooleanField(default=False)
+    # Set when an automatic failover actually switches this entry; stays set after the
+    # attack recovers so the entry is not switched back automatically (no flapping).
+    switched_at = models.DateTimeField(null=True, blank=True)
+    switched_from = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         ordering = ["position", "pk"]
+
+
+class NatFailoverLog(models.Model):
+    """Visible audit trail of every automatic NAT to-addresses change."""
+    RESULT_CHOICES = [("switched", "Switched"), ("failed", "Failed"), ("skipped", "Skipped"),
+                      ("unchanged", "Unchanged")]
+    device = models.ForeignKey("devices.Device", null=True, on_delete=models.SET_NULL, related_name="nat_failover_logs")
+    device_name = models.CharField(max_length=120, blank=True, default="")
+    nat_comment = models.CharField(max_length=120, blank=True, default="")
+    old_address = models.CharField(max_length=255, blank=True, default="")
+    new_address = models.CharField(max_length=255, blank=True, default="")
+    trigger_address = models.CharField(max_length=255, blank=True, default="")
+    triggered_by = models.ForeignKey("public_ips.PublicIP", null=True, on_delete=models.SET_NULL)
+    status_at_trigger = models.CharField(max_length=20, default="")
+    result = models.CharField(max_length=20, choices=RESULT_CHOICES, default="switched")
+    message = models.CharField(max_length=400, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
 
 
 class RAWMonitoringSettings(models.Model):
