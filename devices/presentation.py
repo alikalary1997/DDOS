@@ -4,11 +4,14 @@ INVENTORY_FIELDS = (
     "incoming_monitoring_interface", "router_identity", "routeros_version", "uptime", "cpu_usage", "total_memory", "free_memory",
     "last_connection_test", "last_connection_test_succeeded", "last_successful_connection", "last_connection_error",
     "raw_provisioning_enabled", "raw_provisioning_authorized_at", "raw_preflight_message", "raw_preflight_at",
+    "group_id", "group__name",
 )
 
 
 def present_device(row):
     row = dict(row)
+    # Flat organizational tag; absence of a group is shown as Untagged.
+    row["group_name"] = row.pop("group__name", None) or "Untagged"
     succeeded = row["last_connection_test_succeeded"]
     if row["last_connection_test"] is None or succeeded is None:
         status, code = "Not Tested", "not_tested"

@@ -44,6 +44,7 @@
     const status = document.getElementById("statusFilter");
     const type = document.getElementById("typeFilter");
     const raw = document.getElementById("rawFilter");
+    const group = document.getElementById("groupFilter");
     const rows = [...document.querySelectorAll("[data-device-row]")];
     const noMatches = document.getElementById("noMatchingDevices");
     function filterRows() {
@@ -54,7 +55,8 @@
             row.hidden = Boolean(!searchable.includes(query) ||
                 (status.value && row.dataset.deviceStatus !== status.value) ||
                 (type.value && row.dataset.deviceType !== type.value) ||
-                (raw?.value && row.dataset.rawStatus !== raw.value));
+                (raw?.value && row.dataset.rawStatus !== raw.value) ||
+                (group?.value && row.dataset.deviceGroup !== group.value));
             if (!row.hidden) visible += 1;
         });
         noMatches.hidden = rows.length === 0 || visible > 0;
@@ -63,6 +65,19 @@
     status.addEventListener("change", filterRows);
     type.addEventListener("change", filterRows);
     raw?.addEventListener("change", filterRows);
+    group?.addEventListener("change", filterRows);
+    const groupDialog = document.getElementById("addGroupDialog");
+    document.querySelectorAll("[data-open-group]").forEach((button) => {
+        button.disabled = false;
+        button.addEventListener("click", () => {
+            const form = groupDialog?.querySelector("form");
+            if (!groupDialog) return;
+            form?.querySelector('[name="group_name"]')?.focus();
+            groupDialog.showModal();
+        });
+    });
+    document.querySelectorAll("[data-close-group]").forEach((button) =>
+        button.addEventListener("click", () => groupDialog?.close()));
     const inventoryView = document.getElementById("inventoryView");
     document.querySelectorAll("[data-inventory-view]").forEach(button => {
         button.addEventListener("click", () => {

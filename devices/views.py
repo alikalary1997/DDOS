@@ -15,7 +15,7 @@ from django.views.decorators.debug import sensitive_post_parameters, sensitive_v
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .forms import AddDeviceForm, EditDeviceForm, MonitoringInterfaceForm
-from .models import Device
+from .models import Device, DeviceGroup
 from .services.credentials import CredentialError
 
 
@@ -145,6 +145,7 @@ def inventory_context(request, form=None, unavailable=False):
         sensor_authorized = authorized()
     return {
         "active_page": "devices", "inventory_ready": True, "device_rows": rows, "total_devices": None if unavailable else len(rows),
+        "device_groups": [] if unavailable else list(DeviceGroup.objects.all()),
         "snmp_polling_authorized": False if unavailable else sensor_authorized,
         "sensor_summary": {'total': None, 'active': None, 'attention': None} if unavailable else sensor_summary,
         "inventory_unavailable": unavailable,
@@ -166,6 +167,22 @@ def inventory(request):
     except DatabaseError:
         return render(request, "monitor/devices.html", inventory_context(request, unavailable=True), status=503)
     return render(request, "monitor/devices.html", context)
+
+
+@never_cache
+@login_required(login_url="device_login")
+@require_POST
+def create_group(request):
+    """Create a flat Group tag. Organizational only: touches no device or setting."""
+    if not may_add_devices(request.user):
+        raise PermissionDenied("Administrator access is required.")
+    name = (request.POST.get("group_name") or "").strip()[:120]
+    if not name:
+        messages.error(request, "Enter a group name.")
+        return redirect("devices")
+    group, created = DeviceGroup.objects.get_or_create(name=name)
+    messages.success(request, f"Group '{group.name}' {'created' if created else 'already exists'}.")
+    return redirect("devices")
 
 
 @never_cache

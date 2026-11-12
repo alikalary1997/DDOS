@@ -4,12 +4,23 @@
 {% block body_class %}devices-page fleet-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
 <link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261110-protection">{% endblock %}
-{% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=4-auto-start" defer></script><script src="{% static 'sensors/fleet.js' %}?v=20261012-live-resume" defer></script><script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261012-actions-only" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'sensors/sensors.js' %}?v=4-auto-start" defer></script><script src="{% static 'sensors/fleet.js' %}?v=20261012-live-resume" defer></script><script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261113-groups" defer></script>{% endblock %}
 {% block content %}{% include "monitor/components/device_fleet.html" %}{% endblock %}
 {% block footer_note %}Device inventory{% endblock %}
 {% block dialogs %}
 {% for device in device_rows %}{% include "monitor/components/device_inspector.html" %}{% endfor %}
 {% if can_add_devices %}
+{% if can_add_devices %}
+<dialog id="addGroupDialog" class="device-dialog" aria-labelledby="addGroupTitle">
+    <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addGroupTitle">New Group</h2></div><button class="icon-button" type="button" data-close-group aria-label="Close New Group">&times;</button></div>
+    <p class="dialog-description">Organizational tag only. It does not affect monitoring or detection.</p>
+    <form method="post" action="{% url 'device_group_add' %}" autocomplete="off">
+        {% csrf_token %}
+        <div class="form-grid"><label for="groupName"><span>Group name</span><input id="groupName" type="text" name="group_name" maxlength="120" required placeholder="e.g. Company A"></label></div>
+        <div class="dialog-footer"><span></span><button type="button" class="secondary-button" data-close-group>Cancel</button><button type="submit" class="primary-button">Create</button></div>
+    </form>
+</dialog>
+{% endif %}
 <dialog id="addDeviceDialog" class="device-dialog" aria-labelledby="addDeviceTitle" aria-describedby="deviceSaveNote" data-has-errors="{{ open_add_device|yesno:'true,false' }}" {% if open_add_device %}open{% endif %}>
     <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addDeviceTitle">Add Device</h2></div><button class="icon-button" id="closeDeviceDialog" type="button" aria-label="Close Add Device">&times;</button></div>
     <p class="dialog-description">Add a device connection profile to your inventory.</p>

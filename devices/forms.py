@@ -3,7 +3,7 @@ from django import forms
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.views.decorators.debug import sensitive_variables
 
-from .models import Device
+from .models import Device, DeviceGroup
 from .services.credentials import CredentialError
 
 
@@ -17,6 +17,7 @@ class AddDeviceForm(forms.Form):
     password = forms.CharField(label="Password", strip=False, max_length=4096, widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "API password"}))
     incoming_monitoring_interface = forms.CharField(label="Incoming monitoring interface", max_length=255, required=False, widget=forms.TextInput(attrs={"placeholder": "Exact RouterOS interface name"}))
     description = forms.CharField(label="Description", required=False, max_length=1000, widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Location, role or notes"}))
+    group = forms.ModelChoiceField(label="Group", queryset=DeviceGroup.objects.all(), required=False, empty_label="Untagged")
 
     def clean_management_ip(self):
         if "%" in str(self.data.get("management_ip", "")):
@@ -38,6 +39,7 @@ class AddDeviceForm(forms.Form):
             raise forms.ValidationError("A device with this management IP and API port already exists.")
         self.instance = Device(**{field: cleaned[field] for field in (
             "name", "management_ip", "device_type", "api_port", "use_ssl", "username", "description", "incoming_monitoring_interface",
+            "group",
         )})
         try:
             self.instance.set_password(cleaned["password"])
@@ -80,7 +82,8 @@ class ProvisioningValidationForm(forms.Form):
 
 class EditDeviceForm(AddDeviceForm):
     """An optional replacement password; stored ciphertext is never rendered."""
-    EDIT_FIELDS = ("name", "management_ip", "api_port", "use_ssl", "username", "incoming_monitoring_interface", "description")
+    EDIT_FIELDS = ("name", "management_ip", "api_port", "use_ssl", "username", "incoming_monitoring_interface", "description",
+                   "group")
 
     @sensitive_variables()
     def __init__(self, *args, instance, **kwargs):

@@ -10,6 +10,21 @@ from .fields import EncryptedPasswordField
 from .services.credentials import decrypt_password, encrypt_password
 
 
+class DeviceGroup(models.Model):
+    """Flat business/ownership tag for organizing the device fleet.
+
+    Purely organizational: no topology, hierarchy or detection meaning. A device with no
+    group is "Untagged" - that is the absence of a group, never a stored name.
+    """
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Device(models.Model):
     class DeviceType(models.TextChoices):
         MIKROTIK = "mikrotik", "MikroTik"
@@ -29,6 +44,8 @@ class Device(models.Model):
     incoming_monitoring_interface = models.CharField(max_length=255, blank=True)
     description = models.TextField(max_length=1000, blank=True)
     enabled = models.BooleanField(default=True)
+    group = models.ForeignKey(
+        DeviceGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
     raw_provisioning_enabled = models.BooleanField(default=True, editable=False)
     raw_provisioning_authorized_at = models.DateTimeField(null=True, blank=True, editable=False)
     raw_provisioning_authorized_by = models.ForeignKey(
