@@ -192,7 +192,8 @@ class ProvisioningTests(TestCase):
         self.assertEqual(len(audit.requested_rule_comments), 3)
         self.assertEqual(len(audit.created_rule_ids), 3)
         self.assertEqual(len(audit.verified_rule_ids), 3)
-        self.pool.return_value.disconnect.assert_called_once()
+        # Provisioning runs inside the poller lock; the connection is reused, not torn down.
+        self.pool.return_value.disconnect.assert_not_called()
 
     def test_device_approval_enables_save_and_retry_without_global_release(self):
         self.authorize_device()

@@ -65,4 +65,7 @@ def remove_device(device, actor):
         # touching other IP rows or deleting another device's cache container.
         clear_assignment_samples(public_ip_id, set(FirewallSample.objects.values_list("device_id", flat=True)))
     device.delete()  # Sample cache cascades; historical audit FKs become NULL.
+    # The device is gone: drop any cached RouterOS session held by this process.
+    from devices.services.router_session import close_connection
+    close_connection(device.pk)
     return deleted_ip_ids

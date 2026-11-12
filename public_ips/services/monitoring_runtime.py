@@ -110,6 +110,10 @@ def stop(assignment_ids):
         MonitoringRun.objects.filter(pk=1, device_id_snapshot__in=device_ids).update(
             active=False, stopped_at=timezone.now())
         PublicIP.objects.filter(pk__in=assignment_ids).update(monitoring_enabled=False)
+        # No further polling for these devices: release the cached RouterOS connection.
+        from devices.services.router_session import close_connection
+        for device_id in device_ids:
+            close_connection(device_id)
         # Stop sampling means detection can no longer be confirmed: clear the confirmed status
         # and close open incidents. Otherwise a stale "Under Attack" would be shown forever
         # on the DDoS Detection page while the Public IP table already reports Unknown.

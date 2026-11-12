@@ -53,6 +53,12 @@ class RateTests(TestCase):
 
 
 class RAWMonitoringTests(TestCase):
+    def setUp(self):
+        # Connections are now cached per device process-wide; never leak one across tests.
+        from devices.services.router_session import close_all
+        close_all()
+        self.addCleanup(close_all)
+
     def test_interval_change_while_monitoring_preserves_counter_baseline_and_reads_only(self):
         from monitor.models import RAWMonitoringSettings
         with patch("public_ips.services.monitoring.time.monotonic", side_effect=[10, 70]):
@@ -195,7 +201,7 @@ class RAWMonitoringTests(TestCase):
         with patch("public_ips.management.commands.poll_raw_firewall.wait_for_next_cycle", side_effect=next_cycle):
             call_command("poll_raw_firewall", device_id=self.device.pk, assignment_id=self.ip.pk,
                          public_ip=self.ip.address, stdout=io.StringIO())
-        self.assertEqual(self.pool.call_count, 2)
+        self.assertEqual(self.pool.call_count, 1)
         self.assertTrue(all(call.args[0] == self.device.management_ip for call in self.pool.call_args_list))
         self.assertEqual(FirewallSample.objects.count(), 1)
         self.assertEqual([row["id"] for row in FirewallSample.objects.get().rows], [self.ip.pk])
@@ -298,7 +304,8 @@ class RAWMonitoringTests(TestCase):
         with self.assertRaises(MonitoringScopeError):
             poll_device(self.device.pk, self.calculator, scope=scope)
         self.assertFalse(FirewallSample.objects.exists())
-        self.pool.return_value.disconnect.assert_called_once()
+        # A scope change is not a connection failure: the session is kept for the next cycle.
+        self.pool.return_value.disconnect.assert_not_called()
 
     def test_multiple_devices_have_independent_baselines(self):
         other = Device(name="Other", management_ip="172.26.241.17", username=self.device.username,
@@ -477,7 +484,7 @@ class RAWMonitoringTests(TestCase):
         rows = cached_rows()
         for ip in (self.ip, second):
             self.assertEqual(rows[ip.pk]["packets"], 200)
-        self.assertEqual(self.pool.call_count, 2)  # one router session per cycle for both IPs
+        self.assertEqual(self.pool.call_count, 1)  # one connection reused across cycles
         self.assertFalse(MonitoringRun.objects.get().active)
 
     def test_app_post_start_launches_worker_and_reader_cannot_start(self):
@@ -515,7 +522,7 @@ class RAWMonitoringTests(TestCase):
              patch("public_ips.services.monitoring.POLLING_RELEASED", False):
             call_command("poll_raw_firewall", device_id=self.device.pk, assignment_id=self.ip.pk,
                          public_ip=self.ip.address, managed_token=str(run.token), stdout=io.StringIO())
-        self.assertEqual(self.pool.call_count, 2)
+        self.assertEqual(self.pool.call_count, 1)
         self.assertFalse(MonitoringRun.objects.get().active)
         self.assertEqual(cached_rows()[self.ip.pk]["packets"], 200)
         self.assertTrue(cached_rows()[self.ip.pk]["retained"])

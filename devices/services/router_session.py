@@ -1,6 +1,12 @@
-"""Saved-device RouterOS transport; no raw errors or credential output."""
+"""Saved-device RouterOS transport; no raw errors or credential output.
+
+One RouterOS API connection is kept open per device and reused across poll cycles. A new
+connection is opened only when none exists, the device's connection profile changed, or the
+cached connection has failed (in which case it is discarded and rebuilt on the next call).
+"""
 import socket
 import ssl
+import threading
 from contextlib import contextmanager
 
 import routeros_api
@@ -22,10 +28,77 @@ class RouterAccessError(Exception):
         super().__init__(message)
 
 
+# device.pk -> {"pool": RouterOsApiPool, "signature": tuple}
+# One shared connection per device, reused by every feature (RAW polling and the NAT
+# Protection check), so both share a single login instead of one login each.
+_CONNECTIONS = {}
+_LOCK = threading.RLock()
+
+
+def _signature(device):
+    """Anything that changes the connection must invalidate the cached session."""
+    return (device.management_ip, device.api_port, device.use_ssl, device.username,
+            device.encrypted_password, device.device_type, device.enabled)
+
+
+def _close(pk):
+    entry = _CONNECTIONS.pop(pk, None)
+    if entry:
+        try:
+            entry["pool"].disconnect()
+        except Exception:
+            pass
+
+
+def close_connection(device_id):
+    """Close and forget a device's cached connection (device deleted or monitoring stopped)."""
+    with _LOCK:
+        _close(device_id)
+
+
+def close_all():
+    with _LOCK:
+        for pk in list(_CONNECTIONS):
+            _close(pk)
+
+
+def _pool_for(device, host, password):
+    """Return a connected pool for this device, reusing the cached one when still valid."""
+    signature = _signature(device)
+    with _LOCK:
+        entry = _CONNECTIONS.get(device.pk)
+        if entry and entry["signature"] == signature:
+            try:
+                entry["pool"].get_api()      # no-op while connected; raises if the socket died
+                return entry["pool"]
+            except Exception:
+                _close(device.pk)            # stale/broken: drop it and reconnect below
+        elif entry:
+            _close(device.pk)                # profile changed
+
+    context = None
+    if device.use_ssl:
+        context = ssl.create_default_context(cafile=getattr(settings, "DEVICE_CONNECTION_CA_FILE", None))
+        context.check_hostname = True
+        context.verify_mode = ssl.CERT_REQUIRED
+    event("api_connection", device_id=device.pk, api_port=device.api_port, use_ssl=device.use_ssl, result="attempt")
+    pool = routeros_api.RouterOsApiPool(
+        host, username=device.username, password=password, port=device.api_port,
+        plaintext_login=True, use_ssl=device.use_ssl, ssl_verify=True,
+        ssl_verify_hostname=True, ssl_context=context,
+    )
+    pool.set_timeout(connection_timeout())
+    pool.get_api()                            # performs the single login
+    with _LOCK:
+        _close(device.pk)
+        _CONNECTIONS[device.pk] = {"pool": pool, "signature": signature}
+    return pool
+
+
 @contextmanager
 @sensitive_variables()
 def router_session(device):
-    pool = None
+    """Yield an API for this device. The underlying connection stays open between calls."""
     connected = False
     try:
         available, valid = encryption_key_status()
@@ -34,22 +107,10 @@ def router_session(device):
             raise RouterAccessError("device_unavailable", "An enabled MikroTik device is required.")
         host = validate_target(device)
         event("target_validation", device_id=device.pk, result="success")
-        timeout = connection_timeout()
         event("password_decryption", device_id=device.pk, result="attempt")
         password = device.get_password()
         event("password_decryption", device_id=device.pk, result="success")
-        context = None
-        if device.use_ssl:
-            context = ssl.create_default_context(cafile=getattr(settings, "DEVICE_CONNECTION_CA_FILE", None))
-            context.check_hostname = True
-            context.verify_mode = ssl.CERT_REQUIRED
-        event("api_connection", device_id=device.pk, api_port=device.api_port, use_ssl=device.use_ssl, result="attempt")
-        pool = routeros_api.RouterOsApiPool(
-            host, username=device.username, password=password, port=device.api_port,
-            plaintext_login=True, use_ssl=device.use_ssl, ssl_verify=True,
-            ssl_verify_hostname=True, ssl_context=context,
-        )
-        pool.set_timeout(timeout)
+        pool = _pool_for(device, host, password)
         api = pool.get_api()
         connected = True
         event("api_connection", device_id=device.pk, result="success")
@@ -66,6 +127,9 @@ def router_session(device):
     except Exception as error:
         if not isinstance(error, (RouterOsApiError, OSError, ValueError, TypeError)):
             raise
+        # A failed operation may have killed the socket: drop it so the next call reconnects.
+        if connected or _CONNECTIONS.get(device.pk):
+            close_connection(device.pk)
         cause = _nested_exception(error)
         if isinstance(cause, (socket.timeout, TimeoutError)):
             code, message = "timeout", "The RouterOS API operation timed out. Retry will check for existing rules first."
@@ -99,9 +163,3 @@ def router_session(device):
                 message = "RouterOS API: " + detail
         event("api_operation" if connected else "api_connection", device_id=device.pk, result=code, reason=reason, errno=getattr(cause, "errno", None), winerror=getattr(cause, "winerror", None))
         raise RouterAccessError(code, message) from None
-    finally:
-        if pool is not None:
-            try:
-                pool.disconnect()
-            except Exception:
-                pass

@@ -121,6 +121,9 @@ class Command(BaseCommand):
                 finish(token, "Monitoring stopped because a safe sample could not be completed.")
             raise CommandError("RAW polling stopped because a safe sample could not be completed.") from None
         finally:
+            # Release the cached RouterOS connection: the worker is ending.
+            from devices.services.router_session import close_connection
+            close_connection(options["device_id"])
             if token:
                 MonitoringRun.objects.filter(pk=1, token=token, active=True).update(
                     active=False, stopped_at=timezone.now())
