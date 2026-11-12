@@ -125,7 +125,7 @@ def inventory_context(request, form=None, unavailable=False):
             row["audit_history"] = audits.get(row["id"], [])
             row["provisioning_history"] = attempts.get(row["id"], [])
         from sensors.presentation import fleet_snapshot, summarize_sensors
-        from monitor.models import DeviceDDoSProtection, NatFailoverLog
+        from monitor.models import DeviceDDoSProtection
         sensor_groups = fleet_snapshot()
         protection_state = dict(DeviceDDoSProtection.objects.filter(
             device_id__in=[row['id'] for row in rows]).values_list('device_id', 'enabled'))
@@ -145,8 +145,6 @@ def inventory_context(request, form=None, unavailable=False):
         sensor_authorized = authorized()
     return {
         "active_page": "devices", "inventory_ready": True, "device_rows": rows, "total_devices": None if unavailable else len(rows),
-        "nat_failover_logs": [] if unavailable else list(
-            NatFailoverLog.objects.select_related("device")[:25]),
         "snmp_polling_authorized": False if unavailable else sensor_authorized,
         "sensor_summary": {'total': None, 'active': None, 'attention': None} if unavailable else sensor_summary,
         "inventory_unavailable": unavailable,

@@ -37,12 +37,5 @@
     <tr id="noMatchingDevices" hidden><td colspan="7" class="inventory-empty">No matching devices. Try another search or filter.</td></tr>
     </tbody></table></div>
     <div class="fleet-panel-footer"><span>Read-only sensor telemetry</span><span>Settings opens SNMP sensors &middot; device name opens details</span></div>
-    <div class="overview-panel-foot"><span>Automatic NAT failover records (device → DDoS Protection)</span><a href="#natFailoverLog">View NAT change log</a></div>
-    <section class="panel" id="natFailoverLog" aria-labelledby="natFailoverLogTitle">
-        <div class="panel-heading"><div><h2 id="natFailoverLogTitle">Automatic NAT Failover Log</h2><p class="panel-subtitle">Every automatic NAT to-addresses change, newest first (latest 25)</p></div><span class="phase-badge">AUDIT</span></div>
-        <div class="table-wrap" role="region" tabindex="0" aria-label="NAT failover log"><table class="devices-table"><caption class="sr-only">Time, device, NAT comment, old and new address, trigger and result</caption>
-        <thead><tr><th scope="col">Time</th><th scope="col">Device</th><th scope="col">NAT entry</th><th scope="col">From → To</th><th scope="col">Triggered by</th><th scope="col">Result</th></tr></thead>
-        <tbody>{% for log in nat_failover_logs %}<tr><td class="fleet-address">{{ log.created_at|date:"M d, H:i:s" }}</td><td>{{ log.device_name|default:"—" }}</td><td>{{ log.nat_comment|default:"—" }}</td><td class="fleet-management-ip">{{ log.old_address|default:"—" }} → {{ log.new_address|default:"—" }}</td><td>{{ log.trigger_address|default:"—" }} <small>{{ log.status_at_trigger }}</small></td><td><span class="status-pill" data-state="{{ log.result }}">{{ log.result|upper }}</span>{% if log.message %}<small>{{ log.message }}</small>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="inventory-empty">No automatic NAT changes recorded yet.</td></tr>{% endfor %}</tbody></table></div>
-    </section>
 </section>
 <noscript><p class="preview-notice">Enable JavaScript to open device dialogs and refresh sensor readings.</p></noscript>
