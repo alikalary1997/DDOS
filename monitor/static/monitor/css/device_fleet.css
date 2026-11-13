@@ -25,13 +25,7 @@
 .fleet-context p{margin:0;line-height:1.5}.fleet-context>div{display:flex;gap:14px}.fleet-context strong{color:var(--text);font-weight:650}
 .fleet-page .fleet-inventory .devices-table{width:100%;table-layout:fixed;min-width:0;border-collapse:collapse}
 .fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(n){width:auto;display:table-cell;font:600 10px/1.5 Inter,"Segoe UI",sans-serif;letter-spacing:.4px;text-transform:uppercase;white-space:normal;padding:14px 12px;background:var(--surface-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);color:var(--muted)}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(1){width:19%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(2){width:17%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(3){width:12%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(4){width:23%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(5){width:19%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(6){width:10%}
-.fleet-page .fleet-inventory[data-view=matrix] .devices-table td:nth-child(n){display:table-cell;padding:23px 12px;border-bottom:1px solid var(--border);vertical-align:top;white-space:normal;overflow-wrap:anywhere;background:transparent;font-size:12px}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table td:nth-child(n){display:table-cell;padding:23px 12px;border-bottom:1px solid var(--border);vertical-align:top;white-space:normal;background:transparent;font-size:12px}
 .fleet-page .fleet-inventory[data-view=matrix] .devices-table :is(td,th):first-child{padding-left:22px}
 .fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]:hover td{background:var(--surface-2)}
 .fleet-device-heading{display:flex;gap:10px;align-items:center;min-width:0}
@@ -100,3 +94,90 @@
 }
 @media(max-width:950px){.fleet-page .fleet-panel .device-toolbar{grid-template-columns:1fr 1fr}.fleet-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-page .fleet-inventory[data-view=grid] tbody{grid-template-columns:1fr}.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-context>div{flex-wrap:wrap}}
 @media(max-width:520px){.fleet-page .fleet-intro h2{font-size:24px}.fleet-stat{padding:15px}.fleet-stat-top{font-size:11px;gap:8px}.fleet-stat>strong{font-size:28px}.fleet-stat-top svg{width:24px;height:24px;flex:none}.fleet-page .fleet-panel .panel-heading{flex-wrap:wrap;padding:18px}.fleet-page .fleet-panel .device-toolbar{margin:0 16px;gap:10px}.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]{padding:18px 16px;gap:20px 16px}.fleet-router-icon{display:none}.fleet-page .fleet-inventory .noc-name{font-size:15px}.fleet-page .fleet-inventory[data-view=grid] tbody{padding:0 12px 12px}.fleet-summary{gap:10px}.fleet-panel-footer{padding:14px 16px}}
+
+/* ---- Fleet Table (matrix) layout -------------------------------------------
+   Seven explicit columns so nothing collapses to letter-per-line wrapping.
+   Scoped to [data-view=matrix]; the Router Grid view is unaffected. */
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table{
+    table-layout:fixed;width:100%;border-collapse:separate;border-spacing:0}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(n){width:auto}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(1){width:20%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(2){width:14%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(3){width:11%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(4){width:18%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(5){width:13%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(6){width:9%}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table th:nth-child(7){width:15%}
+
+/* Header row: same mono/uppercase treatment as the rest of NetShield. */
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table thead th{
+    text-align:left;vertical-align:middle;white-space:nowrap;
+    background:var(--surface-2);color:var(--muted);
+    font:600 10px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.07em;text-transform:uppercase;
+    padding:12px 14px;border-bottom:1px solid var(--border)}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table thead th:first-child{border-top-left-radius:9px}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table thead th:last-child{border-top-right-radius:9px}
+
+/* Body cells: comfortable height, never wrap mid-word. */
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table td{
+    vertical-align:middle;padding:14px 14px;border-bottom:1px solid var(--border);
+    font-size:12px;overflow-wrap:normal;word-break:normal;white-space:normal}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table tbody tr:last-child td{border-bottom:0}
+.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]:hover td{background:var(--surface-2)}
+.fleet-page .fleet-inventory[data-view=matrix] .devices-table td:first-child{border-left:2px solid transparent}
+.fleet-page .fleet-inventory[data-view=matrix] tr[data-device-row]:hover td:first-child{border-left-color:var(--blue)}
+
+/* Device name + group tag */
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-device-heading{align-items:flex-start}
+.fleet-page .fleet-inventory[data-view=matrix] .device-group-label{
+    display:inline-block;margin-top:6px;padding:2px 7px;border-radius:999px;
+    border:1px solid var(--border);background:var(--surface-2);
+    color:var(--muted);font:500 10px/1.5 "Segoe UI",sans-serif;letter-spacing:.02em}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-management-ip{
+    font:600 12px/1.5 ui-monospace,Consolas,monospace;color:var(--text);margin:0}
+
+/* Status pills: coloured, single-line, never stacked letters. */
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-reading-state{
+    display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:2px 8px;
+    border-radius:999px;border:1px solid var(--border);background:var(--surface-2);
+    font:600 10px/1.6 "Segoe UI",sans-serif;letter-spacing:.02em;white-space:nowrap}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-reading-state::before{
+    content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-reading-state[data-state=active]{
+    color:var(--green);border-color:var(--green);background:var(--ns-success-surface-1)}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-reading-state[data-state=attention]{
+    color:var(--amber);border-color:var(--amber);background:var(--ns-warning-surface-1)}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-interface-state{
+    display:inline-block;padding:1px 6px;border-radius:999px;font:600 9px/1.6 "Segoe UI",sans-serif;
+    border:1px solid currentColor;white-space:nowrap}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-interface-state[data-state=active]{color:var(--green)}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-interface-state[data-state=idle]{color:var(--red)}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-traffic-interface{
+    display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:normal}
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-traffic-rates{display:flex;gap:14px;flex-wrap:wrap}
+
+/* Actions column: compact button + protection pill, laid out horizontally. */
+.fleet-page .fleet-inventory[data-view=matrix] .fleet-actions{
+    display:table-cell;white-space:nowrap}
+.fleet-page .fleet-inventory[data-view=matrix] .device-protection-form{margin:0 0 8px}
+.fleet-page .fleet-inventory[data-view=matrix] .device-protection-button{
+    display:inline-flex;align-items:center;gap:6px;width:auto;max-width:100%;
+    padding:5px 10px;border-radius:999px;font:600 10px/1.5 "Segoe UI",sans-serif;
+    letter-spacing:.02em;white-space:nowrap;border:1px solid currentColor;cursor:pointer}
+.fleet-page .fleet-inventory[data-view=matrix] .device-protection-button strong{font-weight:700}
+.fleet-page .fleet-inventory[data-view=matrix] .noc-inspect{
+    display:inline-flex;width:auto;margin:0!important;padding:6px 12px!important;
+    border-radius:6px!important;font-size:11px;font-weight:600;white-space:nowrap;
+    justify-content:center;text-decoration:none}
+@media(max-width:1100px){
+  .fleet-page .fleet-inventory[data-view=matrix] .device-protection-form{margin-bottom:6px}
+  .fleet-page .fleet-inventory[data-view=matrix] .fleet-actions{white-space:normal}
+}
+
+/* Stacked (narrow) matrix layout: keep the same pill/button treatment, full width. */
+@media(max-width:1100px){
+  .fleet-page .fleet-inventory[data-view=matrix] .fleet-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .fleet-page .fleet-inventory[data-view=matrix] .device-protection-form{margin:0}
+  .fleet-page .fleet-inventory[data-view=matrix] .noc-inspect{width:auto}
+  .fleet-page .fleet-inventory[data-view=matrix] .devices-table td:nth-child(n){padding:12px 0}
+}
