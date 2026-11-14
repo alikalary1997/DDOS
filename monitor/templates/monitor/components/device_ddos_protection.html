@@ -1,6 +1,6 @@
 <section class="panel device-ddos-settings" id="deviceDDoSProtection" aria-labelledby="deviceDDoSProtectionTitle">
-    <div class="panel-heading"><div><h2 id="deviceDDoSProtectionTitle">DDoS Protection</h2><p class="panel-subtitle">NAT failover entries and SOS Public for this device</p></div><span class="phase-badge">{% if protection_enabled %}PROTECTION ON{% else %}PROTECTION OFF{% endif %}</span></div>
-    <p class="settings-section-note" id="deviceDDoSProtectionNote">Each entry matches a RouterOS NAT rule by its comment. While Protection is on and this device's public IP is confirmed Under Attack, every matching rule's <code>to-addresses</code> is switched to the SOS Public address. It is never switched back automatically. Saving does not block traffic or change detection.</p>
+    <div class="panel-heading"><div><h2 id="deviceDDoSProtectionTitle">DDoS Protection</h2><p class="panel-subtitle">NAT failover entries, SOS Public and Null IP for this device</p></div><span class="phase-badge">{% if protection_enabled %}PROTECTION ON{% else %}PROTECTION OFF{% endif %}</span></div>
+    <p class="settings-section-note" id="deviceDDoSProtectionNote">Each entry matches a RouterOS NAT rule by its comment. While Protection is on and a public IP on this device is confirmed Under Attack, only the NAT rule(s) whose <code>to-addresses</code> currently equals that attacked IP are switched to the SOS Public address - every other rule is left untouched. On every confirmed attack the attacked IP is also routed to the Null IP as a <code>/32</code>. Neither action is ever reverted automatically. Saving does not block traffic or change detection.</p>
     <form method="post" action="{% url 'device_ddos_protection' device.id %}#deviceDDoSProtection" id="deviceProtectionForm">
         {% csrf_token %}
         <table class="ddos-thresholds-table" id="natRulesTable" aria-describedby="deviceDDoSProtectionNote">
@@ -25,9 +25,11 @@
 
         <div class="settings-fields" style="margin-top:18px">
             <label for="sosPublic"><span>SOS Public</span><input id="sosPublic" type="text" name="sos_public" value="{{ sos_public }}" maxlength="255" autocomplete="off" aria-describedby="deviceDDoSProtectionNote"{% if not can_edit_protection %} disabled{% endif %}></label>
+            <label for="nullIp"><span>Null IP</span><input id="nullIp" type="text" name="null_ip" value="{{ null_ip }}" maxlength="255" autocomplete="off" aria-describedby="deviceDDoSProtectionNote"{% if not can_edit_protection %} disabled{% endif %}></label>
             <label class="nat-toggle-field"><span>Protection</span><span class="nat-toggle"><input type="checkbox" name="protection_enabled" value="1" aria-label="Protection for this device"{% if protection_enabled %} checked{% endif %}{% if not can_edit_protection %} disabled{% endif %}><span class="nat-toggle-track" aria-hidden="true"></span><span class="nat-toggle-text">{% if protection_enabled %}On{% else %}Off{% endif %}</span></span></label>
         </div>
         <p class="settings-section-note" id="deviceDDoSProtectionStatus">Status: <span class="nat-status" data-state="{% if switched_count %}switched{% elif protection_enabled %}active{% else %}off{% endif %}">{% if switched_count %}Switched to SOS Public ({{ switched_count }} entr{{ switched_count|pluralize:"y,ies" }}){% elif protection_enabled %}Protection on &middot; active on primary{% else %}Protection off{% endif %}</span></p>
+        <p class="settings-section-note" id="deviceDDoSProtectionRouteStatus">Null IP route: <span class="nat-status" data-state="{% if null_ip %}active{% else %}off{% endif %}">{% if null_ip %}On &middot; attacked IPs are routed to {{ null_ip }}{% else %}Off &middot; no Null IP configured, no route will be added{% endif %}</span></p>
         <div class="settings-section-actions">{% if can_edit_protection %}<button type="submit" class="primary-button">Save DDoS Protection</button>{% else %}<span>Administrator access is required to change these settings.</span>{% endif %}</div>
     </form>
 </section>

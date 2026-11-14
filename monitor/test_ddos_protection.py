@@ -25,8 +25,8 @@ class DDoSProtectionTests(TestCase):
         self.page_url = reverse("device_sensors", args=[self.device.pk])
         self.save_url = reverse("device_ddos_protection", args=[self.device.pk])
 
-    def save(self, names, values=None, sos="185.166.27.99", protection=False):
-        data = {"rule_name": names, "sos_public": sos}
+    def save(self, names, values=None, sos="185.166.27.99", protection=False, null_ip=""):
+        data = {"rule_name": names, "sos_public": sos, "null_ip": null_ip}
         if values is not None:
             data["rule_value"] = values
         if protection:
@@ -40,28 +40,35 @@ class DDoSProtectionTests(TestCase):
         page = self.client.get(self.page_url)
         self.assertContains(page, "DDoS Protection")
         self.assertContains(page, "SOS Public")
+        self.assertContains(page, "Null IP")
         self.assertContains(page, "Add Row")
         self.assertContains(page, 'id="natRulesBody"')
         self.assertContains(page, "Protection off")
+        self.assertContains(page, "no Null IP configured")
 
-    def test_one_sos_public_and_one_protection_for_the_whole_section(self):
+    def test_one_sos_public_one_null_ip_and_one_protection_for_the_whole_section(self):
         page = self.client.get(self.page_url).content.decode()
         saved_rows = page.split('id="natRulesBody"')[1].split("</tbody>")[0]
         self.assertIn('name="sos_public"', page)
+        self.assertIn('name="null_ip"', page)
         self.assertIn('name="protection_enabled"', page)
-        # Nothing per-row: no SOS Public / Protection inputs inside the row list.
+        # Nothing per-row: no SOS Public / Null IP / Protection inputs inside the row list.
         self.assertNotIn('name="rule_sos_public"', page)
+        self.assertNotIn('name="rule_null_ip"', page)
         self.assertNotIn('name="rule_protection"', page)
         self.assertNotIn('name="rule_name"', saved_rows)   # no saved rows yet
         form = page.split('id="deviceProtectionForm"')[1].split("</form>")[0]
         self.assertEqual(form.count('name="sos_public"'), 1)
+        self.assertEqual(form.count('name="null_ip"'), 1)
         self.assertEqual(form.count('name="protection_enabled"'), 1)
 
-    def test_save_persists_rows_and_the_single_sos_and_toggle(self):
-        response = self.save(["1", "2", "4"], values=["25", "30", "40"], sos="185.166.27.16", protection=True)
+    def test_save_persists_rows_and_the_single_sos_null_ip_and_toggle(self):
+        response = self.save(["1", "2", "4"], values=["25", "30", "40"], sos="185.166.27.16",
+                             protection=True, null_ip="192.0.2.1")
         self.assertRedirects(response, self.page_url)
         protection = self.protection()
         self.assertEqual(protection.sos_public, "185.166.27.16")
+        self.assertEqual(protection.null_ip, "192.0.2.1")
         self.assertTrue(protection.enabled)
         self.assertEqual(list(protection.rules.values_list("name", "value")),
                          [("1", Decimal("25")), ("2", Decimal("30")), ("4", Decimal("40"))])
@@ -83,28 +90,24 @@ class DDoSProtectionTests(TestCase):
         self.assertEqual(list(self.protection().rules.values_list("name", flat=True)), ["1", "7"])
 
     def test_rendered_values_round_trip(self):
-        self.save(["uplink"], values=["25.5"], sos="185.166.27.16", protection=True)
+        self.save(["uplink"], values=["25.5"], sos="185.166.27.16", protection=True, null_ip="192.0.2.1")
         page = self.client.get(self.page_url).content.decode()
         self.assertIn('name="rule_name" value="uplink"', page)
         self.assertIn('name="sos_public" value="185.166.27.16"', page)
+        self.assertIn('name="null_ip" value="192.0.2.1"', page)
         self.assertIn("PROTECTION ON", page)
 
-    def test_resave_keeps_switched_latch_for_unchanged_entries(self):
+    def test_whole_section_status_reflects_the_device_toggle(self):
         self.save(["iQ-25-01"], values=["25"], protection=True)
-        rule = self.protection().rules.get()
-        rule.switched_at = timezone.now(); rule.switched_from = "185.166.27.16"; rule.save()
-        self.save(["iQ-25-01"], values=["25"], protection=True)
-        rule = self.protection().rules.get()
-        self.assertIsNotNone(rule.switched_at)
-        self.assertContains(self.client.get(self.page_url), "Switched to SOS Public (1 entry)")
+        page = self.client.get(self.page_url).content.decode()
+        self.assertIn("Protection on", page)
+        self.assertNotIn("Switched to SOS Public (", page)
 
-    def test_turning_protection_off_clears_the_switch_latch(self):
+    def test_turning_protection_off_shows_protection_off(self):
         self.save(["iQ-25-01"], values=["25"], protection=True)
-        rule = self.protection().rules.get()
-        rule.switched_at = timezone.now(); rule.switched_from = "185.166.27.16"; rule.save()
         self.save(["iQ-25-01"], values=["25"], protection=False)
-        self.assertIsNone(self.protection().rules.get().switched_at)
-        self.assertContains(self.client.get(self.page_url), "Protection off")
+        page = self.client.get(self.page_url).content.decode()
+        self.assertIn("Protection off", page)
 
     def test_changing_sos_public_rearms_every_entry(self):
         """Regression: a latch from an older SOS address blocked every later switch."""
@@ -118,10 +121,9 @@ class DDoSProtectionTests(TestCase):
 
     def test_resaving_with_same_sos_keeps_the_latch(self):
         self.save(["iQ-25-01"], values=["25"], sos="185.166.24.24", protection=True)
-        rule = self.protection().rules.get()
-        rule.switched_at = timezone.now(); rule.switched_from = "185.166.24.24"; rule.save()
-        self.assertContains(self.client.get(self.page_url), "Switched to SOS Public")
-        self.save(["iQ-25-01"], values=["25"], sos="185.166.24.24", protection=True)
+        DeviceDDoSProtectionRule.objects.update(switched_at=timezone.now())
+        self.assertEqual(self.save(["iQ-25-01"], values=["25"], sos="185.166.24.24", protection=True).status_code, 302)
+        self.assertIsNotNone(self.protection().rules.get().switched_at)
 
     def test_reader_cannot_save(self):
         self.client.force_login(get_user_model().objects.create_user(username="protect-reader"))

@@ -106,6 +106,8 @@ class DeviceDDoSProtection(models.Model):
     sos_public = models.CharField(max_length=255, blank=True, default="")
     # Deprecated: superseded by DeviceDDoSProtectionRule.protection_enabled.
     enabled = models.BooleanField(default=False)
+    # One plain IP per device. On a confirmed attack the attacked /32 is routed here.
+    null_ip = models.CharField(max_length=255, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
 

@@ -69,7 +69,8 @@ def context(device, user_can_edit=False):
             'switched_count': sum(1 for rule in protection.rules.all() if rule.switched_at) if protection else 0,
             'can_edit_protection': user_can_edit,
             'protection_enabled': bool(protection and protection.enabled),
-            'sos_public': protection.sos_public if protection else ''}
+            'sos_public': protection.sos_public if protection else '',
+            'null_ip': protection.null_ip if protection else ''}
 
 
 @login_required
@@ -116,15 +117,17 @@ def ddos_protection(request, device_id):
         except (InvalidOperation, ValueError):
             value = None
         rows.append({'name': name, 'value': value})
-    # One SOS Public and one Protection switch for the whole section (whole device).
+    # One SOS Public, one Null IP and one Protection switch for the whole section (whole device).
     sos_public = request.POST.get('sos_public', '').strip()
+    null_ip = request.POST.get('null_ip', '').strip()
     protection_enabled = request.POST.get('protection_enabled') == '1'
     with transaction.atomic():
         protection, _ = DeviceDDoSProtection.objects.select_for_update().get_or_create(device=device)
         previous_sos = (protection.sos_public or '').strip()
         protection.sos_public = sos_public
+        protection.null_ip = null_ip
         protection.enabled = protection_enabled
-        protection.save(update_fields=['sos_public', 'enabled', 'updated_at'])
+        protection.save(update_fields=['sos_public', 'null_ip', 'enabled', 'updated_at'])
         # Keep the switch latch only while the Sos Public target is unchanged AND the entry is
         # still switched to it. A changed SOS Public means every entry must be re-evaluated:
         # otherwise an entry latched under the old address could never fail over to the new one.
@@ -145,8 +148,6 @@ def ddos_protection(request, device_id):
             for position, row in enumerate(rows)])
     messages.success(request, 'DDoS Protection settings saved for this device.' + (
         ' The SOS Public address changed, so all entries are re-armed for failover.' if changed_target else ''))
-    return redirect('device_sensors', device_id=device.pk)
-    messages.success(request, 'DDoS Protection settings saved for this device.')
     return redirect('device_sensors', device_id=device.pk)
 
 
