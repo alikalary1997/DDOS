@@ -8,6 +8,8 @@ from public_ips.models import FirewallSample, PublicIP
 from public_ips.services.assignments import clear_assignment_samples, delete_assignment, invalidate_assignment, record_review
 
 CONNECTION_FIELDS = {"management_ip", "api_port", "use_ssl", "username", "password", "incoming_monitoring_interface"}
+# The one field whose change re-targets live polling automatically (see sensors.polling).
+MANAGEMENT_IP_FIELD = "management_ip"
 
 
 @contextmanager
@@ -29,17 +31,32 @@ def audit_change(device, actor, action, changed_fields=()):
 
 
 def save_device(form, actor):
+    from devices.services.router_session import close_connection
+
     device = form.instance
     if not form.changed_fields:
         return device
     # Audit before mutation so a persistence failure rolls back the whole change.
     original = Device.objects.get(pk=device.pk)
     audit_change(original, actor, "edit", form.changed_fields)
+    # Drop the cached RouterOS session before the profile changes: the next poll must dial
+    # the new address (or credentials) rather than reusing a socket opened to the old one.
+    close_connection(device.pk)
     if CONNECTION_FIELDS.intersection(form.changed_fields):
+        # An IP-only edit re-targets live polling: keep each assignment's verified state and
+        # monitoring preference so the sensor/RAW cycles simply resume on the new address.
+        # The device is the same router and the RAW rules are matched by comment, not by
+        # address, so nothing about the rules changes. Any other profile change still
+        # requires the operator's review, exactly as before.
+        ip_only = set(form.changed_fields) == {MANAGEMENT_IP_FIELD}
         for ip in PublicIP.objects.select_for_update().filter(device_id=device.pk):
             record_review(ip, "device_edit", ip.address, device.pk, actor)
-            invalidate_assignment(ip)
             clear_assignment_samples(ip.pk, {device.pk})
+            if ip_only:
+                # Nothing on the assignment itself changed: keep its verification and its
+                # updated_at intact so the running worker's scope stays valid.
+                continue
+            invalidate_assignment(ip)
             ip.save()
         # A saved connection profile has changed; old results cannot describe it.
         device.last_connection_test = None

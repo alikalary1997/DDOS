@@ -12,8 +12,9 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 from pysnmp.proto.rfc1902 import Counter64, Integer32, OctetString, TimeTicks
-from devices.models import Device
+from devices.models import Device, DeviceChange
 from devices.services.credentials import encrypt_password, decrypt_password
+from devices.services import management as manage
 from sensors.models import Sensor, SensorSample, SensorRuntime, SNMPProfile
 from sensors.polling import Poller, format_uptime
 from sensors.snmp import Client, SNMPError, number, read, CPU
@@ -311,12 +312,27 @@ class SensorTests(TestCase):
         self.assertEqual(SensorSample.objects.count(), 0)
 
     def test_device_change_does_not_poll_old_profile(self):
+        """A non-IP profile change still requires re-testing the credentials."""
         self.activate()
-        self.device.management_ip = '10.20.30.41'; self.device.save()
+        self.profile.validated_ip = '10.20.30.99'; self.profile.save()
         self.sensor.refresh_from_db()
         with patch('sensors.snmp.read') as probe: Poller().poll(self.sensor)
         probe.assert_not_called()
         self.assertFalse(self.sensor.samples.last().valid)
+
+    def test_management_ip_edit_follows_the_new_address_without_retesting(self):
+        """Editing only the IP re-binds the validated profile; the next cycle polls the new IP."""
+        self.activate()
+        self.device.management_ip = '10.20.30.41'; self.device.save()
+        manage.audit_change(self.device, self.admin, 'edit', ['management_ip'])
+        self.sensor.refresh_from_db()
+        with patch('sensors.snmp.read', return_value=self.values()) as probe:
+            Poller().poll(self.sensor)
+        probe.assert_called_once()
+        self.assertEqual(probe.call_args.args[0].management_ip, '10.20.30.41')
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.validated_ip, '10.20.30.41')
+        self.assertTrue(self.sensor.samples.last().valid)
 
     def test_history_stale_and_failed_are_not_live(self):
         self.activate()

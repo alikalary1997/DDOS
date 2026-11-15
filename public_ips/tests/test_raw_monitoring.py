@@ -285,13 +285,28 @@ class RAWMonitoringTests(TestCase):
         with router_lock(0):
             pass
 
-    def test_scoped_service_stops_when_device_endpoint_changes(self):
-        from public_ips.services.monitoring_scope import MonitoringScope, MonitoringScopeError
+    def test_scoped_service_follows_a_management_ip_change(self):
+        """An IP edit re-targets the run; the worker keeps polling on the new address."""
+        from public_ips.services.monitoring_scope import MonitoringScope
         scope = MonitoringScope(self.device.pk, self.ip.pk, self.ip.address)
         scope.validate()
         Device.objects.filter(pk=self.device.pk).update(management_ip="172.26.241.17")
-        with self.assertRaises(MonitoringScopeError):
-            poll_device(self.device.pk, self.calculator, scope=scope)
+        poll_device(self.device.pk, self.calculator, scope=scope)
+        self.assertEqual(self.pool.call_count, 1)
+        self.assertEqual(self.pool.call_args.args[0], "172.26.241.17")
+
+    def test_scoped_service_stops_when_another_endpoint_field_changes(self):
+        """Port/SSL/username/password are identity: those changes still stop the worker."""
+        from public_ips.services.monitoring_scope import MonitoringScope, MonitoringScopeError
+        for field, value in (("api_port", 8728), ("use_ssl", False), ("username", "other")):
+            with self.subTest(field=field):
+                original = getattr(self.device, field)
+                scope = MonitoringScope(self.device.pk, self.ip.pk, self.ip.address)
+                scope.validate()
+                Device.objects.filter(pk=self.device.pk).update(**{field: value})
+                with self.assertRaises(MonitoringScopeError):
+                    poll_device(self.device.pk, self.calculator, scope=scope)
+                Device.objects.filter(pk=self.device.pk).update(**{field: original})
         self.pool.assert_not_called()
 
     def test_scoped_read_discards_sample_when_assignment_changes_during_api(self):

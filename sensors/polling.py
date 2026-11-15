@@ -4,12 +4,37 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.utils import timezone
 from devices.services.credentials import decrypt_password, CredentialError
+from devices.services.management import MANAGEMENT_IP_FIELD
 from . import ping, snmp
 from .models import Sensor, SensorSample, SensorRuntime, SNMPProfile
 
 
 def authorized():
     return SensorRuntime.objects.filter(pk=1, polling_authorized=True).exists()
+
+
+def profile_matches(profile, device):
+    """True when the saved SNMP credentials were validated for this device's current address."""
+    return bool(profile) and profile.validated_ip == device.management_ip
+
+
+def carry_forward_on_ip_change(device):
+    """Follow a management-IP change with the already-validated SNMP profile.
+
+    Only an IP change does this: the credentials were validated against this device and
+    SNMP is read-only, so re-binding the validated address keeps sensors polling at the
+    new IP without a manual re-test. Any other profile change still requires the operator
+    to test and save the credentials, exactly as before.
+    """
+    from devices.models import DeviceChange
+    if not DeviceChange.objects.filter(device_id=device.pk, action="edit",
+                                       changed_fields__icontains=MANAGEMENT_IP_FIELD).exists():
+        return False
+    profile = SNMPProfile.objects.filter(device_id=device.pk).first()
+    if not profile or profile.validated_ip == device.management_ip:
+        return False
+    SNMPProfile.objects.filter(pk=profile.pk).update(validated_ip=device.management_ip)
+    return True
 
 
 class Poller:
@@ -45,10 +70,14 @@ class Poller:
         if sensor.kind == 'ping':
             return self.poll_ping(sensor)
         profile = SNMPProfile.objects.filter(device_id=sensor.device_id).first()
+        if profile is not None and not profile_matches(profile, sensor.device):
+            # A management-IP edit only: follow it with the same validated credentials.
+            if carry_forward_on_ip_change(sensor.device):
+                profile = SNMPProfile.objects.filter(pk=profile.pk).first()
         signature = (sensor.revision, sensor.device.management_ip, profile.revision if profile else None)
         values, error = {}, ''
         try:
-            if not profile or profile.validated_ip != sensor.device.management_ip:
+            if not profile or not profile_matches(profile, sensor.device):
                 raise snmp.SNMPError('Test and save SNMP credentials for the current management IP first.')
             values = snmp.read(sensor.device, decrypt_password(profile.community), profile.port, 'sample', sensor)
         except snmp.SNMPError as exc:

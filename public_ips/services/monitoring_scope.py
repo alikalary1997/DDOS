@@ -1,4 +1,10 @@
-"""Reusable, fail-closed identity checks for a single monitoring target."""
+"""Reusable, fail-closed identity checks for a single monitoring target.
+
+An assignment's identity is its public IP; the device's management address is how we
+reach the router. Editing only the management IP therefore re-targets the run onto the
+new address instead of stopping it (the same way an IP change re-resolves DNS elsewhere).
+Any other connection-profile change still stops the worker, as before.
+"""
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address
 
@@ -7,6 +13,12 @@ from public_ips.models import PublicIP
 
 class MonitoringScopeError(Exception):
     pass
+
+
+def _profile_version(device):
+    """Connection profile identity. The management IP is deliberately excluded: it may change."""
+    return (device.api_port, device.use_ssl, device.username,
+            device.encrypted_password, device.incoming_monitoring_interface)
 
 
 @dataclass
@@ -35,8 +47,7 @@ class MonitoringScope:
             raise MonitoringScopeError("The scoped assignment is missing, changed, disabled or no longer verified. Worker stopped.")
         device = ip.device
         version = (ip.updated_at, ip.incoming_monitoring_interface, ip.provisioning_verified_at,
-                   device.management_ip, device.api_port, device.use_ssl, device.username,
-                   device.encrypted_password, device.incoming_monitoring_interface)
+                   *_profile_version(device))
         if self._version is not None and self._version != version:
             raise MonitoringScopeError("The scoped assignment or saved device profile changed. Worker stopped.")
         self._version = version
@@ -67,8 +78,7 @@ class DeviceMonitoringScope:
         if not ips:
             raise MonitoringScopeError("The device has no verified public IP to monitor, or it changed. Worker stopped.")
         device = ips[0].device
-        version = (device.management_ip, device.api_port, device.use_ssl, device.username,
-                   device.encrypted_password, device.incoming_monitoring_interface,
+        version = (*_profile_version(device),
                    tuple((ip.pk, ip.address, ip.updated_at, ip.incoming_monitoring_interface,
                           ip.provisioning_verified_at) for ip in ips))
         if self._version is not None and self._version != version:
