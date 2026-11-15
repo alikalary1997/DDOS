@@ -1,19 +1,20 @@
 {% extends 'monitor/base.html' %}{% load static %}
 {% block title %}{{ sensor.name }} · {{ device.name }}{% endblock %}
 {% block body_class %}devices-page sensors-page sensor-detail-page{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=20261115-detail">{% endblock %}
-{% block scripts %}<script src="{% static 'sensors/detail.js' %}?v=20261115-detail" defer></script>{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=20261116-switcher">{% endblock %}
+{% block scripts %}<script src="{% static 'sensors/detail.js' %}?v=20261116-switcher" defer></script>{% endblock %}
 {% block content %}
+<nav class="sensor-crumbs" aria-label="Breadcrumb">
+    <a href="{% url 'device_sensors' device.id %}">{{ device.name }}</a><span aria-hidden="true">/</span>
+    <a href="{% url 'device_sensors' device.id %}">SNMP Sensors</a><span aria-hidden="true">/</span>
+    <span aria-current="page">{{ sensor.name }}</span>
+</nav>
 <section class="page-intro sensor-detail-intro">
-    <div>
-        <p class="eyebrow">{{ device.name }} / {{ sensor.get_kind_display }}</p>
+    <div class="sensor-heading">
         <h2>{{ sensor.name }}</h2>
-        <p class="muted">{{ device.management_ip }}{% if sensor.interface_name %} · {{ sensor.interface_name }}{% endif %} · read-only monitoring</p>
+        <span class="sensor-live-pill" data-status data-tone="{{ status_tone }}">{{ status }}</span>
     </div>
-    <div class="sensor-detail-intro-actions">
-        <span class="sensor-status" data-status data-tone="{{ status_tone }}">{{ status }}</span>
-        <a class="secondary-button" href="{% url 'device_sensors' device.id %}">Back to sensors</a>
-    </div>
+    <a class="secondary-button" href="{% url 'device_sensors' device.id %}">&larr; Back to sensors</a>
 </section>
 {% for message in messages %}<p class="preview-notice" role="status">{{ message }}</p>{% endfor %}
 
@@ -39,19 +40,33 @@
         <div class="gauge-row">
             {% for gauge in gauges %}
             <article class="gauge" data-gauge="{{ gauge.key }}" data-tone="{{ gauge.tone }}" data-max="{{ gauge.max|default:0 }}">
-                <svg viewBox="0 0 120 120" role="img" aria-label="{{ gauge.label }}">
-                    <circle class="gauge-track" cx="60" cy="60" r="50"></circle>
-                    <circle class="gauge-fill" cx="60" cy="60" r="50" data-arc></circle>
-                </svg>
-                <p class="gauge-value"><strong data-gauge-value>{{ gauge.value|default_if_none:"—" }}</strong>{% if gauge.unit %}<em>{{ gauge.unit }}</em>{% endif %}</p>
                 <p class="gauge-label">{{ gauge.label }}</p>
+                <div class="gauge-ring">
+                    <svg viewBox="0 0 120 120" role="img" aria-label="{{ gauge.label }}">
+                        <circle class="gauge-track" cx="60" cy="60" r="50"></circle>
+                        <circle class="gauge-fill" cx="60" cy="60" r="50" data-arc></circle>
+                    </svg>
+                    <p class="gauge-value"><strong data-gauge-value>{{ gauge.value|default_if_none:"—" }}</strong>{% if gauge.unit %}<em>{{ gauge.unit }}</em>{% endif %}</p>
+                </div>
             </article>
             {% endfor %}
         </div>
+        <section class="live-graph-panel" aria-labelledby="liveGraphTitle">
+            <div class="live-graph-head"><h3 id="liveGraphTitle">Live Graph</h3><div class="range-slot" data-range-slot></div></div>
+            <figure class="sensor-chart sensor-chart-large">
+                <figcaption class="sr-only" data-chart-caption></figcaption>
+                <svg viewBox="0 0 680 240" role="img" aria-label="Sensor readings for the selected range" data-detail-chart></svg>
+                <p class="muted" data-detail-chart-note></p>
+                <span class="sensor-legend" data-detail-legend></span>
+            </figure>
+        </section>
     </section>
 
     <section role="tabpanel" id="panelGraphs" aria-labelledby="tabGraphs" data-panel="graphs" hidden>
-        <p class="muted" data-graph-note>Stored readings for the selected range.</p>
+        <section class="live-graph-panel" aria-labelledby="graphsGraphTitle">
+            <div class="live-graph-head"><h3 id="graphsGraphTitle">Graphs</h3></div>
+            <p class="muted">The same stored readings and range control as the Overview tab. Use the range buttons there to change the window.</p>
+        </section>
     </section>
 
     <section role="tabpanel" id="panelHistoric" aria-labelledby="tabHistoric" data-panel="historic" hidden>

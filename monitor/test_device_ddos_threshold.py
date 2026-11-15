@@ -82,7 +82,8 @@ class DeviceDDoSThresholdUITests(TestCase):
         self.client.force_login(self.admin)
         self.device = Device.objects.create(name="UI router", management_ip="10.20.30.40", username="private-user",
                                             encrypted_password=encrypt_password("private-api-password"))
-        self.url = reverse("device_sensors", args=[self.device.pk])
+        # Per-device thresholds render in the "Device Settings" view.
+        self.url = reverse("device_sensors", args=[self.device.pk]) + "?view=settings"
         self.save_url = reverse("device_ddos_settings", args=[self.device.pk])
         self.values = {"total_pps_warning": "9000", "total_pps_attack": "45000",
                        "bandwidth_mbps_warning": "95.125", "bandwidth_mbps_attack": "450.5",

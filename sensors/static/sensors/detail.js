@@ -64,13 +64,7 @@
         button.dataset.range = key;
         controls.append(button);
     }
-    document.querySelector('[data-panel="overview"]').append(controls);
-    document.querySelector('[data-panel="graphs"]').append(controls.cloneNode(true));
-    const chart = document.createElement('figure');
-    chart.className = 'sensor-chart sensor-chart-large';
-    chart.innerHTML = '<figcaption data-chart-caption></figcaption><svg viewBox="0 0 680 240" role="img" aria-label="Sensor readings for the selected range" data-detail-chart></svg>' +
-        '<p class="muted" data-detail-chart-note></p><span class="sensor-legend" data-detail-legend></span>';
-    document.querySelector('[data-panel="graphs"]').prepend(chart);
+    document.querySelectorAll('[data-range-slot]').forEach(slot => slot.append(controls.cloneNode(true)));
 
     function markRange(key, label) {
         document.querySelectorAll('[data-range]').forEach(button => {
@@ -125,18 +119,28 @@
         if (!flat.length) return;
         const low = Math.min(...flat.map(p => p.time)), high = Math.max(...flat.map(p => p.time));
         const scaleMax = Math.max(kind === 'traffic' || kind === 'uptime' ? .001 : 100, ...flat.map(p => p.value));
-        svg.append(node('path', {d: 'M55 15V195H655', fill: 'none', stroke: 'currentColor', opacity: '.2'}));
+        // Faint horizontal gridlines behind the series.
+        for (const fraction of [0, .25, .5, .75, 1]) {
+            const y = 195 - fraction * 175;
+            svg.append(node('line', {x1: 55, y1: y, x2: 655, y2: y, class: 'grid-line'}));
+        }
+        const toXY = group => group.map(p => [55 + (p.time - low) / Math.max(1, high - low) * 600, 195 - p.value / scaleMax * 175]);
+        // Primary series: line plus a soft area fill. Secondary series: a thin accent line.
         for (const [index, groups] of sets.entries()) {
             for (const group of groups) {
-                const xy = group.map(p => [55 + (p.time - low) / Math.max(1, high - low) * 600, 195 - p.value / scaleMax * 175]);
-                svg.append(node('polyline', {points: xy.map(p => p.join(',')).join(' '), fill: 'none', 'stroke-width': '2',
-                    class: index ? 'outbound' : 'inbound'}));
+                const xy = toXY(group);
+                const drawn = xy.map(p => p.join(',')).join(' ');
+                if (!index && xy.length > 1) {
+                    svg.append(node('polygon', {
+                        points: `${drawn} ${xy[xy.length - 1][0]},195 ${xy[0][0]},195`, class: 'series-area'}));
+                }
+                svg.append(node('polyline', {points: drawn, fill: 'none', class: index ? 'outbound' : 'inbound'}));
                 if (xy.length === 1) svg.append(node('circle', {cx: xy[0][0], cy: xy[0][1], r: 3, fill: 'none', 'stroke-width': 2,
                     class: index ? 'outbound' : 'inbound'}));
             }
         }
         const label = value => kind === 'uptime' ? duration(value) : format(value, 1);
-        for (const [x, y, text, anchor] of [[50, 22, label(scaleMax), 'end'], [50, 195, kind === 'uptime' ? '0' : '0', 'end'],
+        for (const [x, y, text, anchor] of [[50, 22, label(scaleMax), 'end'], [50, 199, '0', 'end'],
             [55, 220, new Date(low).toLocaleString(), 'start'], [655, 220, new Date(high).toLocaleString(), 'end']]) {
             const element = node('text', {x, y, 'text-anchor': anchor});
             element.textContent = text;

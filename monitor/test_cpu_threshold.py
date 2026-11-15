@@ -147,12 +147,13 @@ class CpuThresholdFormTests(TestCase):
         self.save_url = reverse("device_ddos_settings", args=[self.device.pk])
 
     def test_cpu_row_renders_and_saves_on_device_page(self):
-        page = self.client.get(reverse("device_sensors", args=[self.device.pk]))
+        page = self.client.get(reverse("device_sensors", args=[self.device.pk]), {"view": "settings"})
         self.assertContains(page, "CPU (%)")
         self.assertEqual(len(page.context["ddos_form"].fields), 10)
         self.assertEqual(page.context["ddos_form"]["cpu_warning"].field.widget.attrs.get("max"), "100")
+        # Saving returns to the Device Settings view that holds the form.
         self.assertRedirects(self.client.post(self.save_url, {**self.values, "action": "save"}),
-                             reverse("device_sensors", args=[self.device.pk]))
+                             reverse("device_sensors", args=[self.device.pk]) + "?view=settings")
         override = DeviceDDoSThreshold.objects.get(device=self.device)
         self.assertEqual((override.cpu_warning, override.cpu_attack), (70, 90))
 

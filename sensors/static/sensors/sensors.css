@@ -67,3 +67,86 @@
 .sensor-card h3 .sensor-open{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
 .sensor-card h3 .sensor-open:hover{color:var(--blue);border-bottom-color:var(--blue)}
 .sensor-card footer a.primary-button{display:inline-flex;align-items:center;text-decoration:none}
+/* Make the detail entry points unmistakable on the live page. */
+.sensor-card header h3 .sensor-open{display:inline-flex;align-items:center;gap:6px}
+.sensor-card header h3 .sensor-open::after{content:'\2192';font-size:14px;color:var(--muted)}
+.sensor-card header h3 .sensor-open:hover::after{color:var(--blue)}
+.noc-inspector .device-sensor-item strong a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent}
+.noc-inspector .device-sensor-item strong a:hover{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ===== Settings switcher + device-settings panels + sensor detail reference styling ===== */
+.sensors-page{--rose:#f0619a;--panel-bg:var(--surface);--pill-track:var(--surface-2)}
+.settings-switcher{display:inline-flex;gap:6px;padding:4px;margin:0 0 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.switch-pill{display:inline-flex;align-items:center;padding:9px 18px;border:1px solid transparent;border-radius:7px;font:600 12px "Segoe UI",Arial,sans-serif;color:var(--muted);background:transparent;text-decoration:none}
+.switch-pill:hover{color:var(--text);background:var(--surface)}
+.switch-pill[aria-current=page]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.switch-pill:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.device-settings-stack{display:flex;flex-direction:column;gap:18px}
+.device-panel{padding:20px 22px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.device-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+.device-panel-head h2{margin:0;font-size:15px;font-weight:700}
+.device-panel-note{margin:4px 0 0;font-size:11px;line-height:1.6;color:var(--muted)}
+.threshold-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+.threshold-card{padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}
+.threshold-card-title{margin:0 0 10px;font-size:11px;font-weight:700;color:var(--muted)}
+.threshold-field{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;font-size:11px;color:var(--muted)}
+.threshold-field input{width:100%;box-sizing:border-box}
+.protection-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0 12px}
+.protection-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted)}
+.protection-toggle-row{margin:0 0 12px}
+.protection-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid currentColor;font:600 10px/1.6 "Segoe UI",Arial,sans-serif;white-space:nowrap}
+.protection-pill[data-state=on]{color:var(--green);background:var(--ns-success-surface-1)}
+.protection-pill[data-state=off]{color:var(--muted);background:var(--surface-2)}
+@media(max-width:1100px){.threshold-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.threshold-grid,.protection-fields{grid-template-columns:1fr}}
+
+/* Sensor detail: breadcrumb, heading pill, tabs, metadata strip, gauges, live graph. */
+.sensor-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px;font-size:11px;color:var(--muted)}
+.sensor-crumbs a{color:var(--blue);text-decoration:none}
+.sensor-crumbs a:hover{text-decoration:underline}
+.sensor-crumbs span[aria-current=page]{color:var(--text);font-weight:600}
+.sensor-detail-intro{align-items:center;margin-bottom:6px}
+.sensor-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sensor-heading h2{margin:0;font-size:26px;font-weight:700}
+.sensor-live-pill{display:inline-flex;align-items:center;padding:4px 11px;border-radius:999px;font:700 10px/1.7 "Segoe UI",Arial,sans-serif;letter-spacing:.02em;border:1px solid currentColor}
+.sensor-live-pill[data-tone=active]{color:var(--green);background:var(--ns-success-surface-1)}
+.sensor-live-pill[data-tone=attention]{color:var(--amber);background:var(--surface-2)}
+.sensor-live-pill[data-tone=idle]{color:var(--muted);background:var(--surface-2)}
+.sensor-tabs{border-bottom:1px solid var(--border);gap:2px}
+.sensor-tabs button{border-radius:0;padding:12px 16px;font-size:12px;font-weight:600}
+.sensor-tabs button:hover{background:transparent;color:var(--text)}
+.sensor-tabs button[aria-selected=true]{color:var(--blue);border-bottom-color:var(--blue);background:transparent}
+.sensor-meta{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;padding:18px 22px;margin:0 0 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.sensor-meta dt{margin:0 0 6px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.sensor-meta dd{margin:0;font:700 14px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);overflow-wrap:anywhere}
+.gauge-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:0 0 18px;align-items:stretch}
+.gauge{padding:16px 16px 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);text-align:left}
+.gauge-label{margin:0 0 12px;font:700 10px "Segoe UI",Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gauge-ring{position:relative;width:140px;height:140px;margin:0 auto}
+.gauge-ring svg{display:block;width:140px;height:140px;transform:rotate(-90deg)}
+.gauge-ring circle{fill:none;stroke-width:7}
+.gauge-ring .gauge-track{stroke:var(--border)}
+.gauge-ring .gauge-fill{stroke:var(--blue);stroke-linecap:round;transition:stroke-dasharray .3s ease}
+.gauge[data-tone=normal] .gauge-fill{stroke:var(--green)}
+.gauge[data-tone=warning] .gauge-fill{stroke:var(--amber)}
+.gauge[data-tone=attack] .gauge-fill{stroke:var(--red)}
+.gauge-value{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin:0}
+.gauge-value strong{font:700 26px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);line-height:1.1;overflow-wrap:anywhere;max-width:112px;text-align:center}
+.gauge-value em{font-style:normal;font-size:10px;color:var(--muted)}
+.live-graph-panel{padding:18px 20px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.live-graph-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.live-graph-head h3{margin:0;font-size:13px;font-weight:700}
+.range-control{display:inline-flex;gap:4px;padding:0;margin:0;border:0;background:transparent}
+.range-control button{padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--muted);font:600 11px "Segoe UI",Arial,sans-serif;cursor:pointer}
+.range-control button:hover:not(:disabled){border-color:var(--blue);color:var(--text)}
+.range-control button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+.range-control button:disabled{opacity:.55;cursor:default}
+.sensor-chart-large{border:0;padding:0;margin:0;background:transparent}
+.sensor-chart-large svg{display:block;width:100%;height:auto}
+.sensor-chart-large text{fill:var(--muted);font:10px sans-serif}
+.sensor-chart-large .grid-line{stroke:var(--border);stroke-width:1;opacity:.7}
+.sensor-chart-large .series-area{fill:var(--blue);opacity:.14;stroke:none}
+.sensor-chart-large .inbound{stroke:var(--blue);stroke-width:2}
+.sensor-chart-large .outbound{stroke:var(--rose);stroke-width:1.4;opacity:.9}
+@media(max-width:900px){.sensor-meta{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.sensor-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}

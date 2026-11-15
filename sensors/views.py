@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import F
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from django.views.decorators.http import require_POST, require_GET
@@ -60,6 +61,7 @@ def context(device, user_can_edit=False):
         ddos_form = DeviceDDoSThresholdForm(initial=initial)
     protection = DeviceDDoSProtection.objects.filter(device=device).prefetch_related("rules").first()
     return {'device': device, 'profile_ready': bool(profile and profile.validated_ip == device.management_ip),
+            'device_description': device.description,
             'profile_form': ProfileForm(initial={'port': profile.port if profile else 161}),
             'sensor_form': AddSensorForm(), 'sensors': Sensor.objects.filter(device=device),
             'polling_authorized': authorized(), 'active_page': 'devices',
@@ -76,8 +78,11 @@ def context(device, user_can_edit=False):
 @login_required
 @require_GET
 def inventory(request, device_id):
-    return render(request, 'sensors/inventory.html', context(
-        device_for(device_id), request.user.is_staff or request.user.is_superuser))
+    device = device_for(device_id)
+    ctx = context(device, request.user.is_staff or request.user.is_superuser)
+    # One page, two views: the sensor list and the device-wide settings panels.
+    ctx['active_view'] = 'settings' if request.GET.get('view') == 'settings' else 'sensors'
+    return render(request, 'sensors/inventory.html', ctx)
 
 
 @administrator
@@ -148,7 +153,7 @@ def ddos_protection(request, device_id):
             for position, row in enumerate(rows)])
     messages.success(request, 'DDoS Protection settings saved for this device.' + (
         ' The SOS Public address changed, so all entries are re-armed for failover.' if changed_target else ''))
-    return redirect('device_sensors', device_id=device.pk)
+    return redirect(reverse('device_sensors', args=[device.pk]) + '?view=settings')
 
 
 @administrator
@@ -175,7 +180,7 @@ def ddos_settings(request, device_id):
     if request.POST.get('action') == 'reset':
         DeviceDDoSThreshold.objects.filter(device=device).delete()
         messages.success(request, 'DDoS thresholds reset to the global defaults.')
-        return redirect('device_sensors', device_id=device.pk)
+        return redirect(reverse('device_sensors', args=[device.pk]) + '?view=settings')
     override = DeviceDDoSThreshold.objects.filter(device=device).first()
     form = DeviceDDoSThresholdForm(request.POST, instance=override)
     if form.is_valid():
@@ -183,10 +188,11 @@ def ddos_settings(request, device_id):
         instance.device = device
         instance.save()
         messages.success(request, 'DDoS thresholds saved for this device. Detection activation was not changed.')
-        return redirect('device_sensors', device_id=device.pk)
+        return redirect(reverse('device_sensors', args=[device.pk]) + '?view=settings')
     ctx = context(device)
     ctx['ddos_form'] = form
     ctx['has_ddos_override'] = bool(override)
+    ctx['active_view'] = 'settings'
     messages.error(request, 'Thresholds were not saved. Correct the errors below.')
     return render(request, 'sensors/inventory.html', ctx, status=400)
 

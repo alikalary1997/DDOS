@@ -88,6 +88,53 @@ class SensorDetailTests(TestCase):
         url, _history, _settings = self.urls(self.cpu)
         self.assertIn(f'href="{url}"', page)
 
+    def test_settings_area_switches_between_sensors_and_device_settings(self):
+        base = reverse("device_sensors", args=[self.device.pk])
+        sensors_view = self.client.get(base).content.decode()
+        settings_view = self.client.get(base, {"view": "settings"}).content.decode()
+        # Both views carry the two pills; the active one is marked for styling.
+        for page in (sensors_view, settings_view):
+            self.assertIn("settings-switcher", page)
+            self.assertIn("Sensors<", page)
+            self.assertIn("Device Settings<", page)
+        sensors_pill = sensors_view.split('aria-label="Device settings sections"', 1)[1].split("</div>", 1)[0]
+        self.assertIn(f'href="{base}" aria-current="page">Sensors<', sensors_pill)
+        settings_pill = settings_view.split('aria-label="Device settings sections"', 1)[1].split("</div>", 1)[0]
+        self.assertIn('aria-current="page">Device Settings<', settings_pill)
+        # The sensor list belongs to the Sensors view only...
+        self.assertIn("sensor-grid", sensors_view)
+        self.assertNotIn("sensor-grid", settings_view)
+        # ...and the device-wide panels to the Device Settings view only.
+        self.assertNotIn("deviceDDoSSettings", sensors_view)
+        self.assertIn("deviceDDoSSettings", settings_view)
+        self.assertIn("deviceDDoSProtection", settings_view)
+        self.assertIn("DEVICE / SETTINGS", settings_view)
+        self.assertIn("Device-wide configuration. Not tied to any single sensor.", settings_view)
+        for label in ("Total PPS", "CPU (%)", "Save thresholds", "Save protection settings",
+                      "SOS Public", "Null IP"):
+            self.assertIn(label, settings_view)
+
+    def test_sensor_detail_uses_the_reference_layout(self):
+        detail_url = reverse("sensor_detail", args=[self.device.pk, self.cpu.pk])
+        page = self.client.get(detail_url).content.decode()
+        self.assertIn("sensor-crumbs", page)            # Device / SNMP Sensors / <sensor>
+        self.assertIn("sensor-live-pill", page)         # status pill beside the heading
+        self.assertIn("Live Graph", page)               # graph panel title
+        self.assertIn("data-range-slot", page)          # range buttons land here
+        self.assertIn("gauge-ring", page)               # donut gauges
+        self.assertNotIn("DDoS Settings", page)
+        self.assertNotIn("DDoS Protection", page)
+
+    def test_devices_page_inspector_links_to_the_detail_view(self):
+        """Regression: the Devices page sensor list showed names as plain text."""
+        page = self.client.get(reverse("devices")).content.decode()
+        url, _history, _settings = self.urls(self.cpu)
+        # The inspector renders one entry per sensor, each linking to its own detail page.
+        self.assertIn(f'href="{url}"', page)
+        self.assertIn(">Details</a>", page)
+        # The sensor's own edit form is still reachable alongside it.
+        self.assertIn(reverse("sensor_edit", args=[self.device.pk, self.cpu.pk]), page)
+
     # --- range switching -------------------------------------------------
     def test_switching_range_returns_different_stored_samples(self):
         self.seed_ranges(self.cpu)

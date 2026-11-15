@@ -22,7 +22,8 @@ class DDoSProtectionTests(TestCase):
         self.client.force_login(self.admin)
         self.device = Device.objects.create(name="Protect router", management_ip="10.20.30.70", username="u",
                                             encrypted_password=encrypt_password("p"))
-        self.page_url = reverse("device_sensors", args=[self.device.pk])
+        # The protection panel lives in the "Device Settings" view of the device page.
+        self.page_url = reverse("device_sensors", args=[self.device.pk]) + "?view=settings"
         self.save_url = reverse("device_ddos_protection", args=[self.device.pk])
 
     def save(self, names, values=None, sos="185.166.27.99", protection=False, null_ip=""):
@@ -95,7 +96,7 @@ class DDoSProtectionTests(TestCase):
         self.assertIn('name="rule_name" value="uplink"', page)
         self.assertIn('name="sos_public" value="185.166.27.16"', page)
         self.assertIn('name="null_ip" value="192.0.2.1"', page)
-        self.assertIn("PROTECTION ON", page)
+        self.assertIn("Protection Enabled", page)
 
     def test_whole_section_status_reflects_the_device_toggle(self):
         self.save(["iQ-25-01"], values=["25"], protection=True)

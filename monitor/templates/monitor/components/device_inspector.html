@@ -3,11 +3,12 @@
 {% if device.device_type == 'mikrotik' %}{% if can_add_devices %}<p><a class="secondary-button" data-device-add-sensor href="{% url 'device_sensors' device.id %}#addSensor">Add Sensor</a></p>{% endif %}
 <section class="device-sensor-summary"><h3>SNMP sensors</h3>
 {% for sensor in device.snmp_sensors %}<div class="device-sensor-item" data-integrated-sensor="{{ sensor.id }}">
-<strong>{{ sensor.name }}</strong><span data-sensor-summary>{{ sensor.status }}</span>
+<strong><a href="{% url 'sensor_detail' device.id sensor.id %}" aria-label="Open {{ sensor.name }} details">{{ sensor.name }}</a></strong><span data-sensor-summary>{{ sensor.status }}</span>
 <small data-sensor-schedule>Every {{ sensor.interval }} seconds &middot; Last reading: {{ sensor.last_success|default:"No readings yet" }}</small>
 {% if can_add_devices %}
 <form method="post" action="{% url 'sensor_control' device.id sensor.id 'start' %}">{% csrf_token %}<input type="hidden" name="next" value="devices"><button class="secondary-button" type="submit" data-sensor-start{% if sensor.enabled and sensor.status != 'Paused' %} disabled{% endif %}>{% if sensor.status == 'Paused' %}Resume{% else %}Start{% endif %}</button></form>
 <form method="post" action="{% url 'sensor_control' device.id sensor.id 'stop' %}">{% csrf_token %}<input type="hidden" name="next" value="devices"><button class="secondary-button" type="submit" data-sensor-stop{% if not sensor.enabled %} disabled{% endif %}>Stop</button></form>
+<a class="secondary-button" href="{% url 'sensor_detail' device.id sensor.id %}">Details</a>
 <a class="secondary-button" href="{% url 'sensor_edit' device.id sensor.id %}">Edit sensor</a>{% endif %}
 </div>{% empty %}<p>No sensors added.</p>{% endfor %}</section>{% endif %}
 <div class="noc-tabs" role="tablist" aria-label="Device details">
