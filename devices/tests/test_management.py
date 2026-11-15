@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from devices.models import Device, DeviceChange
+from devices.models import Device, DeviceChange, DeviceGroup
 from devices.services.connection import ProbeResult
 from devices.services.router_lock import RouterBusy
 from public_ips.models import AssignmentReview, FirewallSample, ProvisioningAttempt, PublicIP
@@ -30,7 +30,9 @@ class DeviceManagementTests(TestCase):
         self.edit = reverse("device_edit", args=[self.device.pk])
         self.delete = reverse("device_delete", args=[self.device.pk])
         self.payload = {"edit-name": "Updated router", "edit-management_ip": self.device.management_ip, "edit-api_port": self.device.api_port,
-            "edit-use_ssl": "true", "edit-username": self.device.username, "edit-password": "", "edit-incoming_monitoring_interface": "ether1", "edit-description": "Updated notes"}
+            "edit-use_ssl": "true", "edit-username": self.device.username, "edit-password": "", "edit-incoming_monitoring_interface": "ether1", "edit-description": "Updated notes",
+            # Shown on every browser form submission, even unchanged: both are editable now.
+            "edit-device_type": self.device.device_type, "edit-group": ""}
 
     def assert_safe(self, response, *extra):
         for secret in (self.password, self.device.encrypted_password, self.key, *extra):
@@ -208,6 +210,75 @@ class DeviceManagementTests(TestCase):
     def test_unknown_ids_are_404(self):
         for name in ("device_edit", "device_delete"):
             self.assertEqual(self.client.get(reverse(name, args=[999999])).status_code, 404)
+
+    def test_fleet_rows_expose_edit_and_delete_in_both_views(self):
+        """Regression: the fleet lost every Edit/Delete entry point."""
+        page = self.client.get(reverse("devices")).content.decode()
+        actions = page.split('<td class="noc-card-actions fleet-actions"', 1)[1]
+        self.assertIn(f'href="{self.edit}" data-manage-device="{self.device.pk}"', actions)
+        self.assertIn(f'href="{self.delete}" data-manage-device="{self.device.pk}"', actions)
+        self.assertIn("Settings", actions)
+        # The same actions cell is the last column of every row, so grid and table both show it.
+        self.assertIn('data-inventory-view="matrix"', page)
+        self.assertIn('data-inventory-view="grid"', page)
+        self.assertNotContains(self.client.get(self.delete), self.password)
+
+    def test_edit_form_exposes_every_add_field(self):
+        page = self.client.get(self.edit).content.decode()
+        form = page.split("data-device-edit-form", 1)[1].split("</form>", 1)[0]
+        for name in ("name", "management_ip", "device_type", "api_port", "use_ssl", "username",
+                     "password", "incoming_monitoring_interface", "description", "group"):
+            self.assertIn(f'name="edit-{name}"', form)
+
+    def test_edit_changes_only_the_submitted_fields_and_keeps_the_group(self):
+        group = DeviceGroup.objects.create(name="Company A")
+        other_group = DeviceGroup.objects.create(name="Company B")
+        Device.objects.filter(pk=self.device.pk).update(group=group)
+        response = self.client.post(self.edit, {**self.payload, "edit-management_ip": "172.26.241.99",
+                                                "edit-group": other_group.pk}, HTTP_ACCEPT="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.device.refresh_from_db()
+        self.assertEqual(self.device.management_ip, "172.26.241.99")
+        self.assertEqual(self.device.name, "Updated router")
+        self.assertEqual(self.device.group_id, other_group.pk)
+        self.assertEqual(self.device.device_type, "mikrotik")
+        # Password untouched: still the original secret.
+        self.assertEqual(self.device.get_password(), self.password)
+        self.assertEqual(DeviceChange.objects.get().changed_fields, ["name", "management_ip", "description", "group"])
+
+    def test_edit_with_blank_group_untags_the_device(self):
+        Device.objects.filter(pk=self.device.pk).update(group=DeviceGroup.objects.create(name="Company C"))
+        self.assertEqual(self.client.post(self.edit, {**self.payload, "edit-group": ""}).status_code, 302)
+        self.device.refresh_from_db()
+        self.assertIsNone(self.device.group_id)
+
+    def test_delete_removes_only_the_target_devices_tied_in_data(self):
+        from monitor.models import DeviceDDoSProtection, DeviceDDoSThreshold
+        from sensors.models import Sensor
+
+        mine = DeviceDDoSThreshold.objects.create(device=self.device)
+        theirs = DeviceDDoSThreshold.objects.create(device=self.other)
+        my_protection = DeviceDDoSProtection.objects.create(device=self.device, sos_public="8.8.4.4")
+        their_protection = DeviceDDoSProtection.objects.create(device=self.other)
+        my_sensor = Sensor.objects.create(device=self.device, kind="cpu", name="CPU", interface_index=0)
+        their_sensor = Sensor.objects.create(device=self.other, kind="cpu", name="CPU", interface_index=0)
+        my_ip = PublicIP.objects.create(address="8.8.8.8", device=self.device)
+        their_ip = PublicIP.objects.create(address="1.1.1.1", device=self.other)
+
+        response = self.client.post(self.delete, {"confirm": "yes"}, HTTP_ACCEPT="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Device.objects.filter(pk=self.device.pk).exists())
+        # The target device's tied-in data is gone...
+        self.assertFalse(DeviceDDoSThreshold.objects.filter(pk=mine.pk).exists())
+        self.assertFalse(DeviceDDoSProtection.objects.filter(pk=my_protection.pk).exists())
+        self.assertFalse(Sensor.objects.filter(pk=my_sensor.pk).exists())
+        self.assertFalse(PublicIP.objects.filter(pk=my_ip.pk).exists())
+        # ...and the unrelated device keeps everything.
+        self.assertTrue(Device.objects.filter(pk=self.other.pk).exists())
+        self.assertTrue(DeviceDDoSThreshold.objects.filter(pk=theirs.pk).exists())
+        self.assertTrue(DeviceDDoSProtection.objects.filter(pk=their_protection.pk).exists())
+        self.assertTrue(Sensor.objects.filter(pk=their_sensor.pk).exists())
+        self.assertTrue(PublicIP.objects.filter(pk=their_ip.pk).exists())
 
     def test_late_connection_result_cannot_restore_old_profile_information(self):
         def changed(device):

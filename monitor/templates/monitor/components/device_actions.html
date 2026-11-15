@@ -1,4 +1,4 @@
-{# The device inspector now opens through the device name; this links directly to SNMP sensor settings. #}
+{# Device inspector opens through the device name; Settings links straight to its SNMP sensors. #}
 <div class="device-protection">
     <form method="post" action="{% url 'device_ddos_protection_toggle' device.id %}" class="device-protection-form">
         {% csrf_token %}
@@ -7,3 +7,9 @@
     </form>
 </div>
 <a class="noc-inspect" href="{% url 'device_sensors' device.id %}" aria-label="Settings for {{ device.name }}">Settings</a>
+{% if can_add_devices %}
+<div class="device-manage-actions">
+    <a class="noc-manage" href="{% url 'device_edit' device.id %}" data-manage-device="{{ device.id }}" aria-haspopup="dialog">Edit</a>
+    <a class="noc-manage noc-manage-delete" href="{% url 'device_delete' device.id %}" data-manage-device="{{ device.id }}" aria-haspopup="dialog">Delete</a>
+</div>
+{% endif %}

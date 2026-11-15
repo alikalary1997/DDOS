@@ -82,8 +82,8 @@ class ProvisioningValidationForm(forms.Form):
 
 class EditDeviceForm(AddDeviceForm):
     """An optional replacement password; stored ciphertext is never rendered."""
-    EDIT_FIELDS = ("name", "management_ip", "api_port", "use_ssl", "username", "incoming_monitoring_interface", "description",
-                   "group")
+    EDIT_FIELDS = ("name", "management_ip", "device_type", "api_port", "use_ssl", "username",
+                   "incoming_monitoring_interface", "description", "group")
 
     @sensitive_variables()
     def __init__(self, *args, instance, **kwargs):
@@ -92,8 +92,9 @@ class EditDeviceForm(AddDeviceForm):
         initial = dict(self.original, use_ssl="true" if instance.use_ssl else "false", password="")
         kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
-        self.fields.pop("device_type")
         self.fields["name"].widget.attrs["id"] = "editDeviceName"
+        # Queryset is resolved on demand so it is correct under any prefix and never stale.
+        self.fields["group"].queryset = DeviceGroup.objects.all()
         self.fields["password"].required = False
         self.fields["password"].help_text = "Leave blank to keep the stored password."
         self.fields["password"].widget.attrs["placeholder"] = "Leave blank to keep current password"

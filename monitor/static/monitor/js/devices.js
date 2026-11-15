@@ -88,6 +88,22 @@
     document.querySelectorAll("[data-inspect-device]").forEach(button => {
         button.addEventListener("click", () => document.getElementById("deviceInspector" + button.dataset.inspectDevice)?.showModal());
     });
+    // Edit / Delete act as plain links without JavaScript (the server reply renders the
+    // dialog). With JavaScript, open the server-provided dialog in place instead.
+    document.querySelectorAll("[data-manage-device]").forEach(link => {
+        link.addEventListener("click", event => {
+            const id = link.dataset.manageDevice;
+            const dialog = document.getElementById(link.textContent.trim() === "Delete" ? "deleteDeviceDialog" : "editDeviceDialog");
+            if (!dialog) return;                 // let the plain link load the server-rendered dialog
+            event.preventDefault();
+            if (id && dialog.id === "deleteDeviceDialog") {
+                const name = link.closest("tr")?.querySelector("[data-cell=name]")?.textContent?.trim() || "this device";
+                if (!window.confirm(`Permanently delete ${name}? Its assigned public IP records are removed too. This cannot be undone.`)) return;
+            }
+            dialog.removeAttribute("open");
+            dialog.showModal();
+        });
+    });
     const inspectHash = /^#inspect-(\d+)$/.exec(window.location?.hash || "");
     if (inspectHash) document.getElementById("deviceInspector" + inspectHash[1])?.showModal();
     document.querySelectorAll("[data-device-inspector]").forEach(inspector => {
