@@ -373,6 +373,128 @@ def control(request, device_id, sensor_id, action):
     return redirect('devices') if request.POST.get('next') == 'devices' else redirect('device_sensors', device_id=device_id)
 
 
+def sensor_status(sensor, gate, running, device_enabled, last):
+    """The single status vocabulary used by the list, the detail page and the API."""
+    if not sensor.enabled:
+        return 'Stopped'
+    if not gate or not running or not device_enabled:
+        return 'Paused'
+    if not last:
+        return 'Waiting for data'
+    if last.timestamp < timezone.now() - timedelta(seconds=max(30, sensor.interval * 3)):
+        return 'Stale'
+    return 'Active' if last.valid else 'Connection Failed'
+
+
+def detail_context(sensor, device, selected_range=None):
+    """Everything the sensor detail page renders. Read-only: no polling, no writes."""
+    from . import detail as detail_service
+
+    key, label, delta = detail_service.resolve_range(selected_range or detail_service.DEFAULT_RANGE)
+    gate, running = authorized(), worker_running()
+    last = sensor.samples.order_by('-timestamp', '-pk').first()
+    thresholds = detail_service.cpu_thresholds(device.pk) if sensor.kind == 'cpu' else None
+    gauges = []
+    history = detail_service.history_payload(sensor, key)
+    latest = {row['t']: row for row in history['points']}
+    current = None
+    if last and last.valid:
+        current = {
+            't': last.timestamp.isoformat(), 'valid': True, 'cpu': last.cpu,
+            'uptime_seconds': last.uptime_seconds, 'in_mbps': last.in_mbps, 'out_mbps': last.out_mbps,
+            'ping_ms': last.ping_ms, 'packet_loss': last.packet_loss,
+            'restart_detected': last.restart_detected, 'counter_reset': last.counter_reset,
+        }
+    if sensor.kind == 'traffic':
+        total = (current['in_mbps'] + current['out_mbps']) if current and current['in_mbps'] is not None \
+            and current['out_mbps'] is not None else None
+        gauges = [
+            {'key': 'total', 'label': 'Total throughput', 'unit': 'Mbps', 'value': total, 'tone': 'normal'},
+            {'key': 'in_mbps', 'label': 'Inbound', 'unit': 'Mbps', 'value': current['in_mbps'] if current else None, 'tone': 'normal'},
+            {'key': 'out_mbps', 'label': 'Outbound', 'unit': 'Mbps', 'value': current['out_mbps'] if current else None, 'tone': 'normal'},
+        ]
+    elif sensor.kind == 'cpu':
+        value = current['cpu'] if current else None
+        gauges = [{'key': 'cpu', 'label': 'CPU utilization', 'unit': '%', 'value': value,
+                   'max': 100, 'tone': detail_service.tune_for(value, thresholds)}]
+    elif sensor.kind == 'ping':
+        gauges = [
+            {'key': 'ping_ms', 'label': 'Latency', 'unit': 'ms', 'value': current['ping_ms'] if current else None, 'tone': 'normal'},
+            {'key': 'packet_loss', 'label': 'Packet loss', 'unit': '%', 'value': current['packet_loss'] if current else None,
+             'max': 100, 'tone': 'normal'},
+        ]
+    else:
+        gauges = [{'key': 'uptime_seconds', 'label': 'Device uptime', 'unit': '',
+                   'value': format_uptime(current['uptime_seconds']) if current else None, 'tone': 'normal'}]
+    stats = detail_service.stats_for(sensor, key)
+    status = sensor_status(sensor, gate, running, device.enabled, last)
+    return {
+        'sensor': sensor, 'device': device,
+        'status': status,
+        'status_tone': 'active' if status == 'Active' else 'attention' if status in ('Paused', 'Stale', 'Connection Failed') else 'idle',
+        'current': current, 'gauges': gauges, 'stats': stats,
+        'ranges': [{'key': k, 'label': label} for k, label, _delta in detail_service.RANGES],
+        'selected_range': key, 'selected_range_label': label,
+        'history': history, 'latest_point': latest,
+        'cpu_thresholds': thresholds,
+        'up': stats['uptime_percent'],
+        'down': None if stats['uptime_percent'] is None else round(100 - stats['uptime_percent'], 1),
+        'restart_count': sensor.samples.filter(restart_detected=True).count(),
+        'can_edit': True, 'active_page': 'devices',
+        'polling_authorized': gate, 'worker_running': running,
+        'settings_form': EditSensorForm(instance=sensor),
+    }
+
+
+@login_required
+@require_GET
+def detail(request, device_id, sensor_id):
+    device = device_for(device_id)
+    sensor = get_object_or_404(Sensor, pk=sensor_id, device_id=device_id)
+    selected = request.GET.get('range')
+    ctx = detail_context(sensor, device, selected)
+    ctx['can_edit'] = request.user.is_staff or request.user.is_superuser
+    return render(request, 'sensors/detail.html', ctx)
+
+
+@login_required
+@require_GET
+def history(request, device_id, sensor_id):
+    """Stored samples for one range. Re-queries the database; nothing is recomputed or invented."""
+    device_for(device_id)
+    sensor = get_object_or_404(Sensor, pk=sensor_id, device_id=device_id)
+    from . import detail as detail_service
+    payload = detail_service.history_payload(sensor, request.GET.get('range'))
+    payload['stats'] = detail_service.stats_for(sensor, payload['range'])
+    payload['latest'] = next((row for row in reversed(payload['points']) if row['valid']), None)
+    response = JsonResponse(payload)
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@administrator
+@require_POST
+def settings(request, device_id, sensor_id):
+    """Save ONLY this sensor's own configuration (name, interval, started/stopped state)."""
+    device = device_for(device_id)
+    sensor = get_object_or_404(Sensor, pk=sensor_id, device_id=device_id)
+    form = EditSensorForm(request.POST, instance=sensor)
+    if not form.is_valid():
+        ctx = detail_context(sensor, device)
+        ctx['settings_form'] = form
+        ctx['tab'] = 'settings'
+        messages.error(request, 'Sensor settings were not saved. Correct the errors below.')
+        return render(request, 'sensors/detail.html', ctx, status=400)
+    name, interval = form.cleaned_data['name'], form.cleaned_data['interval']
+    wanted = request.POST.get('enabled')
+    if wanted in ('1', '0') and (wanted == '1') != sensor.enabled:
+        # Reuses the existing start/stop path so the worker state stays consistent.
+        return control(request, device_id, sensor_id, 'start' if wanted == '1' else 'stop')
+    Sensor.objects.filter(pk=sensor.pk).update(name=name, interval=interval, revision=F('revision') + 1)
+    messages.success(request, 'Sensor settings saved. The worker applies the new interval automatically.')
+    return redirect('sensor_detail', device_id=device_id, sensor_id=sensor.pk)
+
+
 @login_required
 @require_GET
 def data(request, device_id):

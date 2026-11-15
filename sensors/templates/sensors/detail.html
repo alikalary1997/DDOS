@@ -1,0 +1,100 @@
+{% extends 'monitor/base.html' %}{% load static %}
+{% block title %}{{ sensor.name }} · {{ device.name }}{% endblock %}
+{% block body_class %}devices-page sensors-page sensor-detail-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261011-fleet"><link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=20261115-detail">{% endblock %}
+{% block scripts %}<script src="{% static 'sensors/detail.js' %}?v=20261115-detail" defer></script>{% endblock %}
+{% block content %}
+<section class="page-intro sensor-detail-intro">
+    <div>
+        <p class="eyebrow">{{ device.name }} / {{ sensor.get_kind_display }}</p>
+        <h2>{{ sensor.name }}</h2>
+        <p class="muted">{{ device.management_ip }}{% if sensor.interface_name %} · {{ sensor.interface_name }}{% endif %} · read-only monitoring</p>
+    </div>
+    <div class="sensor-detail-intro-actions">
+        <span class="sensor-status" data-status data-tone="{{ status_tone }}">{{ status }}</span>
+        <a class="secondary-button" href="{% url 'device_sensors' device.id %}">Back to sensors</a>
+    </div>
+</section>
+{% for message in messages %}<p class="preview-notice" role="status">{{ message }}</p>{% endfor %}
+
+<nav class="sensor-tabs" role="tablist" aria-label="Sensor detail">
+    <button type="button" role="tab" id="tabOverview" aria-controls="panelOverview" aria-selected="true" data-tab="overview">Overview</button>
+    <button type="button" role="tab" id="tabGraphs" aria-controls="panelGraphs" aria-selected="false" data-tab="graphs">Graphs</button>
+    <button type="button" role="tab" id="tabHistoric" aria-controls="panelHistoric" aria-selected="false" data-tab="historic">Historic Data</button>
+    <button type="button" role="tab" id="tabSettings" aria-controls="panelSettings" aria-selected="false" data-tab="settings">Settings</button>
+</nav>
+
+<div class="sensor-detail" data-sensor-history-url="{% url 'sensor_history' device.id sensor.id %}"
+     data-sensor-kind="{{ sensor.kind }}" data-interval="{{ sensor.interval }}">
+
+    <section role="tabpanel" id="panelOverview" aria-labelledby="tabOverview" data-panel="overview">
+        <dl class="sensor-meta">
+            <div><dt>Last scan</dt><dd data-meta="last_scan">{% if sensor.last_success %}{{ sensor.last_success }}{% else %}Not yet{% endif %}</dd></div>
+            <div><dt>Uptime</dt><dd data-meta="uptime">{% if up is not None %}{{ up }}%{% else %}—{% endif %}</dd></div>
+            <div><dt>Downtime</dt><dd data-meta="downtime">{% if down is not None %}{{ down }}%{% else %}—{% endif %}</dd></div>
+            <div><dt>Interval</dt><dd>Every {{ sensor.interval }} seconds</dd></div>
+            <div><dt>Sensor type</dt><dd>{{ sensor.get_kind_display }}</dd></div>
+        </dl>
+
+        <div class="gauge-row">
+            {% for gauge in gauges %}
+            <article class="gauge" data-gauge="{{ gauge.key }}" data-tone="{{ gauge.tone }}" data-max="{{ gauge.max|default:0 }}">
+                <svg viewBox="0 0 120 120" role="img" aria-label="{{ gauge.label }}">
+                    <circle class="gauge-track" cx="60" cy="60" r="50"></circle>
+                    <circle class="gauge-fill" cx="60" cy="60" r="50" data-arc></circle>
+                </svg>
+                <p class="gauge-value"><strong data-gauge-value>{{ gauge.value|default_if_none:"—" }}</strong>{% if gauge.unit %}<em>{{ gauge.unit }}</em>{% endif %}</p>
+                <p class="gauge-label">{{ gauge.label }}</p>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section role="tabpanel" id="panelGraphs" aria-labelledby="tabGraphs" data-panel="graphs" hidden>
+        <p class="muted" data-graph-note>Stored readings for the selected range.</p>
+    </section>
+
+    <section role="tabpanel" id="panelHistoric" aria-labelledby="tabHistoric" data-panel="historic" hidden>
+        <div class="sensor-history sensor-history-full">
+            <table>
+                <caption class="sr-only">Stored samples for the selected range</caption>
+                <thead><tr><th scope="col">Time</th><th scope="col">Reading</th><th scope="col">Status</th></tr></thead>
+                <tbody data-history-body></tbody>
+            </table>
+        </div>
+        <p class="muted" data-history-note></p>
+    </section>
+
+    <section role="tabpanel" id="panelSettings" aria-labelledby="tabSettings" data-panel="settings" hidden>
+        {% if can_edit %}
+        <form method="post" action="{% url 'sensor_settings' device.id sensor.id %}" class="sensor-settings-form">
+            {% csrf_token %}
+            {% if settings_form.errors %}<div class="modal-notice" role="alert"><strong>Settings were not saved.</strong>{{ settings_form.non_field_errors }}</div>{% endif %}
+            <div class="form-grid">
+                <label for="{{ settings_form.name.id_for_label }}"><span>{{ settings_form.name.label }}</span>{{ settings_form.name }}{% if settings_form.name.errors %}<span role="alert">{{ settings_form.name.errors }}</span>{% endif %}</label>
+                <label for="{{ settings_form.interval.id_for_label }}"><span>Polling interval</span>{{ settings_form.interval }}{% if settings_form.interval.errors %}<span role="alert">{{ settings_form.interval.errors }}</span>{% endif %}</label>
+                <label for="sensorEnabled"><span>Enabled</span>
+                    <select id="sensorEnabled" name="enabled">
+                        <option value="1"{% if sensor.enabled %} selected{% endif %}>Started</option>
+                        <option value="0"{% if not sensor.enabled %} selected{% endif %}>Stopped</option>
+                    </select>
+                </label>
+            </div>
+            <p class="settings-section-note">These are this sensor's own settings only. Changes apply from the next poll; stored history is kept.</p>
+            <div class="settings-section-actions"><button class="primary-button" type="submit">Save sensor settings</button></div>
+        </form>
+        <section class="sensor-danger">
+            <h3>Delete sensor</h3>
+            <p class="muted">Deletes this sensor and all {{ stats.total }} stored samples in the last 30 days{{ stats.total|pluralize }}. This cannot be undone.</p>
+            <form method="post" action="{% url 'sensor_control' device.id sensor.id 'delete' %}">{% csrf_token %}
+                <button class="secondary-button" type="submit">Delete this sensor</button>
+            </form>
+        </section>
+        {% else %}
+        <p class="muted">Administrator access is required to change these settings.</p>
+        {% endif %}
+    </section>
+</div>
+
+{{ history|json_script:"sensorHistorySeed" }}
+{% endblock %}

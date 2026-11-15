@@ -12,6 +12,9 @@ urlpatterns = [
     path('ddos-protection/toggle/', views.ddos_protection_toggle, name='device_ddos_protection_toggle'),
     path('ddos-protection/reset/', views.ddos_protection_reset, name='device_ddos_protection_reset'),
     path('data/', views.data, name='sensor_data'),
+    path('<int:sensor_id>/', views.detail, name='sensor_detail'),
+    path('<int:sensor_id>/history/', views.history, name='sensor_history'),
+    path('<int:sensor_id>/settings/', views.settings, name='sensor_settings'),
     path('<int:sensor_id>/edit/', views.edit, name='sensor_edit'),
     path('<int:sensor_id>/<str:action>/', views.control, name='sensor_control'),
 ]
