@@ -36,3 +36,9 @@ test('gauge arc is proportional to the percentage and clamped to the dial', () =
     assert.strictEqual(detail.arcPath(150), full);
     assert.strictEqual(detail.arcPath(-20), 0);
 });
+
+test('a PPPoE reading is described as a user count, not a rate', () => {
+    assert.strictEqual(detail.reading({pppoe_users: 25}, 'pppoe'), '25 users');
+    assert.strictEqual(detail.reading({pppoe_users: 0}, 'pppoe'), '0 users');
+    assert.strictEqual(detail.reading({}, 'pppoe').startsWith('—'), true);
+});

@@ -28,6 +28,7 @@ METRICS = {
     "cpu": ["cpu"],
     "uptime": ["uptime_seconds"],
     "ping": ["ping_ms", "packet_loss"],
+    "pppoe": ["pppoe_users"],
 }
 
 
@@ -75,6 +76,7 @@ def history_payload(sensor, key=DEFAULT_RANGE):
                 "out_mbps": sample.out_mbps,
                 "ping_ms": sample.ping_ms if sample.valid else None,
                 "packet_loss": sample.packet_loss if sample.valid else None,
+                "pppoe_users": sample.pppoe_users if sample.valid else None,
                 "restart_detected": sample.restart_detected,
                 "counter_reset": sample.counter_reset,
             }

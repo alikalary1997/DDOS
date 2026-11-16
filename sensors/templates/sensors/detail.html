@@ -39,8 +39,14 @@
 
         <div class="gauge-row">
             {% for gauge in gauges %}
-            <article class="gauge" data-gauge="{{ gauge.key }}" data-tone="{{ gauge.tone }}" data-max="{{ gauge.max|default:0 }}">
+            <article class="gauge{% if gauge.plain %} gauge-plain{% endif %}" data-gauge="{{ gauge.key }}" data-tone="{{ gauge.tone }}" data-max="{{ gauge.max|default:0 }}">
                 <p class="gauge-label">{{ gauge.label }}</p>
+                {% if gauge.plain %}
+                {# No meaningful 0-100 scale (e.g. a user count): show the number plainly. #}
+                <div class="gauge-plain-value">
+                    <strong data-gauge-value>{{ gauge.value|default_if_none:"—" }}</strong>{% if gauge.unit %}<em>{{ gauge.unit }}</em>{% endif %}
+                </div>
+                {% else %}
                 <div class="gauge-ring">
                     <svg viewBox="0 0 120 120" role="img" aria-label="{{ gauge.label }}">
                         <circle class="gauge-track" cx="60" cy="60" r="50"></circle>
@@ -48,6 +54,7 @@
                     </svg>
                     <p class="gauge-value"><strong data-gauge-value>{{ gauge.value|default_if_none:"—" }}</strong>{% if gauge.unit %}<em>{{ gauge.unit }}</em>{% endif %}</p>
                 </div>
+                {% endif %}
             </article>
             {% endfor %}
         </div>

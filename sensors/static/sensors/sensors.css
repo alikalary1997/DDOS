@@ -150,3 +150,9 @@
 .sensor-chart-large .outbound{stroke:var(--rose);stroke-width:1.4;opacity:.9}
 @media(max-width:900px){.sensor-meta{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){.sensor-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* PPPoE (and any metric without a meaningful scale): plain value, no ring. */
+.gauge-plain{display:flex;flex-direction:column;justify-content:flex-start}
+.gauge-plain-value{display:flex;align-items:baseline;gap:8px;padding:22px 0 8px}
+.gauge-plain-value strong{font:700 44px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);line-height:1}
+.gauge-plain-value em{font-style:normal;font-size:12px;color:var(--muted)}

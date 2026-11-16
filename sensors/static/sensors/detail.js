@@ -33,6 +33,7 @@
         if (sensorKind === 'cpu') return format(point.cpu, 1) + ' %';
         if (sensorKind === 'uptime') return duration(point.uptime_seconds);
         if (sensorKind === 'ping') return format(point.ping_ms, 1) + ' ms / ' + format(point.packet_loss, 1) + '% loss';
+        if (sensorKind === 'pppoe') return (Number.isFinite(point.pppoe_users) ? point.pppoe_users : '—') + ' users';
         return 'In ' + rate(point.in_mbps) + ' / Out ' + rate(point.out_mbps);
     }
     /* ---- tabs ---- */
@@ -71,11 +72,13 @@
             button.setAttribute('aria-pressed', String(button.dataset.range === key));
         });
         document.querySelectorAll('[data-chart-caption]').forEach(caption => {
-            caption.textContent = (kind === 'traffic' ? 'Inbound / outbound Mbps' : kind === 'ping' ? 'Latency ms' : kind === 'cpu' ? 'CPU %' : 'Uptime') + ' · ' + label;
+            caption.textContent = (kind === 'traffic' ? 'Inbound / outbound Mbps' : kind === 'ping' ? 'Latency ms'
+                : kind === 'cpu' ? 'CPU %' : kind === 'pppoe' ? 'Active PPPoE users' : 'Uptime') + ' · ' + label;
         });
         document.querySelectorAll('[data-detail-legend]').forEach(legend => {
             legend.textContent = kind === 'traffic' ? 'Blue: inbound · Green: outbound'
-                : kind === 'ping' ? 'Blue: latency' : kind === 'cpu' ? 'Blue: CPU' : 'Blue: uptime';
+                : kind === 'ping' ? 'Blue: latency' : kind === 'cpu' ? 'Blue: CPU'
+                : kind === 'pppoe' ? 'Blue: active users' : 'Blue: uptime';
         });
     }
 
@@ -103,7 +106,8 @@
         if (current.length) groups.push(current);
         return groups;
     }
-    const METRICS = {traffic: ['in_mbps', 'out_mbps'], cpu: ['cpu'], ping: ['ping_ms'], uptime: ['uptime_seconds']};
+    const METRICS = {traffic: ['in_mbps', 'out_mbps'], cpu: ['cpu'], ping: ['ping_ms'],
+                     uptime: ['uptime_seconds'], pppoe: ['pppoe_users']};
     function drawChart() {
         const svg = document.querySelector('[data-detail-chart]');
         if (!svg || !payload) return;
@@ -139,7 +143,7 @@
                     class: index ? 'outbound' : 'inbound'}));
             }
         }
-        const label = value => kind === 'uptime' ? duration(value) : format(value, 1);
+        const label = value => kind === 'uptime' ? duration(value) : kind === 'pppoe' ? format(value, 0) : format(value, 1);
         for (const [x, y, text, anchor] of [[50, 22, label(scaleMax), 'end'], [50, 199, '0', 'end'],
             [55, 220, new Date(low).toLocaleString(), 'start'], [655, 220, new Date(high).toLocaleString(), 'end']]) {
             const element = node('text', {x, y, 'text-anchor': anchor});
@@ -194,9 +198,10 @@
         document.querySelectorAll('[data-gauge]').forEach(gauge => {
             const arc = gauge.querySelector('[data-arc]');
             const label = gauge.querySelector('[data-gauge-value]');
-            if (!arc || !label) return;
+            if (!label) return;
+            const plain = !arc;                 // no ring for count metrics: update the number only
             const key = gauge.dataset.gauge;
-            if (!point) { label.textContent = '—'; applyArc(gauge, arc, 0); return; }
+            if (!point) { label.textContent = '—'; if (!plain) applyArc(gauge, arc, 0); return; }
             if (key === 'total') label.textContent = format((point.in_mbps ?? 0) + (point.out_mbps ?? 0), 2);
             else if (key === 'in_mbps') label.textContent = format(point.in_mbps, 2);
             else if (key === 'out_mbps') label.textContent = format(point.out_mbps, 2);
@@ -204,7 +209,8 @@
             else if (key === 'ping_ms') label.textContent = format(point.ping_ms, 1);
             else if (key === 'packet_loss') label.textContent = format(point.packet_loss, 1);
             else if (key === 'uptime_seconds') label.textContent = duration(point.uptime_seconds);
-            applyArc(gauge, arc, gaugePercent(gauge, point));
+            else if (key === 'pppoe_users') label.textContent = Number.isFinite(point.pppoe_users) ? point.pppoe_users : '—';
+            if (!plain) applyArc(gauge, arc, gaugePercent(gauge, point));
         });
     }
     // Draw the server-rendered current reading on first paint.

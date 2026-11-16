@@ -60,7 +60,9 @@
         wizard.setAttribute('aria-busy', 'true');
         const enabledButtons = [...wizard.querySelectorAll('button[type="submit"]')].filter(item => !item.disabled);
         enabledButtons.forEach(item => item.disabled = true);
-        const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 30000);
+        // A PPPoE detect walks a large table and can take ~15s; do not abort it early.
+        const timeout = form.dataset.wizardForm === 'detect' ? 120000 : 30000;
+        const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
         try {
             const response = await fetch(endpoint, {method: 'POST', body: data, credentials: 'same-origin', signal: controller.signal, headers: {Accept: 'text/html'}});
             if (form.dataset.wizardForm === 'add' && response.ok && response.redirected) {
@@ -116,7 +118,8 @@
         const svg = card.querySelector('[data-chart]');
         if (!svg) return;
         svg.replaceChildren();
-        const keys = sensor.kind === 'cpu' ? ['cpu'] : sensor.kind === 'ping' ? ['ping_ms'] : ['in_mbps', 'out_mbps'];
+        const keys = sensor.kind === 'cpu' ? ['cpu'] : sensor.kind === 'ping' ? ['ping_ms'] :
+            sensor.kind === 'pppoe' ? ['pppoe_users'] : ['in_mbps', 'out_mbps'];
         const sets = keys.map(key => segments(sensor.history, key, sensor.interval));
         const points = sets.flat(2);
         card.querySelector('[data-chart-note]').textContent = points.length ? 'Time along the horizontal axis; gaps indicate missing readings.' : 'No valid historical rates yet.';
@@ -149,12 +152,14 @@
         if (sensor.restart_detected) note += ' Device uptime reset detected.';
         if (sensor.kind === 'traffic') note += ' In ' + rate(sensor.in_mbps) + ' / Out ' + rate(sensor.out_mbps);
         if (sensor.kind === 'ping') note += ' Latency ' + (sensor.ping_ms ?? '—') + ' ms, loss ' + (sensor.packet_loss ?? '—') + '%';
+        if (sensor.kind === 'pppoe') note += ' Active users ' + (sensor.pppoe_users ?? '—');
         card.querySelector('[data-sample-note]').textContent = note;
         const body = card.querySelector('[data-history]'); body.replaceChildren();
         for (const sample of [...sensor.history].reverse()) {
             const row = body.insertRow();
             row.insertCell().textContent = new Date(sample.timestamp).toLocaleString();
             row.insertCell().textContent = sensor.kind === 'cpu' ? format(sample.cpu) + ' %' :
+                sensor.kind === 'pppoe' ? (sample.pppoe_users ?? '—') + ' users' :
                 sensor.kind === 'ping' ? (sample.ping_ms ?? '—') + ' ms / ' + (sample.packet_loss ?? '—') + '% loss' :
                 sensor.kind === 'uptime' ? sample.uptime ?? '—' : 'In ' + rate(sample.in_mbps) + ' / Out ' + rate(sample.out_mbps);
             row.insertCell().textContent = sample.valid ? (sample.restart_detected ? 'Uptime reset' : 'Valid') : 'Read failed';

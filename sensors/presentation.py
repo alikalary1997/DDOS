@@ -46,11 +46,13 @@ def fleet_snapshot():
             is_live=status == 'Active', has_reading=bool(sample and sample.valid), sample_at=sample.timestamp if sample else None,
             cpu=None, uptime=None, uptime_seconds=None, in_mbps=None, out_mbps=None,
             interface_status=None, restart_detected=False, ping_ms=None, packet_loss=None,
+            pppoe_users=None,
         )
         if sample and sample.valid:
             sensor.update(cpu=sample.cpu, uptime=format_uptime(sample.uptime_seconds), uptime_seconds=sample.uptime_seconds,
                           in_mbps=sample.in_mbps, out_mbps=sample.out_mbps,
                           interface_status=sample.interface_status or None, restart_detected=sample.restart_detected,
-                          ping_ms=sample.ping_ms, packet_loss=sample.packet_loss)
+                          ping_ms=sample.ping_ms, packet_loss=sample.packet_loss,
+                          pppoe_users=sample.pppoe_users)
         groups.setdefault(sensor['device_id'], []).append(sensor)
     return groups

@@ -6,7 +6,7 @@ from django.views.decorators.debug import sensitive_variables
 from devices.services.targets import validate_target, TargetPolicyError
 from pysnmp.hlapi.v3arch.asyncio import (
     SnmpEngine, CommunityData, ContextData, ObjectType, ObjectIdentity,
-    UdpTransportTarget, Udp6TransportTarget, get_cmd, next_cmd,
+    UdpTransportTarget, Udp6TransportTarget, bulk_walk_cmd, get_cmd, next_cmd,
 )
 from pysnmp.proto.rfc1902 import Counter64, Integer32, OctetString, TimeTicks
 from pysnmp.proto.rfc1905 import NoSuchObject, NoSuchInstance, EndOfMibView
@@ -18,6 +18,21 @@ IN = "1.3.6.1.2.1.31.1.1.1.6"
 OUT = "1.3.6.1.2.1.31.1.1.1.10"
 CPU = "1.3.6.1.2.1.25.3.3.1.2"
 DISCONTINUITY = "1.3.6.1.2.1.31.1.1.1.19"
+# MikroTik enterprise table of active PPP/PPPoE sessions. Verified against real devices:
+# every binding is <root>.<column>.<session index>, so one row = one active session.
+PPP_TABLE = "1.3.6.1.4.1.14988.1.1.14.1.1"
+# A real 218-session device returned ~14,283 bindings; keep generous headroom.
+PPP_BINDING_LIMIT = 200000
+# Larger GETBULK batches cut round-trips. Measured on a 218-session RouterOS device:
+# 25 -> 47 s, 40 -> 13 s, 50 -> erratic, 60 -> request rejected. 40 is the safe maximum.
+PPP_BULK_REPETITIONS = 40
+# RouterOS rejects oversized batches outright; retry once at a conservative size.
+PPP_BULK_REPETITIONS_FALLBACK = 25
+PPP_WALK_RETRIES = 4
+# A PPP table walk can take far longer than a scalar read; it gets its own budget.
+PPP_READ_TIMEOUT = 120
+PPP_REQUEST_TIMEOUT = 8
+PPP_REQUEST_RETRIES = 2
 
 
 class SNMPError(Exception):
@@ -38,10 +53,10 @@ class Client:
         self.host, self.community, self.port = host, community, port
         self.engine = None
 
-    async def open(self):
+    async def open(self, timeout=2, retries=0):
         self.engine = SnmpEngine()
         transport = Udp6TransportTarget if ipaddress.ip_address(self.host).version == 6 else UdpTransportTarget
-        self.transport = await transport.create((self.host, self.port), timeout=2, retries=0)
+        self.transport = await transport.create((self.host, self.port), timeout=timeout, retries=retries)
         self.auth = CommunityData(self.community, mpModel=1)
 
     async def query(self, oids, walk=False):
@@ -92,6 +107,69 @@ class Client:
             result.append({"index": index, "name": label, "status": {1: "Up", 2: "Down"}.get(int(state) if isinstance(state, Integer32) else 0, "Unknown")})
         return result
 
+    async def pppoe_users(self):
+        """Count active PPP/PPPoE sessions in the MikroTik PPP table.
+
+        PPP tables can be large: a real device returned 14,283 bindings (207 sessions) and
+        needed ~25 s, which is longer than a single request timeout window and longer than
+        the read budget used by scalar sensors. Two things keep that reliable:
+
+        * the walk is resumed from the last OID we saw whenever a request times out, so a
+          mid-table timeout costs one retry instead of failing the whole reading; and
+        * an empty (but readable) table counts as zero sessions, which is a real reading.
+
+        Only an unrecoverable SNMP failure raises SNMPError.
+        """
+        root = tuple(map(int, PPP_TABLE.split('.')))
+        indexes, bindings = set(), 0
+        cursor, stalls = None, 0
+        # Some RouterOS builds reject large GETBULK batches; fall back once, then keep it.
+        repetitions = PPP_BULK_REPETITIONS
+        degraded = False
+        while True:
+            start = PPP_TABLE if cursor is None else cursor
+            advanced = False
+            failed = False
+            async for error, status, _index, values in bulk_walk_cmd(
+                    self.engine, self.auth, self.transport, ContextData(), 0, repetitions,
+                    ObjectType(ObjectIdentity(start)), lookupMib=False, lexicographicMode=False):
+                if status:
+                    if not degraded and repetitions > PPP_BULK_REPETITIONS_FALLBACK:
+                        # This build rejected the batch size: resume from the same point, smaller.
+                        degraded, repetitions = True, PPP_BULK_REPETITIONS_FALLBACK
+                        break
+                    raise SNMPError("The device rejected the SNMP read request.")
+                if error:
+                    failed = True
+                    break
+                if not values:
+                    return len(indexes)        # answered, but the table is exhausted
+                for oid, _value in values:
+                    row = tuple(oid)
+                    if row[:len(root)] != root:
+                        return len(indexes)        # left the table: the walk is complete
+                    advanced = True
+                    bindings += 1
+                    if bindings > PPP_BINDING_LIMIT:
+                        raise SNMPError("The PPP session table exceeds the discovery limit.")
+                    suffix = row[len(root):]
+                    # <root>.<column>.<session index>; column 1 enumerates every session.
+                    if len(suffix) == 2 and suffix[0] == 1:
+                        indexes.add(suffix[1])
+                    cursor = '.'.join(map(str, row))
+            else:
+                return len(indexes)                # generator finished cleanly: table exhausted
+            if not failed:
+                continue                           # progressed: resume from the cursor
+            if advanced:
+                stalls = 0                         # timed out mid-table: resume where we stopped
+                continue
+            stalls += 1                            # timed out with no progress: retry, bounded
+            if stalls > PPP_WALK_RETRIES:
+                raise SNMPError(
+                    "The PPP session table could not be read. The device stopped "
+                    "responding part-way through the SNMP walk.")
+
     async def sample(self, sensor):
         uptime = await self.uptime()
         result = {"uptime_seconds": uptime}
@@ -100,6 +178,9 @@ class Client:
             if not loads:
                 raise SNMPError("The device did not return CPU readings.")
             result['cpu'] = sum(loads) / len(loads)
+        elif sensor.kind == "pppoe":
+            # A count of zero is a valid reading; None is never produced here.
+            result['pppoe_users'] = await self.pppoe_users()
         elif sensor.kind == "traffic":
             suffix = '.' + str(sensor.interface_index)
             name, status, incoming, outgoing, discontinuity = await self.get(*(oid + suffix for oid in (DESCR, STATUS, IN, OUT, DISCONTINUITY)))
@@ -124,7 +205,11 @@ def read(device, community, port, operation, sensor=None):
     async def execute():
         client = Client(device.management_ip, community, port)
         try:
-            await client.open()
+            # A PPP table walk is long-running and reads a busy device, so it gets a
+            # longer per-request timeout and a larger overall budget than scalar reads.
+            is_pppoe = operation == 'sample' and getattr(sensor, 'kind', None) == 'pppoe'
+            await client.open(timeout=PPP_REQUEST_TIMEOUT if is_pppoe else 2,
+                              retries=PPP_REQUEST_RETRIES if is_pppoe else 0)
             if operation == 'interfaces':
                 return await client.interfaces()
             if operation == 'test':
@@ -133,8 +218,9 @@ def read(device, community, port, operation, sensor=None):
         finally:
             if client.engine:
                 client.engine.close_dispatcher()
+    budget = PPP_READ_TIMEOUT if operation == 'sample' and getattr(sensor, 'kind', None) == 'pppoe' else 20
     try:
-        return asyncio.run(asyncio.wait_for(execute(), timeout=20))
+        return asyncio.run(asyncio.wait_for(execute(), timeout=budget))
     except SNMPError:
         raise
     except TimeoutError:

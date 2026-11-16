@@ -259,8 +259,8 @@ def detect(request, device_id):
     device = device_for(device_id)
     ctx = context(device)
     kind = request.POST.get('kind')
-    if kind not in ('cpu', 'uptime', 'ping'):
-        return JsonResponse({'error': 'Choose CPU, Uptime or Ping.'}, status=400)
+    if kind not in ('cpu', 'uptime', 'ping', 'pppoe'):
+        return JsonResponse({'error': 'Choose CPU, Uptime, Ping or PPPoE.'}, status=400)
     ctx['sensor_form'] = AddSensorForm(initial={'kind': kind, 'interval': 10})
     if kind == 'ping':
         # A one-off ICMP probe: needs no SNMP credentials and creates no sensor.
@@ -276,7 +276,9 @@ def detect(request, device_id):
     try:
         profile = saved_profile(device)
         reading = snmp.read(device, decrypt_password(profile.community), profile.port, 'sample', SimpleNamespace(kind=kind))
-        value = f"{reading['cpu']:.1f}%" if kind == 'cpu' else format_uptime(reading['uptime_seconds'])
+        value = (f"{reading['cpu']:.1f}%" if kind == 'cpu'
+                 else f"{reading['pppoe_users']} active PPPoE user(s)" if kind == 'pppoe'
+                 else format_uptime(reading['uptime_seconds']))
         ctx['sensor_success'] = f"{dict(Sensor.KINDS)[kind]} detected: {value}. You can now add this sensor."
     except snmp.SNMPError as error:
         ctx['sensor_error'] = str(error)
@@ -404,6 +406,7 @@ def detail_context(sensor, device, selected_range=None):
             't': last.timestamp.isoformat(), 'valid': True, 'cpu': last.cpu,
             'uptime_seconds': last.uptime_seconds, 'in_mbps': last.in_mbps, 'out_mbps': last.out_mbps,
             'ping_ms': last.ping_ms, 'packet_loss': last.packet_loss,
+            'pppoe_users': last.pppoe_users,
             'restart_detected': last.restart_detected, 'counter_reset': last.counter_reset,
         }
     if sensor.kind == 'traffic':
@@ -424,6 +427,10 @@ def detail_context(sensor, device, selected_range=None):
             {'key': 'packet_loss', 'label': 'Packet loss', 'unit': '%', 'value': current['packet_loss'] if current else None,
              'max': 100, 'tone': 'normal'},
         ]
+    elif sensor.kind == 'pppoe':
+        # No arbitrary scale: the count is shown plainly rather than forced onto a gauge.
+        gauges = [{'key': 'pppoe_users', 'label': 'Active PPPoE users', 'unit': 'users',
+                   'value': current['pppoe_users'] if current else None, 'tone': 'normal', 'plain': True}]
     else:
         gauges = [{'key': 'uptime_seconds', 'label': 'Device uptime', 'unit': '',
                    'value': format_uptime(current['uptime_seconds']) if current else None, 'tone': 'normal'}]
@@ -521,17 +528,18 @@ def data(request, device_id):
         row = {'id': sensor.pk, 'status': status, 'last_success': sensor.last_success,
                'error': sensor.error, 'kind': sensor.kind, 'interval': sensor.interval,
                'cpu': None, 'uptime': None, 'in_mbps': None, 'out_mbps': None,
-               'ping_ms': None, 'packet_loss': None,
+               'ping_ms': None, 'packet_loss': None, 'pppoe_users': None,
                'interface_status': None, 'restart_detected': False, 'counter_reset': False,
                'history': [{'timestamp': s.timestamp, 'cpu': s.cpu, 'in_mbps': s.in_mbps, 'out_mbps': s.out_mbps,
                             'uptime': format_uptime(s.uptime_seconds), 'restart_detected': s.restart_detected,
                             'ping_ms': s.ping_ms if s.valid else None,
                             'packet_loss': s.packet_loss if s.valid else None,
+                            'pppoe_users': s.pppoe_users if s.valid else None,
                             'valid': s.valid} for s in samples]}
         if last and last.valid:
             row.update(cpu=last.cpu, uptime=format_uptime(last.uptime_seconds), in_mbps=last.in_mbps,
                        out_mbps=last.out_mbps, interface_status=last.interface_status,
-                       ping_ms=last.ping_ms, packet_loss=last.packet_loss,
+                       ping_ms=last.ping_ms, packet_loss=last.packet_loss, pppoe_users=last.pppoe_users,
                        restart_detected=last.restart_detected, counter_reset=last.counter_reset)
         row['restart_count'] = sensor.samples.filter(restart_detected=True).count()
         rows.append(row)

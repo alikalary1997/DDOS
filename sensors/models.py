@@ -23,7 +23,8 @@ class SensorRuntime(models.Model):
 
 
 class Sensor(models.Model):
-    KINDS = [("traffic", "Traffic Sensor"), ("uptime", "Uptime Sensor"), ("cpu", "CPU Sensor"), ("ping", "Ping Sensor")]
+    KINDS = [("traffic", "Traffic Sensor"), ("uptime", "Uptime Sensor"), ("cpu", "CPU Sensor"), ("ping", "Ping Sensor"),
+             ("pppoe", "PPPoE Active Users")]
     device = models.ForeignKey("devices.Device", on_delete=models.CASCADE, related_name="sensors")
     kind = models.CharField(max_length=10, choices=KINDS)
     name = models.CharField(max_length=120)
@@ -53,6 +54,9 @@ class SensorSample(models.Model):
     # Ping sensors: latency (ms) and packet loss (%). Null latency means no reply, never 0.
     ping_ms = models.FloatField(null=True)
     packet_loss = models.FloatField(null=True)
+    # PPPoE sensor: number of active PPP sessions. Null means "no reading", never 0 -
+    # a genuine zero is stored as 0.
+    pppoe_users = models.IntegerField(null=True)
     restart_detected = models.BooleanField(default=False)
     interface_status = models.CharField(max_length=16, blank=True)
     # Store exact decimal strings: SQLite NUMERIC affinity rounds large uint64s.
