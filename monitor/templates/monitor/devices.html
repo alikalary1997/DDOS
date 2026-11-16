@@ -13,10 +13,12 @@
 {% if can_add_devices %}
 <dialog id="addGroupDialog" class="device-dialog" aria-labelledby="addGroupTitle">
     <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addGroupTitle">New Group</h2></div><button class="icon-button" type="button" data-close-group aria-label="Close New Group">&times;</button></div>
-    <p class="dialog-description">Organizational tag only. It does not affect monitoring or detection.</p>
+    <p class="dialog-description">A label devices can be tagged with. Groups nest under other groups, or sit at top level.</p>
     <form method="post" action="{% url 'device_group_add' %}" autocomplete="off">
         {% csrf_token %}
-        <div class="form-grid"><label for="groupName"><span>Group name</span><input id="groupName" type="text" name="group_name" maxlength="120" required placeholder="e.g. Company A"></label></div>
+        <input type="hidden" name="next" value="tree">
+        <div class="form-grid"><label for="groupName"><span>Group name</span><input id="groupName" type="text" name="group_name" maxlength="120" required placeholder="e.g. Kalar"></label>
+        <label for="groupParent"><span>Parent</span><select id="groupParent" name="parent">{% for key, label in group_parent_choices %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>{% if not group_parent_choices %}<small>No groups exist yet.</small>{% endif %}</label></div>
         <div class="dialog-footer"><span></span><button type="button" class="secondary-button" data-close-group>Cancel</button><button type="submit" class="primary-button">Create</button></div>
     </form>
 </dialog>

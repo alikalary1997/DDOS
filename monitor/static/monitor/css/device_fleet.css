@@ -195,3 +195,31 @@
   .fleet-page .fleet-inventory[data-view=matrix] .noc-inspect{width:auto}
   .fleet-page .fleet-inventory[data-view=matrix] .devices-table td:nth-child(n){padding:12px 0}
 }
+
+/* ---- Fleet tree: outline of groups and devices ---- */
+.tree-intro-actions{display:flex;gap:8px;flex-wrap:wrap}
+.tree-tools{display:flex;gap:6px}
+.tree-outline{list-style:none;margin:0;padding:0}
+.tree-children{list-style:none;margin:0;padding:0 0 0 22px;border-left:1px solid var(--border)}
+.tree-children[hidden]{display:none}
+.tree-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid transparent;border-radius:8px}
+.tree-row:hover{background:var(--surface-2);border-color:var(--border)}
+.tree-toggle{display:inline-grid;place-items:center;width:22px;height:22px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;flex:none}
+.tree-toggle[hidden]{visibility:hidden;display:inline-grid}
+.tree-toggle svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .15s}
+.tree-toggle[aria-expanded=true] svg{transform:rotate(90deg)}
+.tree-icon{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;flex:none}
+.tree-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6}
+.tree-icon-group{color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,transparent)}
+.tree-icon-device{color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent)}
+.tree-label{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1}
+.tree-label strong{font-size:13px;overflow-wrap:anywhere}
+.tree-label small{color:var(--muted);font:11px ui-monospace,Consolas,monospace}
+.tree-counts{display:inline-flex;gap:6px;flex:none}
+.tree-pill{font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.tree-actions{display:inline-flex;gap:4px;flex:none;flex-wrap:wrap}
+.tree-action{font-size:10px;color:var(--blue);background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.tree-action:hover{border-color:var(--blue)}
+.tree-empty{padding:18px;color:var(--muted);font-size:12px}
+.tree-summary .fleet-stat strong{font-size:26px}
+@media(max-width:760px){.tree-actions{display:none}.tree-counts{display:none}}

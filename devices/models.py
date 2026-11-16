@@ -10,22 +10,95 @@ from .fields import EncryptedPasswordField
 from .services.credentials import decrypt_password, encrypt_password
 
 
-class DeviceGroup(models.Model):
-    """Flat business/ownership tag for organizing the device fleet.
+class Group(models.Model):
+    """A named label a device can be tagged with, optionally nested under another Group.
 
-    Purely organizational: no topology, hierarchy or detection meaning. A device with no
-    group is "Untagged" - that is the absence of a group, never a stored name.
+    Groups nest under Groups only - never under a device. This is a pure label/filter
+    structure and has no relationship to a device's topology parent.
     """
     name = models.CharField(max_length=120, unique=True)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE, related_name="child_groups")
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["name", "pk"]
 
     def __str__(self):
         return self.name
 
+    def set_parent(self, node):
+        """Assign a parent Group, or None for top level. Devices can never be a parent."""
+        if node is not None and not isinstance(node, Group):
+            raise ValidationError("A group's parent must be another group, or top level.")
+        if node is not None and self.pk and node.pk == self.pk:
+            raise ValidationError("A group cannot be its own parent.")
+        if node is not None and self.pk and node.pk in self.descendant_ids():
+            raise ValidationError("That group is nested under this one, so it cannot also be its parent.")
+        self.parent = node
+
+    def descendant_ids(self, seen=None):
+        """Ids of every group nested under this one, at any depth (cycle-safe)."""
+        seen = set() if seen is None else seen
+        found, stack = set(), list(Group.objects.filter(parent=self))
+        while stack:
+            group = stack.pop()
+            if group.pk in seen:
+                continue
+            seen.add(group.pk)
+            found.add(group.pk)
+            stack.extend(Group.objects.filter(parent=group))
+        return found
+
+
+def group_key(group):
+    """Picker identifier for a Group."""
+    return f"g:{group.pk}"
+
+
+def group_from_key(key):
+    """Resolve a `g:<id>` key (or blank for top level) to a Group."""
+    key = (key or "").strip()
+    if not key:
+        return None
+    kind, _, raw = key.partition(":")
+    if kind != "g" or not raw.isdigit():
+        raise ValidationError("Select a group, or Top level.")
+    group = Group.objects.filter(pk=int(raw)).first()
+    if group is None:
+        raise ValidationError("The selected group no longer exists.")
+    return group
+
+
+def child_groups(group):
+    """Direct sub-groups of a group, by name."""
+    return list(Group.objects.filter(parent=group))
+
+
+def tree_nodes():
+    """Every Group as a flat row with its parent id (one query)."""
+    return list(Group.objects.values("id", "name", "parent"))
+
+
+def tree_summary():
+    """Groups summary: total groups and the deepest nesting level in use."""
+    rows = tree_nodes()
+    parents = {row["id"]: row["parent"] for row in rows}
+    depth_of = {}
+
+    def depth(pk, trail=()):
+        if pk in depth_of:
+            return depth_of[pk]
+        parent = parents.get(pk)
+        value = 0 if parent is None or parent in trail else depth(parent, trail + (pk,)) + 1
+        depth_of[pk] = value
+        return value
+
+    levels = [depth(pk) for pk in parents]
+    return {"groups": len(rows), "depth": max(levels) + 1 if levels else 0}
+
 
 class Device(models.Model):
+
     class DeviceType(models.TextChoices):
         MIKROTIK = "mikrotik", "MikroTik"
         CISCO = "cisco", "Cisco"
@@ -44,8 +117,13 @@ class Device(models.Model):
     incoming_monitoring_interface = models.CharField(max_length=255, blank=True)
     description = models.TextField(max_length=1000, blank=True)
     enabled = models.BooleanField(default=True)
+    # Two independent labels on a device:
+    #   group         - optional tag for filtering/labelling (nested groups, no topology meaning)
+    #   topology_parent - the real network chain: what this device connects to (device -> device)
     group = models.ForeignKey(
-        DeviceGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
+        Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
+    topology_parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="topology_children")
     raw_provisioning_enabled = models.BooleanField(default=True, editable=False)
     raw_provisioning_authorized_at = models.DateTimeField(null=True, blank=True, editable=False)
     raw_provisioning_authorized_by = models.ForeignKey(
@@ -126,6 +204,39 @@ class Device(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    def set_topology_parent(self, node):
+        """Set the device this one connects to (None = top level), rejecting cycles.
+
+        Only the topology chain is touched: the device's Group tag is left exactly as is.
+        """
+        if node is not None and not isinstance(node, Device):
+            raise ValidationError("A topology parent must be a device, or top level.")
+        if node is not None and self.pk and node.pk == self.pk:
+            raise ValidationError("A device cannot connect to itself.")
+        if node is not None and self.pk and node.pk in self.topology_descendant_ids():
+            raise ValidationError("That device already sits below this one, so it cannot also be a parent.")
+        self.topology_parent = node
+
+    def topology_descendant_ids(self):
+        """Ids of every device below this one in the topology chain (cycle-safe)."""
+        found, seen, stack = set(), set(), list(Device.objects.filter(topology_parent=self))
+        while stack:
+            device = stack.pop()
+            if device.pk in seen:
+                continue
+            seen.add(device.pk)
+            found.add(device.pk)
+            stack.extend(Device.objects.filter(topology_parent=device))
+        return found
+
+    def topology_ancestor_ids(self):
+        """Ids of every device above this one (used for display paths)."""
+        found, seen, current = [], set(), self.topology_parent
+        while current is not None and current.pk not in seen:
+            seen.add(current.pk)
+            found.append(current.pk)
+            current = current.topology_parent
+        return found
     @sensitive_variables()
     def set_password(self, password):
         self.encrypted_password = encrypt_password(password)

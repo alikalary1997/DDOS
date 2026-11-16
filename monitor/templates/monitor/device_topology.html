@@ -1,0 +1,27 @@
+{% extends "monitor/base.html" %}{% load static %}
+{% block title %}Topology | NetShield{% endblock %}
+{% block body_class %}devices-page fleet-page tree-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script>{% endblock %}
+{% block footer_note %}Topology{% endblock %}
+{% block content %}
+{% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
+<section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology</h2><p class="muted">What each device connects to. The chain follows your network: core &rarr; limits &rarr; PPPoE servers &rarr; towers, at whatever depth it actually has.</p></div>
+<div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
+
+<section class="fleet-summary tree-summary" aria-label="Topology summary">
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Devices</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/></svg></div><strong data-topology-stat="devices">{{ topology_summary.devices }}</strong><span>In the chain</span></article>
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Deepest level</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M6 8l6-5 6 5"/></svg></div><strong data-topology-stat="depth">{{ topology_summary.depth }}</strong><span>Levels currently in use</span></article>
+</section>
+
+<section class="panel inventory-panel fleet-panel tree-panel" aria-labelledby="topologyTitle">
+    <div class="panel-heading"><div><p class="eyebrow">CHAIN</p><h2 id="topologyTitle">Device chain</h2></div>
+        <div class="tree-tools"><button type="button" class="secondary-button" data-tree-expand>Expand all</button><button type="button" class="secondary-button" data-tree-collapse>Collapse all</button></div></div>
+    <ul class="tree-outline" id="treeOutline" aria-label="Device topology">
+    {% for row in topology %}{% include "monitor/components/topology_row.html" with row=row %}{% empty %}
+        <li class="tree-empty">No devices yet. Add a device, then set its <strong>Connects to</strong> parent in the device form.</li>
+    {% endfor %}
+    </ul>
+</section>
+{% endblock %}

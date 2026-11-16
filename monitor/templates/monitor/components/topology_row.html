@@ -1,0 +1,24 @@
+{% comment %}
+One device row in the topology chain, plus its downstream devices rendered recursively.
+Depth is whatever the network actually has; nothing here assumes a fixed number of levels.
+{% endcomment %}
+<li class="tree-node" data-tree-kind="device" data-tree-key="{{ row.key }}" data-depth="{{ row.depth }}">
+    <div class="tree-row">
+        <button type="button" class="tree-toggle" data-tree-toggle aria-expanded="{% if row.children %}true{% else %}false{% endif %}"{% if not row.children %} hidden{% endif %} aria-label="Toggle devices under {{ row.name }}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <span class="tree-icon tree-icon-device" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 11h.01M7 14h.01M11 11h6M7 3v4m10-4v4"/></svg></span>
+        <span class="tree-label">
+            <strong>{{ row.name }}</strong><small>{{ row.ip }}</small>
+            {% if row.group_name %}<small class="tree-tag">{{ row.group_name }}</small>{% endif %}
+        </span>
+        {% if row.children %}<span class="tree-counts"><span class="tree-pill" data-count="devices">{{ row.children|length }} direct</span></span>{% endif %}
+        <span class="tree-actions">
+            <a class="tree-action" href="{% url 'devices' %}?add_device=1&amp;topology_parent={{ row.key }}">+ Connected device</a>
+            <a class="tree-action" href="{% url 'device_sensors' row.device.id %}">Sensors</a>
+        </span>
+    </div>
+    {% if row.children %}<ul class="tree-children">
+        {% for child in row.children %}{% include "monitor/components/topology_row.html" with row=child %}{% endfor %}
+    </ul>{% endif %}
+</li>

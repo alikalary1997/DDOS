@@ -4,14 +4,16 @@ INVENTORY_FIELDS = (
     "incoming_monitoring_interface", "router_identity", "routeros_version", "uptime", "cpu_usage", "total_memory", "free_memory",
     "last_connection_test", "last_connection_test_succeeded", "last_successful_connection", "last_connection_error",
     "raw_provisioning_enabled", "raw_provisioning_authorized_at", "raw_preflight_message", "raw_preflight_at",
-    "group_id", "group__name",
+    "group_id", "group__name", "topology_parent_id", "topology_parent__name",
 )
 
 
 def present_device(row):
     row = dict(row)
-    # Flat organizational tag; absence of a group is shown as Untagged.
+    # Group tag (label/filter only) and the topology chain parent are independent.
     row["group_name"] = row.pop("group__name", None) or "Untagged"
+    row["group_key"] = f"g:{row['group_id']}" if row["group_id"] else "__untagged"
+    row["topology_name"] = row.pop("topology_parent__name", None) or "Top level"
     succeeded = row["last_connection_test_succeeded"]
     if row["last_connection_test"] is None or succeeded is None:
         status, code = "Not Tested", "not_tested"

@@ -1,6 +1,5 @@
 """DDoS Protection section on the device Settings page: NAT list + ONE SOS Public/Protection."""
 import os
-from decimal import Decimal
 from unittest.mock import patch
 
 from cryptography.fernet import Fernet
@@ -27,9 +26,8 @@ class DDoSProtectionTests(TestCase):
         self.save_url = reverse("device_ddos_protection", args=[self.device.pk])
 
     def save(self, names, values=None, sos="185.166.27.99", protection=False, null_ip=""):
+        # The list is name-only now; `values` is accepted so existing call sites still read clearly.
         data = {"rule_name": names, "sos_public": sos, "null_ip": null_ip}
-        if values is not None:
-            data["rule_value"] = values
         if protection:
             data["protection_enabled"] = "1"
         return self.client.post(self.save_url, data)
@@ -71,8 +69,7 @@ class DDoSProtectionTests(TestCase):
         self.assertEqual(protection.sos_public, "185.166.27.16")
         self.assertEqual(protection.null_ip, "192.0.2.1")
         self.assertTrue(protection.enabled)
-        self.assertEqual(list(protection.rules.values_list("name", "value")),
-                         [("1", Decimal("25")), ("2", Decimal("30")), ("4", Decimal("40"))])
+        self.assertEqual(list(protection.rules.values_list("name", flat=True)), ["1", "2", "4"])
 
     def test_save_without_toggle_turns_protection_off(self):
         self.save(["1"], values=["25"], protection=True)
@@ -89,6 +86,27 @@ class DDoSProtectionTests(TestCase):
     def test_blank_rows_are_dropped(self):
         self.save(["1", "", "  ", "7"], values=["25", "", "", ""])
         self.assertEqual(list(self.protection().rules.values_list("name", flat=True)), ["1", "7"])
+
+    def test_list_is_name_only_with_no_value_column(self):
+        """The NAT list has one Name per row; it never asked for a Value."""
+        self.save(["iQ-20-01", "iQ-25-01"], sos="185.166.27.16", protection=True)
+        page = self.client.get(self.page_url).content.decode()
+        form = page.split('id="deviceProtectionForm"')[1].split("</form>")[0]
+        self.assertNotIn('name="rule_value"', form)
+        self.assertIn('name="rule_name"', form)
+        rows = form.split('id="natRulesBody"')[1].split("</tbody>")[0]
+        self.assertEqual(rows.count('name="rule_name"'), 2)
+        self.assertNotIn("Value<", form)
+        # The template used by "+ Add Row" is name-only too.
+        self.assertNotIn('name="rule_value"', form.split('id="natRuleTemplate"')[1])
+
+    def test_name_only_save_keeps_an_existing_stored_value(self):
+        self.save(["iQ-25-01"], values=["25"], sos="185.166.27.16", protection=True)
+        DeviceDDoSProtectionRule.objects.update(value=25)
+        self.save(["iQ-25-01"], sos="185.166.27.16", protection=True)   # no value posted
+        rule = self.protection().rules.get()
+        self.assertEqual(rule.name, "iQ-25-01")
+        self.assertEqual(rule.value, 25)
 
     def test_rendered_values_round_trip(self):
         self.save(["uplink"], values=["25.5"], sos="185.166.27.16", protection=True, null_ip="192.0.2.1")

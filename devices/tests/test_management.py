@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from devices.models import Device, DeviceChange, DeviceGroup
+from devices.models import Device, DeviceChange, Group
 from devices.services.connection import ProbeResult
 from devices.services.router_lock import RouterBusy
 from public_ips.models import AssignmentReview, FirewallSample, ProvisioningAttempt, PublicIP
@@ -231,11 +231,11 @@ class DeviceManagementTests(TestCase):
             self.assertIn(f'name="edit-{name}"', form)
 
     def test_edit_changes_only_the_submitted_fields_and_keeps_the_group(self):
-        group = DeviceGroup.objects.create(name="Company A")
-        other_group = DeviceGroup.objects.create(name="Company B")
+        group = Group.objects.create(name="Company A")
+        other_group = Group.objects.create(name="Company B")
         Device.objects.filter(pk=self.device.pk).update(group=group)
         response = self.client.post(self.edit, {**self.payload, "edit-management_ip": "172.26.241.99",
-                                                "edit-group": other_group.pk}, HTTP_ACCEPT="application/json")
+                                                "edit-group": f"g:{other_group.pk}"}, HTTP_ACCEPT="application/json")
         self.assertEqual(response.status_code, 200)
         self.device.refresh_from_db()
         self.assertEqual(self.device.management_ip, "172.26.241.99")
@@ -247,7 +247,7 @@ class DeviceManagementTests(TestCase):
         self.assertEqual(DeviceChange.objects.get().changed_fields, ["name", "management_ip", "description", "group"])
 
     def test_edit_with_blank_group_untags_the_device(self):
-        Device.objects.filter(pk=self.device.pk).update(group=DeviceGroup.objects.create(name="Company C"))
+        Device.objects.filter(pk=self.device.pk).update(group=Group.objects.create(name="Company C"))
         self.assertEqual(self.client.post(self.edit, {**self.payload, "edit-group": ""}).status_code, 302)
         self.device.refresh_from_db()
         self.assertIsNone(self.device.group_id)

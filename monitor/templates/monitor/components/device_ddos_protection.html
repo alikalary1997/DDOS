@@ -4,13 +4,12 @@
     <form method="post" action="{% url 'device_ddos_protection' device.id %}#deviceDDoSProtection" id="deviceProtectionForm">
         {% csrf_token %}
         <table class="ddos-thresholds-table" id="natRulesTable" aria-describedby="deviceDDoSProtectionNote">
-            <caption class="sr-only">NAT entries: name and value per row</caption>
-            <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
+            <caption class="sr-only">NAT entries: one name per row, matched against the router's NAT rule comments</caption>
+            <thead><tr><th scope="col">Name</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
             <tbody id="natRulesBody">
             {% for rule in protection_rules %}
                 <tr>
                     <td><input type="text" name="rule_name" value="{{ rule.name }}" maxlength="120" aria-label="NAT row {{ forloop.counter }} name"{% if not can_edit_protection %} disabled{% endif %}></td>
-                    <td><input type="number" name="rule_value" value="{% if rule.value is not None %}{{ rule.value|floatformat:"-3" }}{% endif %}" step="0.001" inputmode="decimal" aria-label="NAT row {{ forloop.counter }} value"{% if not can_edit_protection %} disabled{% endif %}></td>
                     <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row {{ forloop.counter }}"{% if not can_edit_protection %} disabled{% endif %}>&times;</button></td>
                 </tr>
             {% endfor %}
@@ -18,7 +17,6 @@
         </table>
         <template id="natRuleTemplate"><tr>
             <td><input type="text" name="rule_name" maxlength="120" aria-label="New NAT row name"></td>
-            <td><input type="number" name="rule_value" step="0.001" inputmode="decimal" aria-label="New NAT row value"></td>
             <td><button type="button" class="secondary-button" data-remove-rule aria-label="Remove NAT row">&times;</button></td>
         </tr></template>
         {% if can_edit_protection %}<div class="settings-section-actions"><button type="button" class="secondary-button" id="addNatRule">+ Add Row</button></div>{% endif %}
@@ -41,9 +39,8 @@
     const add = document.getElementById("addNatRule");
     if (!body || !template) return;
     const renumber = () => [...body.querySelectorAll("tr")].forEach((row, index) => {
-        const inputs = row.querySelectorAll("input");
-        if (inputs[0]) inputs[0].setAttribute("aria-label", `NAT row ${index + 1} name`);
-        if (inputs[1]) inputs[1].setAttribute("aria-label", `NAT row ${index + 1} value`);
+        const input = row.querySelector('input[name="rule_name"]');
+        if (input) input.setAttribute("aria-label", `NAT row ${index + 1} name`);
         const remove = row.querySelector("[data-remove-rule]");
         if (remove) remove.setAttribute("aria-label", `Remove NAT row ${index + 1}`);
     });

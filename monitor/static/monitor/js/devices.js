@@ -68,10 +68,12 @@
     group?.addEventListener("change", filterRows);
     const groupDialog = document.getElementById("addGroupDialog");
     document.querySelectorAll("[data-open-group]").forEach((button) => {
-        button.disabled = false;
         button.addEventListener("click", () => {
             const form = groupDialog?.querySelector("form");
             if (!groupDialog) return;
+            // A generic "+ Group" starts at top level; a node's "+ Group" preselects that node.
+            const parent = groupDialog.querySelector('[name="parent"]');
+            if (parent) parent.value = button.dataset.addChildGroup || "";
             form?.querySelector('[name="group_name"]')?.focus();
             groupDialog.showModal();
         });
@@ -303,4 +305,37 @@
             }
         });
     });
+
+    /* ---- Fleet tree outline: expand/collapse and per-node actions ---- */
+    const outline = document.getElementById("treeOutline");
+    if (outline) {
+        const setOpen = (node, open) => {
+            const button = node.querySelector(":scope > .tree-row > [data-tree-toggle]");
+            const children = node.querySelector(":scope > .tree-children");
+            if (!button || !children) return;
+            button.setAttribute("aria-expanded", String(open));
+            children.hidden = !open;
+        };
+        outline.querySelectorAll("[data-tree-toggle]").forEach(button => {
+            button.addEventListener("click", () => {
+                const node = button.closest(".tree-node");
+                setOpen(node, button.getAttribute("aria-expanded") !== "true");
+            });
+        });
+        document.querySelectorAll("[data-tree-expand]").forEach(button =>
+            button.addEventListener("click", () => outline.querySelectorAll(".tree-node").forEach(node => setOpen(node, true))));
+        document.querySelectorAll("[data-tree-collapse]").forEach(button =>
+            button.addEventListener("click", () => outline.querySelectorAll(".tree-node").forEach(node => setOpen(node, false))));
+        // "+ Device" deep-links to the Add Device dialog with the parent preselected.
+        document.querySelectorAll("[data-add-child-group]").forEach(button => {
+            button.addEventListener("click", () => {
+                const dialog = document.getElementById("addGroupDialog");
+                if (!dialog) return;
+                const parent = dialog.querySelector('[name="parent"]');
+                if (parent) parent.value = button.dataset.addChildGroup;
+                dialog.querySelector('[name="group_name"]')?.focus();
+                dialog.showModal();
+            });
+        });
+    }
 })();

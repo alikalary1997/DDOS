@@ -1,0 +1,23 @@
+{% comment %}
+One group row, plus nested sub-groups rendered recursively. Counts are recursive: every
+group and every tagged device in the branch, including nested sub-groups.
+{% endcomment %}
+<li class="tree-node" data-tree-kind="group" data-tree-key="{{ row.key }}" data-depth="{{ row.depth }}">
+    <div class="tree-row">
+        <button type="button" class="tree-toggle" data-tree-toggle aria-expanded="{% if row.children %}true{% else %}false{% endif %}"{% if not row.children %} hidden{% endif %} aria-label="Toggle sub-groups of {{ row.name }}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <span class="tree-icon tree-icon-group" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg></span>
+        <span class="tree-label"><strong>{{ row.name }}</strong><small>Group</small></span>
+        <span class="tree-counts" title="Everything in this branch, including nested sub-groups">
+            <span class="tree-pill" data-count="devices">{{ row.device_count }} device{{ row.device_count|pluralize }}</span>
+            <span class="tree-pill" data-count="groups">{{ row.group_count }} sub-group{{ row.group_count|pluralize }}</span>
+        </span>
+        {% if can_add_devices %}
+        <span class="tree-actions"><button type="button" class="tree-action" data-add-child-group="{{ row.key }}" data-parent-key="{{ row.key }}">+ Sub-group</button></span>
+        {% endif %}
+    </div>
+    {% if row.children %}<ul class="tree-children">
+        {% for child in row.children %}{% include "monitor/components/group_row.html" with row=child %}{% endfor %}
+    </ul>{% endif %}
+</li>

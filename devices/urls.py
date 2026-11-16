@@ -15,6 +15,8 @@ urlpatterns = [
     path("<int:device_id>/test-connection/", views.test_connection, name="device_test_connection"),
     path("", views.inventory, name="devices"),
     path("groups/", views.create_group, name="device_group_add"),
+    path("tree/", views.tree, name="device_tree"),
+    path("topology/", views.topology, name="device_topology"),
     path("add/", views.add_device, name="device_add"),
     path("login/", LoginView.as_view(template_name="devices/login.html", next_page="devices", extra_context={"active_page": "devices"}), name="device_login"),
 ]

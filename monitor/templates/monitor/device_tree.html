@@ -1,0 +1,45 @@
+{% extends "monitor/base.html" %}{% load static %}
+{% block title %}Groups | NetShield{% endblock %}
+{% block body_class %}devices-page fleet-page tree-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script>{% endblock %}
+{% block footer_note %}Groups{% endblock %}
+{% block content %}
+{% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
+<section class="page-intro"><div><p class="eyebrow">DEVICE / GROUPS</p><h2>Groups</h2><p class="muted">Labels devices can be tagged with. Groups nest under other groups, to any depth.</p></div>
+<div class="tree-intro-actions"><button type="button" class="secondary-button" data-open-group>+ Group</button><a class="secondary-button" href="{% url 'device_topology' %}">Topology</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
+
+<section class="fleet-summary tree-summary" aria-label="Groups summary">
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Groups</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10H3Z"/></svg></div><strong data-tree-stat="groups">{{ tree_summary.groups }}</strong><span>Nested groups in total</span></article>
+    <article class="fleet-stat"><div class="fleet-stat-top"><span>Deepest level</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M6 8l6-5 6 5"/></svg></div><strong data-tree-stat="depth">{{ tree_summary.depth }}</strong><span>Nesting levels in use</span></article>
+</section>
+
+<section class="panel inventory-panel fleet-panel tree-panel" aria-labelledby="treeTitle">
+    <div class="panel-heading"><div><p class="eyebrow">STRUCTURE</p><h2 id="treeTitle">Group tree</h2></div>
+        <div class="tree-tools"><button type="button" class="secondary-button" data-tree-expand>Expand all</button><button type="button" class="secondary-button" data-tree-collapse>Collapse all</button></div></div>
+    <ul class="tree-outline" id="treeOutline" aria-label="Group tree">
+    {% for row in tree %}{% include "monitor/components/group_row.html" with row=row %}{% empty %}
+        <li class="tree-empty">No groups yet. Use <strong>+ Group</strong> to create one.</li>
+    {% endfor %}
+    </ul>
+</section>
+{% endblock %}
+
+{% block dialogs %}
+{% if can_add_devices %}
+<dialog id="addGroupDialog" class="device-dialog" aria-labelledby="addGroupTitle">
+    <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addGroupTitle">New Group</h2></div><button class="icon-button" type="button" data-close-group aria-label="Close New Group">&times;</button></div>
+    <p class="dialog-description">A label devices can be tagged with. Groups nest under other groups, or sit at top level.</p>
+    <form method="post" action="{% url 'device_group_add' %}" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="tree">
+        <div class="form-grid">
+            <label for="treeGroupName"><span>Group name</span><input id="treeGroupName" type="text" name="group_name" maxlength="120" required placeholder="e.g. Ahmad"></label>
+            <label for="treeGroupParent"><span>Parent</span><select id="treeGroupParent" name="parent">{% for key, label in parent_choices %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+        </div>
+        <div class="dialog-footer"><span></span><button type="button" class="secondary-button" data-close-group>Cancel</button><button type="submit" class="primary-button">Create</button></div>
+    </form>
+</dialog>
+{% endif %}
+{% endblock %}

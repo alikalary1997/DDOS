@@ -107,21 +107,12 @@ def ddos_protection(request, device_id):
     """Persist the device's NAT list plus its single SOS Public and Protection switch."""
     device = device_for(device_id)
     from monitor.models import DeviceDDoSProtection, DeviceDDoSProtectionRule
-    from decimal import Decimal, InvalidOperation
-    # Name + Value per row; blank names are dropped.
-    names = request.POST.getlist('rule_name')
-    values = request.POST.getlist('rule_value')
+    # One name per row; blank names are dropped. Each name matches a NAT rule comment.
     rows = []
-    for index, name in enumerate(names):
+    for name in request.POST.getlist('rule_name'):
         name = name.strip()
-        if not name:
-            continue
-        raw_value = (values[index] if index < len(values) else '').strip()
-        try:
-            value = Decimal(raw_value) if raw_value else None
-        except (InvalidOperation, ValueError):
-            value = None
-        rows.append({'name': name, 'value': value})
+        if name:
+            rows.append({'name': name})
     # One SOS Public, one Null IP and one Protection switch for the whole section (whole device).
     sos_public = request.POST.get('sos_public', '').strip()
     null_ip = request.POST.get('null_ip', '').strip()
@@ -138,6 +129,9 @@ def ddos_protection(request, device_id):
         # otherwise an entry latched under the old address could never fail over to the new one.
         changed_target = (previous_sos or '') != sos_public
         keep = {}
+        # The list no longer has a value column; keep each entry's stored value when its name is
+        # unchanged so an existing row is never silently blanked.
+        existing_values = {rule.name: rule.value for rule in protection.rules.all()}
         if not changed_target:
             for rule in protection.rules.all():
                 if rule.switched_at and (rule.switched_from or '') != sos_public:
@@ -145,7 +139,8 @@ def ddos_protection(request, device_id):
         protection.rules.all().delete()
         DeviceDDoSProtectionRule.objects.bulk_create([
             DeviceDDoSProtectionRule(
-                protection=protection, position=position, name=row['name'], value=row['value'],
+                protection=protection, position=position, name=row['name'],
+                value=existing_values.get(row['name']),
                 sos_public=sos_public,
                 protection_enabled=protection_enabled,
                 switched_at=None if not protection_enabled else keep.get(row['name'], (None, ''))[0],

@@ -14,8 +14,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
-from .forms import AddDeviceForm, EditDeviceForm, MonitoringInterfaceForm
-from .models import Device, DeviceGroup
+from .forms import AddDeviceForm, EditDeviceForm, MonitoringInterfaceForm, group_choices
+from .models import Device, Group, group_from_key, tree_summary
 from .services.credentials import CredentialError
 
 
@@ -145,7 +145,9 @@ def inventory_context(request, form=None, unavailable=False):
         sensor_authorized = authorized()
     return {
         "active_page": "devices", "inventory_ready": True, "device_rows": rows, "total_devices": None if unavailable else len(rows),
-        "device_groups": [] if unavailable else list(DeviceGroup.objects.all()),
+        "device_groups": [] if unavailable else list(Group.objects.all()),
+        # Picker/filter entries: (key, label) for every group and device in the tree.
+        "group_parent_choices": [] if unavailable else group_choices(),
         "snmp_polling_authorized": False if unavailable else sensor_authorized,
         "sensor_summary": {'total': None, 'active': None, 'attention': None} if unavailable else sensor_summary,
         "inventory_unavailable": unavailable,
@@ -163,6 +165,12 @@ def inventory_context(request, form=None, unavailable=False):
 @require_GET
 def inventory(request):
     try:
+        # "+ Device" on a tree node opens the Add Device dialog with that node preselected.
+        parent_node = request.GET.get("parent_node") if request.GET.get("add_device") else None
+        topology_parent = request.GET.get("topology_parent") if request.GET.get("add_device") else None
+        if parent_node or topology_parent:
+            form = AddDeviceForm(initial={"group": parent_node or "", "topology_parent": topology_parent or ""})
+            return render(request, "monitor/devices.html", inventory_context(request, form))
         context = inventory_context(request)
     except DatabaseError:
         return render(request, "monitor/devices.html", inventory_context(request, unavailable=True), status=503)
@@ -173,16 +181,59 @@ def inventory(request):
 @login_required(login_url="device_login")
 @require_POST
 def create_group(request):
-    """Create a flat Group tag. Organizational only: touches no device or setting."""
+    """Create a tree Group. Its parent may be a Group or a Device (or nothing = top level)."""
     if not may_add_devices(request.user):
         raise PermissionDenied("Administrator access is required.")
     name = (request.POST.get("group_name") or "").strip()[:120]
     if not name:
         messages.error(request, "Enter a group name.")
-        return redirect("devices")
-    group, created = DeviceGroup.objects.get_or_create(name=name)
-    messages.success(request, f"Group '{group.name}' {'created' if created else 'already exists'}.")
-    return redirect("devices")
+        return redirect(_back(request))
+    if Group.objects.filter(name=name).exists():
+        messages.error(request, f"A group named '{name}' already exists.")
+        return redirect(_back(request))
+    try:
+        parent = group_from_key(request.POST.get("parent"))
+    except ValidationError as error:
+        messages.error(request, error.messages[0] if error.messages else "Select a valid parent.")
+        return redirect(_back(request))
+    group = Group(name=name)
+    group.set_parent(parent)
+    group.full_clean()
+    group.save()
+    messages.success(request, f"Group '{group.name}' created" + (
+        f" under {parent}." if parent is not None else " at top level."))
+    return redirect(_back(request))
+
+
+def _back(request):
+    """Return to the page the request came from (tree view or fleet), never off-site."""
+    target = request.POST.get("next") or ""
+    if target == "tree":
+        return "device_tree"
+    return "devices"
+
+
+@never_cache
+@login_required(login_url="device_login")
+@require_GET
+def tree(request):
+    """Groups view: nested group outline (groups only) with recursive counts."""
+    from .services.tree_view import build_tree
+    context = inventory_context(request)
+    context.update(active_page="devices", tree=build_tree(), tree_summary=tree_summary(),
+                   parent_choices=group_choices())
+    return render(request, "monitor/device_tree.html", context)
+
+
+@never_cache
+@login_required(login_url="device_login")
+@require_GET
+def topology(request):
+    """Topology view: the device-to-device chain, independent of Groups."""
+    from .services.topology import build_topology, topology_summary
+    context = inventory_context(request)
+    context.update(active_page="devices", topology=build_topology(), topology_summary=topology_summary())
+    return render(request, "monitor/device_topology.html", context)
 
 
 @never_cache
@@ -195,7 +246,14 @@ def add_device(request):
         raise PermissionDenied("Administrator access is required.")
     # A previous unconsumed success must not appear on a failed submission.
     list(messages.get_messages(request))
-    form = AddDeviceForm(request.POST)
+    data = request.POST.copy()
+    # "+ Device" from the Groups tree pre-selects a group; from the Topology view it
+    # pre-selects the device this one connects to. The two are independent fields.
+    if data.get("parent_node") and not data.get("group"):
+        data["group"] = data["parent_node"]
+    if data.get("topology_parent_node") and not data.get("topology_parent"):
+        data["topology_parent"] = data["topology_parent_node"]
+    form = AddDeviceForm(data)
     try:
         if form.is_valid():
             # Commit before issuing the success message or redirect.
