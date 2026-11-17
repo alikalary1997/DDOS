@@ -8,7 +8,7 @@
 {% block content %}
 {% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
 <section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology</h2><p class="muted">What each device connects to. The chain follows your network: core &rarr; limits &rarr; PPPoE servers &rarr; towers, at whatever depth it actually has.</p></div>
-<div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
+<div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_topology_map' %}">Map view</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
 
 <section class="fleet-summary tree-summary" aria-label="Topology summary">
     <article class="fleet-stat"><div class="fleet-stat-top"><span>Devices</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/></svg></div><strong data-topology-stat="devices">{{ topology_summary.devices }}</strong><span>In the chain</span></article>

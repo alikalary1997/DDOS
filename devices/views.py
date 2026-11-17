@@ -215,6 +215,30 @@ def _back(request):
 
 @never_cache
 @login_required(login_url="device_login")
+@require_POST
+def delete_group(request, group_id):
+    """Remove a group. Devices are kept and become untagged; nested sub-groups go too."""
+    from .services.tree_view import delete_group as remove_group
+
+    if not may_add_devices(request.user):
+        raise PermissionDenied("Administrator access is required.")
+    group = Group.objects.filter(pk=group_id).first()
+    if group is None:
+        messages.error(request, "That group no longer exists.")
+        return redirect(_back(request))
+    name = group.name
+    result = remove_group(group)
+    extra = []
+    if result["devices"]:
+        extra.append(f"{result['devices']} device{'s' if result['devices'] != 1 else ''} are now untagged and still in inventory")
+    if result["groups"] > 1:
+        extra.append(f"{result['groups'] - 1} sub-group{'s' if result['groups'] - 1 != 1 else ''} removed with it")
+    messages.success(request, f"Group '{name}' deleted." + (" " + ". ".join(extra) + "." if extra else ""))
+    return redirect(_back(request))
+
+
+@never_cache
+@login_required(login_url="device_login")
 @require_GET
 def tree(request):
     """Groups view: nested group outline (groups only) with recursive counts."""
@@ -234,6 +258,17 @@ def topology(request):
     context = inventory_context(request)
     context.update(active_page="devices", topology=build_topology(), topology_summary=topology_summary())
     return render(request, "monitor/device_topology.html", context)
+
+
+@never_cache
+@login_required(login_url="device_login")
+@require_GET
+def topology_map(request):
+    """Read-only 4-column visual map (Core / Limit / PPPoE / Tower) of the device chain."""
+    from .services.topology_map import build_map
+    context = inventory_context(request)
+    context.update(active_page="topology", topology_map=build_map())
+    return render(request, "monitor/device_topology_map.html", context)
 
 
 @never_cache

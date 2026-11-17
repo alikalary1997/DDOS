@@ -48,6 +48,7 @@ def build_tree():
 
 def _row(group, depth, children, direct):
     subtree = _subtree_ids(group, children)
+    device_count = sum(direct.get(group_id, 0) for group_id in subtree)
     return {
         "group": group, "key": f"g:{group.pk}", "pk": group.pk, "depth": depth,
         "name": group.name,
@@ -55,5 +56,48 @@ def _row(group, depth, children, direct):
         "has_children": bool(children.get(group.pk)),
         # Recursive: everything in this branch, including nested sub-groups.
         "group_count": len(subtree) - 1,
-        "device_count": sum(direct.get(group_id, 0) for group_id in subtree),
+        "device_count": device_count,
+        # Plain-language delete confirmation, so the impact is visible before it is undone.
+        "delete_warning": _delete_warning(device_count, len(subtree) - 1),
     }
+
+
+def _delete_warning(devices, subgroups):
+    parts = []
+    if devices:
+        parts.append(f"{devices} device{'s' if devices != 1 else ''} will be untagged and kept in inventory")
+    if subgroups:
+        parts.append(f"{subgroups} nested sub-group{'s' if subgroups != 1 else ''} will be removed")
+    if not parts:
+        return "This group is empty. It will be removed."
+    return "Delete this group? " + "; ".join(parts) + ". No device is deleted. This cannot be undone."
+
+
+def delete_impact(group):
+    """What removing this group would touch, so the UI can warn before it happens.
+
+    Devices are never deleted - they are only untagged, so they stay in inventory as
+    "Untagged". Nested sub-groups go with the parent.
+    """
+    children = _children_map()
+    subtree = _subtree_ids(group, children)
+    return {
+        "devices": Device.objects.filter(group_id__in=subtree).count(),
+        "subgroups": len(subtree) - 1,
+    }
+
+
+def delete_group(group):
+    """Delete a group and its nested sub-groups, leaving every device in place but untagged.
+
+    `Device.group` is SET_NULL, but the untag is done explicitly first so the behaviour does
+    not depend on the FK's on_delete and is guaranteed even for nested sub-groups.
+    """
+    children = _children_map()
+    subtree = _subtree_ids(group, children)
+    from django.db import transaction
+
+    with transaction.atomic():
+        untagged = Device.objects.filter(group_id__in=subtree).update(group=None)
+        deleted, _detail = Group.objects.filter(pk__in=subtree).delete()
+    return {"devices": untagged, "groups": len(subtree), "rows": deleted}

@@ -1,0 +1,45 @@
+{% extends "monitor/base.html" %}{% load static %}
+{% block title %}Topology Map | NetShield{% endblock %}
+{% block body_class %}devices-page fleet-page topology-map-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261117-map">{% endblock %}
+{% block footer_note %}Topology map{% endblock %}
+{% block content %}
+<section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology map</h2><p class="muted">Core &rarr; limits &rarr; PPPoE servers &rarr; towers, laid out from the real device chain. Read-only: no changes are made from this page.</p></div>
+<div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
+
+<section class="topo-map" aria-label="Network topology map" data-topo-map>
+    <div class="topo-columns">
+        <div class="topo-column-heads" aria-hidden="true">
+            {% for column in topology_map.columns %}<div class="topo-column-head"><span>{{ column.label }}</span><em>{{ column.cards|length }}</em></div>{% endfor %}
+        </div>
+        <svg class="topo-links" data-topo-links viewBox="0 0 1000 {{ topology_map.height }}" preserveAspectRatio="none" aria-hidden="true"></svg>
+        {% for column in topology_map.columns %}
+        <div class="topo-column" data-column="{{ column.key }}">
+            {% for card in column.cards %}
+            <article class="topo-card" data-state="{{ card.state }}" data-topo-card="{{ card.key }}" tabindex="0" title="{{ card.name }} · {{ card.ip }}">
+                <div class="topo-card-top"><span class="topo-dot" data-state="{{ card.state }}"></span><strong>{{ card.name }}</strong></div>
+                {% if card.site_count %}<span class="topo-site">{{ card.site_count }} devices at site</span>{% endif %}
+                <p class="topo-stat">
+                    {% if card.value is not None %}<b>{{ card.value }}</b> <span class="topo-unit">{{ card.unit }}</span>
+                    {% else %}<b class="topo-nodata">No data</b>{% endif %}
+                </p>
+                <small class="topo-note">{{ card.note }}</small>
+            </article>
+            {% empty %}
+            <p class="topo-empty">None in this column</p>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<p class="topo-legend">
+    <span class="topo-legend-item"><i class="topo-dot" data-state="online"></i>Online</span>
+    <span class="topo-legend-item"><i class="topo-dot" data-state="offline"></i>Offline / disabled</span>
+    <span class="topo-legend-item"><i class="topo-dot" data-state="not-tested"></i>Not tested</span>
+    <span class="topo-legend-note">Cards show stored sensor readings only. "No data" means no fresh reading exists — nothing is estimated.</span>
+</p>
+{{ topology_map.links|json_script:"topo-links-data" }}
+<script src="{% static 'monitor/js/topology_map.js' %}?v=20261117-map" defer></script>
+{% endblock %}

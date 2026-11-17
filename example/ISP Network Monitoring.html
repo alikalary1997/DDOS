@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ISP Network Monitoring</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#0d1117;--side:#0a0e14;--card:#131a23;--line:#222d3a;--tx:#d7dee8;--mut:#7d8a9b;--in:#4c9be8;--out:#8b7fd6;--ok:#2fbf71;--wn:#f0a030;--bad:#ef4b4b;--okb:rgba(47,191,113,.14);--wnb:rgba(240,160,48,.14);--badb:rgba(239,75,75,.15);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.45 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums;min-width:1180px}
+.app{display:flex;min-height:100vh}
+aside{width:208px;background:var(--side);border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:0;height:100vh;flex:none}
+.brand{padding:4px 10px 18px;font-weight:600;font-size:14px}.brand small{display:block;color:var(--mut);font-weight:400;font-size:11px}
+nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;color:var(--mut);margin-bottom:2px;cursor:pointer}
+nav a:hover{background:#121a24;color:var(--tx)}nav a.on{background:#17222f;color:#fff;box-shadow:inset 2px 0 var(--in)}
+nav svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6}
+nav .bd{margin-left:auto;background:var(--bad);color:#fff;border-radius:9px;font-size:11px;padding:0 6px}
+.side-f{position:absolute;bottom:16px;left:20px;right:16px;color:var(--mut);font-size:11px}
+main{flex:1;min-width:0}
+header{display:flex;align-items:center;gap:22px;height:54px;padding:0 22px;border-bottom:1px solid var(--line);background:var(--side);position:sticky;top:0;z-index:5}
+header h1{font-size:15px;margin:0;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:11px;font-size:11.5px;font-weight:500}
+.ok{background:var(--okb);color:var(--ok)}.wn{background:var(--wnb);color:var(--wn)}.bad{background:var(--badb);color:var(--bad)}.inf{background:rgba(76,155,232,.14);color:var(--in)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}.live .dot{animation:p 1.6s infinite}
+@keyframes p{50%{opacity:.35}}@media(prefers-reduced-motion:reduce){.live .dot{animation:none}}
+.sp{flex:1}.mut{color:var(--mut)}
+.user{display:flex;align-items:center;gap:9px;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
+.av{width:26px;height:26px;border-radius:50%;background:#26384d;display:grid;place-items:center;font-size:11px;font-weight:600}
+.wrap{padding:18px 22px;display:grid;gap:14px}
+.g6{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.row{display:grid;gap:14px}.r1{grid-template-columns:2fr 1fr}.r3{grid-template-columns:1.35fr 1fr}.r4{grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:14px 16px;transition:border-color .15s}
+.card:hover{border-color:#34465a}
+.k{padding:13px 15px}.k .l{color:var(--mut);font-size:12px}.k .v{font-size:25px;font-weight:600;margin-top:2px;letter-spacing:-.3px}.k .s{font-size:11.5px;color:var(--mut);margin-top:2px}
+.k.a{border-color:rgba(239,75,75,.5)}.k.a .v{color:var(--bad)}.k.h .v{color:var(--ok);font-size:21px;line-height:36px}
+.ch{display:flex;align-items:center;gap:10px;margin-bottom:8px}.ch h2{font-size:13.5px;margin:0;font-weight:600}
+.lg{display:flex;gap:14px;font-size:12px;color:var(--mut)}.lg i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+svg text{fill:var(--mut);font-size:10.5px;font-family:inherit}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--mut);font-weight:500;font-size:11.5px;padding:6px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card)}
+td{padding:5px 8px;border-bottom:1px solid #1a2330}tr:hover td{background:#16202b}td.n,th.n{text-align:right}
+.sc{max-height:402px;overflow:auto}.sc2{max-height:300px;overflow:auto}
+.bar{display:inline-block;width:46px;height:5px;background:#1f2a37;border-radius:3px;vertical-align:middle;margin-left:7px;overflow:hidden}.bar b{display:block;height:100%}
+.atk dl{display:grid;grid-template-columns:110px 1fr;margin:0;gap:0}.atk dt{color:var(--mut);padding:5px 0;border-bottom:1px solid #1a2330}.atk dd{margin:0;padding:5px 0;border-bottom:1px solid #1a2330;font-weight:500}
+.ban{border:1px solid rgba(239,75,75,.45);background:var(--badb);border-radius:6px;padding:10px 12px;margin-bottom:8px}
+.ban b{color:var(--bad);font-size:14px}
+.al{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1a2330}.al:last-child{border:0}.al .t{margin-left:auto;color:var(--mut);font-size:11.5px;white-space:nowrap}
+.hl{display:grid;grid-template-columns:1fr 1fr;gap:8px}.hl div{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.mini .card{background:#0f151d;padding:10px 12px}.mini .v{font-size:19px;font-weight:600}
+.topo{display:flex;flex-direction:column;align-items:center;gap:0}.node{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#0f151d;border-radius:6px;padding:7px 14px;width:260px}
+.node svg{width:20px;height:20px;stroke:var(--in);fill:none;stroke-width:1.6;flex:none}.node small{color:var(--mut);display:block;font-size:11px}
+.ln{width:2px;height:16px;background:var(--line);position:relative}.ln.f{background:linear-gradient(var(--in),var(--line))}
+.ln::after{content:"";position:absolute;left:-3px;bottom:-2px;border:4px solid transparent;border-top:5px solid #3a4b5f;border-bottom:0}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.btn{border:1px solid var(--line);background:#17222f;color:var(--tx);border-radius:5px;padding:5px 11px;font:inherit;cursor:pointer;white-space:nowrap}.btn:hover{border-color:#3a4b5f}.btn:focus-visible{outline:2px solid var(--in)}.btn.go{background:var(--okb);color:var(--ok);border-color:rgba(47,191,113,.4)}.btn.st{background:var(--badb);color:var(--bad);border-color:rgba(239,75,75,.4)}.btn.on{background:#223245;border-color:var(--in);color:#fff}
+.dv{border:1px solid var(--line);border-radius:7px;background:var(--card);margin-bottom:8px;overflow:hidden}.dv.hi{border-color:rgba(239,75,75,.6);background:linear-gradient(90deg,rgba(239,75,75,.1),var(--card) 45%)}.dv.md{border-color:rgba(240,160,48,.4)}.dv.off .nm{opacity:.75}
+.dr{display:grid;grid-template-columns:66px 1.1fr 170px 1fr 92px 150px 140px;align-items:center;gap:10px;padding:10px 14px}.dx{padding:6px 14px 12px 80px;border-top:1px solid var(--line);background:#0f151d}.off-p{background:#1c2633;color:var(--mut)}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.cg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+.cc{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:11px 12px}.cc.hi{border-color:rgba(239,75,75,.6);background:#1a1519}.cc.md{border-color:rgba(240,160,48,.55)}
+.ct{display:flex;align-items:center;gap:7px;margin-bottom:8px}.ct .ip{margin-left:auto;color:var(--mut);font:11px ui-monospace,Consolas,monospace}
+.tg{font-size:9.5px;font-weight:600;letter-spacing:.3px;padding:1px 6px;border-radius:3px;white-space:nowrap}.tg.g{background:var(--okb);color:var(--ok)}.tg.r{background:var(--badb);color:var(--bad)}.tg.n{background:#202b38;color:var(--mut)}.tg.o{background:var(--wnb);color:var(--wn)}
+.bn{font-size:11.5px;padding:5px 8px;border-radius:4px;margin-bottom:7px}.bn.r{background:var(--badb);color:#ff8f8f}.bn.o{background:var(--wnb);color:#f3b45a}
+.mr{display:grid;grid-template-columns:62px 1fr 38px;align-items:center;gap:8px;margin:5px 0;font-size:11.5px}.ml{color:var(--mut)}.mb{height:5px;background:#1f2a37;border-radius:3px;overflow:hidden}.mb i{display:block;height:100%}.mv{text-align:right;font-weight:500}
+.ca{display:flex;gap:8px;margin-top:10px}.ca .big{flex:1;font-weight:600}.btn.nu{background:#232d3a;color:var(--tx)}
+.cx{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:11.5px}.cx .ir{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1a2330}.cx .ir:last-child{border:0}
+.in{background:#0d1117;border:1px solid var(--line);color:var(--tx);border-radius:5px;padding:5px 9px;font:inherit}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px}.kv div{background:#0f151d;border:1px solid var(--line);border-radius:6px;padding:8px 10px}.kv b{display:block;font-size:17px;font-weight:600}
+.pr{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;margin-top:6px;cursor:pointer}.pr:hover{border-color:var(--in);background:#16202b}
+.nd{cursor:pointer}.nd rect{fill:#0f151d;stroke:#2a3a4d}.nd:hover rect{stroke:#4a6280}.nd.sel rect{fill:#17283a;stroke:var(--in);stroke-width:1.6}.nd.dim{opacity:.32}.nd text{font-size:10px}.nd .nn{fill:var(--tx);font-size:12px;font-weight:600}.d-ok{fill:var(--ok)}.d-wn{fill:var(--wn)}
+.lk{fill:none;stroke:#2a3a4d;stroke-width:1.5;stroke-dasharray:3 5;animation:fl 1s linear infinite}.lk.on{stroke:var(--in);stroke-width:2}.lk.dim{opacity:.2}@keyframes fl{to{stroke-dashoffset:-8}}@media(prefers-reduced-motion:reduce){.lk{animation:none}}
+.btn:disabled{opacity:.4;cursor:default}tr.fl td{background:rgba(76,155,232,.14)}.nd .bt{fill:#8cc0f5;font-weight:600}select.in{max-width:100%}
+.gi{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:6px;cursor:pointer;border:1px solid transparent;margin-bottom:3px}.gi:hover{background:#16202b}.gi.on{background:#17283a;border-color:var(--in)}.gd{width:9px;height:9px;border-radius:50%;flex:none}.gn{flex:1;font-weight:500}.gb{min-width:20px;text-align:center;border-radius:4px;font-size:11px;font-weight:600;padding:0 5px}.gb.g{background:var(--okb);color:var(--ok)}.gb.w{background:var(--wnb);color:var(--wn)}.gb.r{background:var(--badb);color:var(--bad)}.pill.n{background:#1c2633;color:var(--mut)}
+#dvl td,#dvl th{white-space:nowrap}.wrap{grid-template-columns:minmax(0,1fr)}.foot{color:var(--mut);font-size:11.5px;text-align:center;padding:4px 0 10px}
+</style></head><body>
+<div class="app">
+<aside>
+<div class="brand">Metro Broadband<small>Network Operations Center</small></div>
+<nav id="nav"></nav>
+<div class="side-f">Collector v4.2 · polling 2s<br>Site: Sulaymaniyah DC-1</div>
+</aside>
+<main>
+<header>
+<h1>ISP Network Monitoring</h1>
+<span class="pill ok live"><span class="dot"></span>System status: ONLINE</span>
+<span class="sp"></span>
+<span class="mut">Last update <b id="clk" style="color:var(--tx);font-weight:500"></b></span>
+<span class="pill inf" title="Refresh interval">Auto-refresh 2s</span>
+<div class="user"><div class="av">NO</div><div style="line-height:1.2">noc.admin<br><span class="mut" style="font-size:11px">Network Engineer</span></div></div>
+</header>
+<div class="wrap" id="v-dash" style="display:none">
+<div class="g6" id="kpi"></div>
+<div class="row r1">
+<div class="card"><div class="ch"><h2>Live traffic · last 24 hours</h2><span class="sp"></span><div class="lg"><span><i style="background:var(--in)"></i>Inbound <b id="tin" style="color:var(--tx)"></b></span><span><i style="background:var(--out)"></i>Outbound <b id="tout" style="color:var(--tx)"></b></span></div></div><svg id="c1" viewBox="0 0 860 250" width="100%"></svg></div>
+<div class="card atk"><div class="ch"><h2>DDoS detection</h2><span class="sp"></span><span class="pill bad live"><span class="dot"></span>2 active</span></div>
+<div class="ban"><b>SYN Flood</b> <span class="mut">on</span> 185.166.26.16<div style="margin-top:2px">Status: <b>UNDER MONITORING</b></div></div>
+<dl><dt>Attack status</dt><dd style="color:var(--bad)">Active · mitigation armed</dd><dt>Attack type</dt><dd>SYN Flood</dd><dt>Target IP</dt><dd>185.166.26.16</dd><dt>Packets / sec</dt><dd>1.2M PPS</dd><dt>Traffic rate</dt><dd>8.7 Gbps</dd><dt>Start time</dt><dd>14:22:08</dd><dt>Duration</dt><dd id="dur"></dd><dt>Severity</dt><dd><span class="pill bad">CRITICAL</span></dd><dt>Detection</dt><dd>Threshold + baseline anomaly</dd></dl>
+<div class="mut" style="margin-top:8px;font-size:12px">Secondary: UDP flood on 185.166.26.252 · 450K PPS · <span style="color:var(--wn)">WARNING</span></div></div>
+</div>
+<div class="row r1">
+<div class="card"><div class="ch"><h2>Packets per second</h2><span class="sp"></span><div class="lg"><span><i style="background:#c9d3df"></i>Total <b id="p1" style="color:var(--tx)"></b></span><span><i style="background:var(--wn)"></i>SYN <b id="p2" style="color:var(--tx)"></b></span><span><i style="background:var(--out)"></i>UDP <b id="p3" style="color:var(--tx)"></b></span><span><i style="background:var(--bad)"></i>Attack window</span></div></div><svg id="c2" viewBox="0 0 860 250" width="100%"></svg></div>
+<div class="card"><div class="ch"><h2>Alerts</h2><span class="sp"></span><span class="mut">Last 60 min</span></div><div id="al"></div></div>
+</div>
+<div class="row r3">
+<div class="card"><div class="ch"><h2>MikroTik device status</h2><span class="sp"></span><span class="mut">16 devices · RouterOS 7.14</span></div><div class="sc"><table id="dt"></table></div></div>
+<div class="card"><div class="ch"><h2>Public IP monitoring</h2><span class="sp"></span><span class="mut">32 monitored</span></div><div class="sc"><table id="ipt"></table></div></div>
+</div>
+<div class="row" style="grid-template-columns:1fr 2fr 1fr">
+<div class="card"><div class="ch"><h2>Network topology</h2></div><div class="topo" id="topo"></div></div>
+<div class="card"><div class="ch"><h2>Device performance</h2><span class="sp"></span><span class="mut">MikroTik-03 · 185.166.26.3</span></div><div class="mini" id="mini"></div></div>
+<div class="card"><div class="ch"><h2>System health</h2></div><div class="hl" id="hl" style="grid-template-columns:1fr"></div></div>
+</div>
+<div class="foot">Data refreshed every 2 seconds · Retention 90 days · All times local (UTC+3)</div>
+</div><div class="wrap" id="v-ddos"><div class="ch" style="margin:0"><h2 style="font-size:16px">DDoS Detection</h2><span class="mut" style="margin-left:8px">Start or stop attack monitoring per MikroTik device</span><span class="sp"></span><span id="tb" style="display:flex;gap:8px"></span></div><div class="g5" id="dk"></div><div class="cg" id="dl"></div></div><div class="wrap" id="v-topo" style="display:none"><div class="ch" style="margin:0"><h2 style="font-size:16px">Network topology</h2><span class="mut" style="margin-left:8px">Core → Limit servers → PPPoE servers → Towers</span><span class="sp"></span><span class="pill ok live"><span class="dot"></span>Live</span><button class="btn" data-a="add-l">+ Limit server</button><button class="btn" data-a="add-p">+ PPPoE server</button><button class="btn" data-a="add-t">+ Tower</button></div><div id="tpf"></div><div style="display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start"><div class="card"><svg id="tps" viewBox="0 0 666 400" width="100%"></svg></div><div class="card" id="tpd"></div></div></div><div class="wrap" id="v-dev" style="display:none"><div class="ch" style="margin:0"><h2 style="font-size:16px">Devices</h2><span class="mut" style="margin-left:8px">MikroTik routers and where each one connects in the network</span><span class="sp"></span><span id="dvt" style="display:flex;gap:8px"></span></div><div class="g4" id="dvk"></div><div id="dvf"></div><div style="display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start"><div class="card" id="dvg"></div><div style="display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0"><div id="dvs"></div><div class="card" style="padding:6px 8px"><div style="overflow-x:auto"><table id="dvl"></table></div></div></div></div></div></main></div>
+<script>
+var $=function(i){return document.getElementById(i)};
+var ic={d:'<path d="M3 3h7v7H3zM14 3h7v4h-7zM14 10h7v11h-7zM3 13h7v8H3z"/>',v:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/>',g:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',t:'<path d="M3 17l5-6 4 4 8-10"/>',s:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',b:'<path d="M6 9a6 6 0 0112 0c0 6 3 7 3 7H3s3-1 3-7zM10 20h4"/>',r:'<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"/>',x:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>'};
+var items=[['Dashboard','d'],['Devices','v'],['Public IPs','g'],['Traffic Monitor','t'],['DDoS Detection','s'],['Alerts','b'],['Reports','r'],['Settings','x']];
+$('nav').innerHTML=items.map(function(a,i){return '<a class="'+(i?'':'on')+'"><svg viewBox="0 0 24 24">'+ic[a[1]]+'</svg>'+a[0]+(a[0]=='Alerts'?'<span class="bd">3</span>':'')+(a[0]=='DDoS Detection'?'<span class="bd">2</span>':'')+'</a>'}).join('');
+var kp=[['Total devices','16','MikroTik RouterOS',''],['Devices online','16','0 offline · 2 high load',''],['Total traffic','78.4 Gbps','↑ 6.1% vs. last hour',''],['Monitored public IPs','32','Across 16 devices',''],['Active attacks','2','1 critical · 1 warning','a'],['Network status','HEALTHY','All core services up','h']];
+$('kpi').innerHTML=kp.map(function(k){return '<div class="card k '+k[3]+'"><div class="l">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="s">'+k[2]+'</div></div>'}).join('');
+function pad(n){return n<10?'0'+n:n}
+function tick(){var d=new Date();$('clk').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());var s=Math.floor((d-start)/1000)+2873;$('dur').textContent=pad(Math.floor(s/3600))+':'+pad(Math.floor(s/60)%60)+':'+pad(s%60)}
+var start=new Date();
+// seeded noise
+var sd=7;function rnd(){sd=(sd*9301+49297)%233280;return sd/233280}
+var N=288;
+function diur(i){var h=i/12;return .52+.3*Math.sin((h-9)/24*6.283)+.1*Math.sin((h-3)/4)}
+var inb=[],outb=[],tot=[],syn=[],udp=[];
+for(var i=0;i<N;i++){var b=diur(i);var v=b*(1+.06*(rnd()-.5));if(i>=203&&i<=205)v*=1.0;inb.push(Math.max(.2,v*92*.9));outb.push(Math.max(.2,v*30*(1+.1*(rnd()-.5))));
+var p=b*3.4e6*(1+.05*(rnd()-.5));var a=(i>=206)?Math.min(1,(i-205)/3):0;
+var sy=60e3+20e3*rnd()+a*1.2e6*(.9+.2*rnd());var ud=380e3*b+30e3*rnd()+(i>=232?60e3*rnd()+390e3*Math.min(1,(i-231)/3):0);
+tot.push(p+a*1.35e6);syn.push(sy);udp.push(ud)}
+inb[N-1]=60.1;outb[N-1]=18.3;
+function sm(a){return a}
+function chart(el,series,max,fmt,ticks,atk){
+var W=860,H=250,L=44,R=10,T=8,B=24,pw=W-L-R,ph=H-T-B,o='';
+for(var g=0;g<=ticks;g++){var y=T+ph-ph*g/ticks;o+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="#1c2633"/><text x="'+(L-6)+'" y="'+(y+3)+'" text-anchor="end">'+fmt(max*g/ticks)+'</text>'}
+for(var h=0;h<=24;h+=3){var x=L+pw*h/24;o+='<text x="'+x+'" y="'+(H-6)+'" text-anchor="middle">'+pad(h%24)+':00</text><line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(T+ph)+'" stroke="#161f2b"/>'}
+if(atk){var x0=L+pw*atk/N;o+='<rect x="'+x0+'" y="'+T+'" width="'+(W-R-x0)+'" height="'+ph+'" fill="rgba(239,75,75,.08)"/><line x1="'+x0+'" x2="'+x0+'" y1="'+T+'" y2="'+(T+ph)+'" stroke="#ef4b4b" stroke-dasharray="3 3"/>'}
+series.forEach(function(s){var pts=s.d.map(function(v,i){return (L+pw*i/(N-1)).toFixed(1)+','+(T+ph-ph*Math.min(v,max)/max).toFixed(1)}).join(' ');
+if(s.f)o+='<polygon points="'+L+','+(T+ph)+' '+pts+' '+(L+pw)+','+(T+ph)+'" fill="'+s.c+'" opacity=".13"/>';
+o+='<polyline points="'+pts+'" fill="none" stroke="'+s.c+'" stroke-width="1.6" stroke-linejoin="round"/>'});
+var e=series[0].d[N-1];o+='<circle cx="'+(W-R)+'" cy="'+(T+ph-ph*Math.min(e,max)/max)+'" r="3.5" fill="'+series[0].c+'"/>';
+el.innerHTML=o}
+function draw(){
+chart($('c1'),[{d:inb,c:'#4c9be8',f:1},{d:outb,c:'#8b7fd6',f:1}],120,function(v){return v+' G'},4);
+chart($('c2'),[{d:tot,c:'#c9d3df'},{d:syn,c:'#f0a030',f:1},{d:udp,c:'#8b7fd6'}],6e6,function(v){return (v/1e6).toFixed(1)+'M'},4,206);
+$('tin').textContent=inb[N-1].toFixed(1)+' Gbps';$('tout').textContent=outb[N-1].toFixed(1)+' Gbps';
+$('p1').textContent=(tot[N-1]/1e6).toFixed(2)+'M';$('p2').textContent=(syn[N-1]/1e6).toFixed(2)+'M';$('p3').textContent=Math.round(udp[N-1]/1e3)+'K'}
+function step(){[inb,outb,tot,syn,udp].forEach(function(a){a.shift();a.push(a[a.length-1])});
+var j=function(v,k,lo,hi){return Math.min(hi,Math.max(lo,v+(rnd()-.5)*k))};
+inb[N-1]=j(inb[N-2],5,54,68);outb[N-1]=j(outb[N-2],2,15,22);syn[N-1]=j(syn[N-2],6e4,1.05e6,1.3e6);udp[N-1]=j(udp[N-2],3e4,6.6e5,8.2e5);tot[N-1]=syn[N-1]+udp[N-1]+j(tot[N-2]-syn[N-2]-udp[N-2],4e4,1.6e6,1.9e6);draw();tick()}
+// devices
+var tr=[4.8,5.2,6.9,4.4,5.1,4.6,5.3,5.9,4.2,4.9,5.4,4.7,4.3,5.0,3.9,3.8],cp=[38,42,57,35,44,33,41,71,36,39,78,40,37,43,31,29],us=[612,588,704,541,632,575,598,617,502,559,641,566,527,583,468,451],pp=[310,342,1480,288,331,297,336,372,266,304,402,299,281,326,244,238];
+var ds='<tr><th>Device</th><th>IP</th><th>CPU</th><th class="n">Traffic</th><th class="n">PPS</th><th class="n">Users</th><th>Status</th></tr>';
+for(var i=0;i<16;i++){var c=cp[i],col=c>=75?'var(--wn)':c>=60?'var(--wn)':'var(--ok)';var st=i==2?'<span class="pill bad">UNDER ATTACK</span>':c>=70?'<span class="pill wn">HIGH LOAD</span>':'<span class="pill ok">ONLINE</span>';
+ds+='<tr><td>MikroTik-'+pad(i+1)+'</td><td class="mut">10.20.'+(i+1)+'.1</td><td>'+c+'%<span class="bar"><b style="width:'+c+'%;background:'+col+'"></b></span></td><td class="n">'+tr[i].toFixed(1)+' Gbps</td><td class="n">'+pp[i]+'K</td><td class="n">'+us[i]+'</td><td>'+st+'</td></tr>'}
+$('dt').innerHTML=ds;
+var ips=[['185.166.26.16',3,'41.8B','1.20M','8.7 Gbps','b'],['185.166.26.252',8,'9.2B','450K','2.1 Gbps','w'],['185.166.26.40',1,'3.1B','48K','612 Mbps','o'],['185.166.27.18',5,'2.7B','41K','540 Mbps','o'],['185.166.27.77',11,'4.4B','63K','905 Mbps','o'],['185.166.28.9',4,'1.9B','27K','388 Mbps','o'],['185.166.28.130',7,'5.6B','72K','1.1 Gbps','o'],['185.166.29.52',12,'2.2B','34K','463 Mbps','o'],['185.166.29.201',2,'6.8B','91K','1.4 Gbps','o'],['185.166.30.14',15,'1.3B','19K','271 Mbps','o']];
+var it='<tr><th>Public IP</th><th>Device</th><th class="n">Packets</th><th class="n">PPS</th><th class="n">Traffic</th><th>Status</th></tr>';
+ips.forEach(function(p){it+='<tr><td>'+p[0]+'</td><td class="mut">MT-'+pad(p[1])+'</td><td class="n">'+p[2]+'</td><td class="n">'+p[3]+'</td><td class="n">'+p[4]+'</td><td>'+(p[5]=='b'?'<span class="pill bad">ATTACK</span>':p[5]=='w'?'<span class="pill wn">WARNING</span>':'<span class="pill ok">NORMAL</span>')+'</td></tr>'});
+$('ipt').innerHTML=it;
+// alerts
+var as=[['bad','CRITICAL','SYN flood detected','185.166.26.16 · 1.2M PPS','14:22'],['wn','WARNING','High UDP traffic','185.166.26.252 · 450K PPS','14:31'],['wn','WARNING','High CPU on MikroTik-11','CPU 78% · threshold 75%','14:08'],['inf','INFO','MikroTik-08 CPU returned to normal','CPU 71% → 44%','13:54'],['ok','INFO','Mitigation rule armed','Rate-limit SYN on 185.166.26.16','14:23'],['inf','INFO','RADIUS sync completed','9,412 PPPoE sessions verified','13:40']];
+$('al').innerHTML=as.map(function(a){return '<div class="al"><span class="pill '+a[0]+'" style="height:20px">'+a[1]+'</span><div><b style="font-weight:500">'+a[2]+'</b><div class="mut" style="font-size:12px">'+a[3]+'</div></div><span class="t">'+a[4]+'</span></div>'}).join('');
+// topo
+var tp=[['Internet','Upstream transit · 2×100G','<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'],['NCS / Core router','Cisco NCS · BGP','<rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 12h.01M11 12h.01M15 12h4"/>'],['16 MikroTik devices','PPPoE concentrators','<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/>'],['NAT / Firewall','CGNAT + filter rules','<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'],['QoS','Queue trees · per-plan limits','<path d="M4 6h16M4 12h10M4 18h6"/>'],['Subscribers','9,412 active PPPoE','<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/>']];
+$('topo').innerHTML=tp.map(function(n,i){return (i?'<div class="ln f"></div>':'')+'<div class="node"><svg viewBox="0 0 24 24">'+n[2]+'</svg><div><b style="font-weight:500">'+n[0]+'</b><small>'+n[1]+'</small></div></div>'}).join('');
+// mini cards
+function spark(base,amp,c,n){var a=[],w=140,h=32,p=[];for(var i=0;i<n;i++){a.push(base+amp*(rnd()-.4)+amp*.5*Math.sin(i/5))}var mx=Math.max.apply(0,a),mn=Math.min.apply(0,a);a.forEach(function(v,i){p.push((i*w/(n-1)).toFixed(1)+','+(h-2-(v-mn)/(mx-mn+1e-9)*(h-6)).toFixed(1))});return '<svg viewBox="0 0 140 32" width="100%" height="32"><polyline points="'+p.join(' ')+'" fill="none" stroke="'+c+'" stroke-width="1.5"/></svg>'}
+var mc=[['CPU usage','57%',57,6,'var(--wn)'],['RAM usage','2.1 / 4 GB',52,3,'var(--in)'],['Interface traffic','6.9 Gbps',70,8,'var(--in)'],['Active PPPoE users','704',70,5,'var(--ok)'],['Connections','486K',48,6,'var(--out)'],['Packet rate','1.48M pps',80,10,'var(--bad)']];
+$('mini').innerHTML=mc.map(function(m){return '<div class="card"><div class="mut" style="font-size:11.5px">'+m[0]+'</div><div class="v">'+m[1]+'</div>'+spark(m[2],m[3]*3,m[4],30)+'</div>'}).join('');
+var hs=[['MikroTik API','CONNECTED'],['NCS','CONNECTED'],['RADIUS','CONNECTED'],['NAT','HEALTHY'],['Firewall','HEALTHY'],['Monitoring service','RUNNING']];
+$('hl').innerHTML=hs.map(function(h){return '<div><span>'+h[0]+'</span><span class="pill ok live"><span class="dot"></span>'+h[1]+'</span></div>'}).join('');
+var up=[],mon=[],open={},flt='all',ipd=[];
+for(var i=0;i<16;i++){up.push((14+i*9%60)*86400+(i*7919)%86400);mon.push(i!=13);
+var a='185.166.'+(26+(i>>2))+'.'+(10+i*13),b='185.166.'+(26+(i>>2))+'.'+(100+i*9);if(i==2)a='185.166.26.16';if(i==7)a='185.166.26.252';
+ipd.push([a,b].map(function(x){var at=x=='185.166.26.16'?2:x=='185.166.26.252'?1:0;return {ip:x,at:at,pps:at==2?1200:at==1?450:20+Math.round(rnd()*60),g:at==2?8.7:at==1?2.1:+(.2+rnd()*.6).toFixed(2)}}))}
+function fu(s){return Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h '+Math.floor(s%3600/60)+'m'}
+function cls(c){return c>=75?'hi':c>=60?'md':''}
+function rr(){var hi=0,mn=0,atk=0;cp.forEach(function(c,i){if(c>=75)hi++;if(mon[i])mn++});atk=(mon[2]?1:0)+(mon[7]?1:0);
+var kk=[['Monitoring',mn+' of 16','var(--ok)'],['Stopped',16-mn,'var(--tx)'],['High CPU (75% or more)',hi,hi?'var(--bad)':'var(--ok)'],['Active attacks',atk,atk?'var(--bad)':'var(--ok)']];
+$('dk').innerHTML=kk.map(function(k){return '<div class="card k"><div class="l">'+k[0]+'</div><div class="v" style="color:'+k[2]+'">'+k[1]+'</div></div>'}).join('');
+$('tb').innerHTML=[['all','All devices'],['mon','Monitoring'],['stop','Stopped'],['hi','High CPU']].map(function(f){return '<button class="btn '+(flt==f[0]?'on':'')+'" data-a="f" data-f="'+f[0]+'">'+f[1]+'</button>'}).join(' ')+'<span class="sp"></span><button class="btn go" data-a="all1">Start all</button> <button class="btn st" data-a="all0">Stop all</button>';
+var h='<div class="dr mut" style="padding:6px 14px;font-size:11.5px"><span></span><span>Device</span><span>CPU</span><span>Bandwidth in / out</span><span>Uptime</span><span>Monitoring</span><span></span></div>';
+for(var i=0;i<16;i++){var c=cp[i];if(flt=='mon'&&!mon[i]||flt=='stop'&&mon[i]||flt=='hi'&&c<75)continue;
+var col=c>=75?'var(--bad)':c>=60?'var(--wn)':'var(--ok)',at=mon[i]&&ipd[i].some(function(p){return p.at==2});
+h+='<div class="dv '+cls(c)+(mon[i]?'':' off')+'"><div class="dr"><button class="btn" data-a="o" data-i="'+i+'" aria-expanded="'+!!open[i]+'" title="Show public IPs assigned to this device">'+(open[i]?'▾':'▸')+' IPs</button><div class="nm"><b>MikroTik-'+pad(i+1)+'</b><div class="mut" style="font-size:11.5px">10.20.'+(i+1)+'.1</div></div><div><b style="color:'+col+'">'+c+'%</b><span class="bar" style="width:70px"><b style="width:'+c+'%;background:'+col+'"></b></span> '+(c>=75?'<span class="pill bad">HIGH</span>':c>=60?'<span class="pill wn">ELEVATED</span>':'')+'</div><div>↓ '+(tr[i]*(1+.02*(rnd()-.5))).toFixed(1)+' <span class="mut">/</span> ↑ '+(tr[i]*.3).toFixed(1)+' <span class="mut">Gbps</span></div><div>'+fu(up[i])+'</div><div>'+(at?'<span class="pill bad live"><span class="dot"></span>Under attack</span>':mon[i]?'<span class="pill ok live"><span class="dot"></span>Monitoring</span>':'<span class="pill off-p">Stopped</span>')+'</div><div style="text-align:right">'+(mon[i]?'<button class="btn st" data-a="t" data-i="'+i+'">Stop monitoring</button>':'<button class="btn go" data-a="t" data-i="'+i+'">Start monitoring</button>')+'</div></div>';
+if(open[i])h+='<div class="dx"><table><tr><th>Public IP assigned to this device</th><th class="n">PPS</th><th class="n">Traffic</th><th>Detection</th></tr>'+ipd[i].map(function(p){var m=mon[i];return '<tr><td>'+p.ip+'</td><td class="n">'+(m?(p.pps>=1000?(p.pps/1000).toFixed(1)+'M':p.pps+'K'):'—')+'</td><td class="n">'+(m?(p.g<1?Math.round(p.g*1000)+' Mbps':p.g+' Gbps'):'—')+'</td><td>'+(!m?'<span class="mut">Not monitored</span>':p.at==2?'<span class="pill bad">SYN flood</span>':p.at==1?'<span class="pill wn">High UDP</span>':'<span class="pill ok">Normal</span>')+'</td></tr>'}).join('')+'</table></div>';
+h+='</div>'}
+$('dl').innerHTML=h}
+$('v-ddos').addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a,i=+b.dataset.i;if(a=='t')mon[i]=!mon[i];else if(a=='o')open[i]=!open[i];else if(a=='f')flt=b.dataset.f;else if(a=='all1')mon=mon.map(function(){return true});else if(a=='all0')mon=mon.map(function(){return false});rr()});
+function show(v){$('v-dash').style.display=v=='d'?'':'none';$('v-ddos').style.display=v=='s'?'':'none';[].forEach.call(document.querySelectorAll('nav a'),function(a,i){a.classList.toggle('on',(i==0&&v=='d')||(i==4&&v=='s'))})}
+var na=document.querySelectorAll('nav a');na[0].onclick=function(){show('d')};na[4].onclick=function(){show('s')};
+function adv(){for(var i=0;i<16;i++){var l=i==10?[76,83]:i==7?[66,72]:i==2?[52,62]:[26,58];cp[i]=Math.round(Math.min(l[1],Math.max(l[0],cp[i]+(rnd()-.5)*4)));up[i]+=2}rr()}
+[44,32,19,15,85,47,39,59,20,22,71,36,41,33,28,30].forEach(function(v,i){cp[i]=v});var cb=cp.slice();
+mon=mon.map(function(_,i){return [0,2,4,8,10,12].indexOf(i)<0});flt='all';
+var IPS={2:['185.166.26.16','185.166.26.18'],4:['185.166.27.24','185.166.27.150'],10:['185.166.26.252','185.166.26.250']};
+ipd=[];for(var q=0;q<16;q++){var ia=IPS[q]||['185.166.'+(28+(q>>3))+'.'+(10+q*13),'185.166.'+(28+(q>>3))+'.'+(100+q*9)];ipd.push(ia.map(function(x){var at=x=='185.166.26.16'?2:x=='185.166.26.252'?1:0;return {ip:x,at:at,pps:at==2?1200:at==1?450:20+Math.round(rnd()*60),g:at==2?8.7:at==1?2.1:+(.2+rnd()*.6).toFixed(2)}}))}
+function fu(s){return Math.floor(s/86400)+' days '+Math.floor(s%86400/3600)+' h'}
+rr=function(){var hi=0,mn=0,ak=0;cp.forEach(function(c,i){if(c>80)hi++;if(mon[i])mn++;if(ipd[i].some(function(p){return p.at}))ak++});
+$('dk').innerHTML=[['Devices monitored',mn,' / 16','var(--ok)'],['Not monitored',16-mn,'','var(--wn)'],['High CPU (above 80%)',hi,'',hi?'var(--bad)':'var(--ok)'],['Devices under attack',ak,'',ak?'var(--bad)':'var(--ok)'],['Public IPs protected',mn*2,' / 32','var(--tx)']].map(function(k){return '<div class="card k"><div class="l">'+k[0]+'</div><div class="v" style="color:'+k[3]+'">'+k[1]+'<span class="mut" style="font-size:12px;font-weight:400">'+k[2]+'</span></div></div>'}).join('');
+$('tb').innerHTML=[['all','All 16'],['hi','High CPU'],['atk','Under attack'],['unm','Not monitored']].map(function(f){return '<button class="btn '+(flt==f[0]?'on':'')+'" data-a="f" data-f="'+f[0]+'">'+f[1]+'</button>'}).join('')+'<button class="btn go" data-a="all1">Start all</button><button class="btn" data-a="all0">Stop all</button>';
+var h='';for(var i=0;i<16;i++){var c=cp[i],ap=ipd[i].filter(function(p){return p.at})[0],m=mon[i];if(flt=='hi'&&c<=65||flt=='atk'&&!ap||flt=='unm'&&m)continue;
+var cc=c>80?'var(--bad)':c>65?'var(--wn)':'var(--ok)',bw=tr[i]*(1+.02*(rnd()-.5)),tag=ap?'<span class="tg r">'+(m?'UNDER ATTACK':'ATTACK \u00b7 UNMONITORED')+'</span>':m?'<span class="tg g">MONITORING</span>':'<span class="tg n">NOT MONITORED</span>';
+h+='<div class="cc '+(c>80?'hi':c>65?'md':'')+'"><div class="ct"><b>MikroTik-'+pad(i+1)+'</b>'+tag+'<span class="ip">10.20.'+(i+1)+'.1</span></div>';
+if(c>80)h+='<div class="bn r">CPU at '+c+'%. High load can hide or worsen an attack. Check this device.</div>';else if(c>65)h+='<div class="bn o">CPU is above 65%. Keep an eye on this device.</div>';
+if(ap)h+='<div class="bn r"><b>'+ap.ip+'</b>'+(m?' \u00b7 '+(ap.at==2?'SYN flood':'UDP flood')+' \u00b7 '+(ap.pps>=1000?(ap.pps/1000).toFixed(1)+'M':ap.pps+'K')+' PPS. Mitigation active.':' is under attack but this device is not monitored. Start monitoring.')+'</div>';
+h+='<div class="mr"><span class="ml">CPU</span><span class="mb"><i style="width:'+c+'%;background:'+cc+'"></i></span><span class="mv" style="color:'+cc+'">'+c+'%</span></div><div class="mr"><span class="ml">Bandwidth</span><span class="mb"><i style="width:'+bw*10+'%;background:var(--in)"></i></span><span class="mv">'+bw.toFixed(1)+' G</span></div><div class="mr" style="grid-template-columns:62px 1fr"><span class="ml">Uptime</span><span style="text-align:right;font-weight:500">'+fu(up[i])+'</span></div>';
+h+='<div class="ca">'+(m?'<button class="btn big nu" data-a="t" data-i="'+i+'">Stop monitoring</button>':'<button class="btn big go" data-a="t" data-i="'+i+'">Start monitoring</button>')+'<button class="btn '+(open[i]?'on':'')+'" data-a="o" data-i="'+i+'" aria-expanded="'+!!open[i]+'" title="Show public IPs assigned to this device">IPs (2) '+(open[i]?'\u25b4':'\u25be')+'</button></div>';
+if(open[i])h+='<div class="cx"><div class="mut" style="margin-bottom:3px">Public IPs assigned to MikroTik-'+pad(i+1)+'</div>'+ipd[i].map(function(p){return '<div class="ir"><span style="font-family:ui-monospace,Consolas,monospace">'+p.ip+'</span>'+(!m?(p.at?'<span class="tg r">UNPROTECTED</span>':'<span class="tg n">NOT MONITORED</span>'):p.at?'<span class="tg o">MITIGATING</span>':'<span class="tg g">PROTECTED</span>')+'</div>'}).join('')+'</div>';
+h+='</div>'}
+$('dl').innerHTML=h};
+function adv(){for(var i=0;i<16;i++){cp[i]=Math.round(Math.min(cb[i]+4,Math.max(cb[i]-4,cp[i]+(rnd()-.5)*3)));up[i]+=2}rr()}
+var L=[{id:'l1',name:'Limit-1'},{id:'l2',name:'Limit-2'}],P=[{id:'p1',name:'Kalar',l:'l1'},{id:'p2',name:'Suli',l:'l1'},{id:'p3',name:'Erbil',l:'l1'},{id:'p4',name:'Duhok',l:'l2'},{id:'p5',name:'Halabja',l:'l2'}],TW=[{id:'t1',name:'Azadi',p:'p1',u:640},{id:'t2',name:'Shaidan',p:'p1',u:520},{id:'t3',name:'Bakrajo',p:'p2',u:710},{id:'t4',name:'Sarchnar',p:'p2',u:580},{id:'t5',name:'Ankawa',p:'p3',u:830},{id:'t6',name:'Bahrka',p:'p3',u:460,w:1},{id:'t7',name:'Zakho Road',p:'p4',u:390},{id:'t8',name:'Sirwan',p:'p5',u:340}],TS=null,TA='',tc=100,NW=128,NH=40,SH=50,XS=[8,182,356,530];
+function g(a,id){return a.filter(function(x){return x.id==id})[0]}
+function ps(l){return P.filter(function(p){return p.l==l})}
+function ts(p){return TW.filter(function(t){return t.p==p})}
+function pu(p){return ts(p).reduce(function(a,t){return a+t.u},0)}
+function lu(l){return ps(l).reduce(function(a,p){return a+pu(p.id)},0)}
+function tsum(){return TW.reduce(function(a,t){return a+t.u},0)}
+function gb(u){return (u*.0175).toFixed(1)}
+function ftx(n){return n.toLocaleString('en-US')}
+function es(s){return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function wr(p){return ts(p).some(function(t){return t.w})}
+function stt(id){var k=id[0];return k=='t'?(g(TW,id).w?'wn':'ok'):k=='p'?(wr(id)?'wn':'ok'):k=='l'?(ps(id).some(function(p){return wr(p.id)})?'wn':'ok'):'ok'}
+function sb(id){var k=id[0];if(id=='core')return 'NCS · '+gb(tsum())+' Gbps';if(k=='l')return ps(id).length+' PPPoE · '+gb(lu(id))+' G';if(k=='p')return ts(id).length+' towers · '+(pu(id)/1000).toFixed(1)+'k users';return ftx(g(TW,id).u)+' users · '+gb(g(TW,id).u)+' G'}
+function lay(){var y=0,pos={},av=function(a){return a.reduce(function(s,v){return s+v},0)/a.length},ly=[];
+L.forEach(function(l){var pp=ps(l.id),py=[];pp.forEach(function(p){var tt=ts(p.id),ty=[];tt.forEach(function(t){pos[t.id]=y;ty.push(y);y++});if(!tt.length){pos[p.id]=y;y++}else pos[p.id]=av(ty);py.push(pos[p.id])});if(!pp.length){pos[l.id]=y;y++}else pos[l.id]=av(py);ly.push(pos[l.id]);y+=.35});
+pos.core=ly.length?av(ly):0;return {pos:pos,h:y}}
+function trender(){var lo=lay(),pos=lo.pos,H=lo.h*SH+46,hs=null,o='',k=TS?TS[0]:'';
+if(TS&&TS!='core'){hs={core:1};if(k=='l'){hs[TS]=1;ps(TS).forEach(function(p){hs[p.id]=1;ts(p.id).forEach(function(t){hs[t.id]=1})})}else if(k=='p'){hs[TS]=1;hs[g(P,TS).l]=1;ts(TS).forEach(function(t){hs[t.id]=1})}else{var t0=g(TW,TS);hs[TS]=1;hs[t0.p]=1;hs[g(P,t0.p).l]=1}}
+['CORE','LIMIT SERVERS','PPPoE SERVERS','TOWERS'].forEach(function(t,i){o+='<text x="'+XS[i]+'" y="14" style="letter-spacing:.6px;font-size:10px">'+t+'</text>'});
+var ed=[];L.forEach(function(l){ed.push(['core',0,l.id,1]);ps(l.id).forEach(function(p){ed.push([l.id,1,p.id,2]);ts(p.id).forEach(function(t){ed.push([p.id,2,t.id,3])})})});
+ed.forEach(function(e){var x1=XS[e[1]]+NW,y1=34+pos[e[0]]*SH+NH/2,x2=XS[e[3]],y2=34+pos[e[2]]*SH+NH/2,m=(x1+x2)/2;o+='<path class="lk'+(hs?(hs[e[0]]&&hs[e[2]]?' on':' dim'):'')+'" d="M'+x1+','+y1+' C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2+'"/>'});
+function nd(id,col,name){var x=XS[col],y=34+pos[id]*SH;return '<g class="nd'+(TS==id?' sel':'')+(hs&&!hs[id]?' dim':'')+'" data-n="'+id+'"><rect x="'+x+'" y="'+y+'" width="'+NW+'" height="'+NH+'" rx="6"/><circle cx="'+(x+12)+'" cy="'+(y+14)+'" r="3.5" class="d-'+stt(id)+'"/><text class="nn" x="'+(x+22)+'" y="'+(y+18)+'">'+name+'</text><text x="'+(x+12)+'" y="'+(y+32)+'" id="s-'+id+'">'+sb(id)+'</text>'+bdg(id,x,y)+'</g>'}
+o+=nd('core',0,'Core Router');L.forEach(function(l){o+=nd(l.id,1,l.name)});P.forEach(function(p){o+=nd(p.id,2,p.name)});TW.forEach(function(t){o+=nd(t.id,3,t.name)});
+var s=$('tps');s.setAttribute('viewBox','0 0 666 '+H);s.innerHTML=o;$('tpd').innerHTML=panel()}
+function hd(n,sub,st){return '<div class="ch" style="margin-bottom:2px"><h2 style="font-size:15px">'+n+'</h2><span class="sp"></span><span class="pill '+st+'">'+(st=='ok'?'ONLINE':'DEGRADED')+'</span></div><div class="mut">'+sub+'</div>'}
+function kv(a){return '<div class="kv" style="margin:10px 0">'+a.map(function(x){return '<div><span class="mut">'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join('')+'</div>'}
+function pr(id,a,b){return '<div class="pr" data-n="'+id+'"><span>'+a+'</span><span class="mut">'+b+'</span></div>'}
+function panel(){var k=TS?TS[0]:'',h='',rm='<button class="btn st" data-a="rm" style="margin-top:14px">Remove (with everything under it)</button>';
+if(k=='c'){h=hd('Core Router','NCS · BGP · upstream transit','ok')+kv([['Limit servers',L.length],['PPPoE servers',P.length],['Active users',ftx(tsum())],['Traffic',gb(tsum())+' Gbps']])+'<div class="mut">Limit servers connected</div>'+L.map(function(l){return pr(l.id,l.name,ps(l.id).length+' PPPoE')}).join('');rm=''}
+else if(k=='l'){var l=g(L,TS),pp=ps(l.id),n=0;pp.forEach(function(p){n+=ts(p.id).length});h=hd(l.name,'Limit server · connected to Core Router',stt(TS))+kv([['PPPoE servers',pp.length],['Towers',n],['Active users',ftx(lu(l.id))],['Traffic',gb(lu(l.id))+' Gbps']])+'<div class="mut">PPPoE servers connected to '+l.name+' ('+pp.length+')</div>'+(pp.map(function(p){return pr(p.id,p.name,ts(p.id).length+' towers · '+ftx(pu(p.id))+' users')}).join('')||'<div class="mut" style="margin-top:6px">None yet. Add a PPPoE server.</div>')}
+else if(k=='p'){var p=g(P,TS),lm=g(L,p.l),tt=ts(p.id);h=hd(p.name,'PPPoE server',stt(TS))+kv([['Towers',tt.length],['Active users',ftx(pu(p.id))],['Traffic',gb(pu(p.id))+' Gbps'],['Limit server',lm.name]])+'<div class="mut">Connected to limit server</div>'+pr(lm.id,lm.name,'→ Core Router')+'<div class="mut" style="margin-top:12px">Towers connected to '+p.name+' ('+tt.length+')</div>'+(tt.map(function(t){return pr(t.id,t.name,ftx(t.u)+' users'+(t.w?' · weak signal':''))}).join('')||'<div class="mut" style="margin-top:6px">No towers yet. Add a tower.</div>')}
+else if(k=='t'){var t=g(TW,TS),pp=g(P,t.p);h=hd(t.name,'Tower · '+(t.w?'signal degraded':'link healthy'),stt(TS))+kv([['Active users',ftx(t.u)],['Traffic',gb(t.u)+' Gbps']])+'<div class="mut">Connected to PPPoE server</div>'+pr(pp.id,pp.name,ftx(pu(pp.id))+' users')+'<div class="mut" style="margin-top:12px">Limit server</div>'+pr(pp.l,g(L,pp.l).name,ps(pp.l).length+' PPPoE')}
+else{h='<h2 style="font-size:15px;margin:0 0 4px">Network overview</h2><div class="mut">Click any node to see how it is connected.</div>'+kv([['Limit servers',L.length],['PPPoE servers',P.length],['Towers',TW.length],['Active users',ftx(tsum())]])+'<div class="mut">Click a limit server to see its PPPoE servers. Click a PPPoE server to see its limit and towers.</div>';rm=''}
+return h+dsec(TS)+rm}
+function frm(){if(!TA){$('tpf').innerHTML='';return}var nm={l:'limit server',p:'PPPoE server',t:'tower'}[TA],op=TA=='p'?L:TA=='t'?P:[1],c='<div class="card" style="padding:10px 12px;display:flex;gap:8px;align-items:center"><b>New '+nm+'</b>';
+if(!op.length)c+='<span class="mut">Add a '+(TA=='p'?'limit server':'PPPoE server')+' first.</span><button class="btn" data-a="cx">Close</button></div>';
+else c+='<input class="in" id="tpn" placeholder="Name" maxlength="24">'+(TA!='l'?'<span class="mut">connect to</span><select class="in" id="tpp">'+op.map(function(x){return '<option value="'+x.id+'">'+x.name+(TA=='t'?' ('+g(L,x.l).name+')':'')+'</option>'}).join('')+'</select>':'')+'<button class="btn go" data-a="ok">Add</button><button class="btn" data-a="cx">Cancel</button></div>';
+$('tpf').innerHTML=c;if($('tpn'))$('tpn').focus()}
+function rmv(id){var k=id[0];if(k=='l'){ps(id).forEach(function(p){rmv(p.id)});L=L.filter(function(x){return x.id!=id})}else if(k=='p'){TW=TW.filter(function(t){return t.p!=id});P=P.filter(function(x){return x.id!=id})}else TW=TW.filter(function(x){return x.id!=id});DV.forEach(function(d){if(d.n&&d.n!='core'&&!g(L.concat(P,TW),d.n))d.n=''})}
+$('v-topo').addEventListener('click',function(e){var b=e.target.closest('[data-a]'),n=e.target.closest('[data-n]');
+if(b){var a=b.dataset.a;if(a.indexOf('add')==0){TA=a[4];frm()}else if(a=='cx'){TA='';frm()}else if(a=='ok'){var nm=es($('tpn').value.trim());if(nm){var id=TA+(++tc),par=$('tpp')?$('tpp').value:'';if(TA=='l')L.push({id:id,name:nm});else if(TA=='p')P.push({id:id,name:nm,l:par});else TW.push({id:id,name:nm,p:par,u:150+Math.round(rnd()*400)});TS=id;TA='';frm();trender()}}else if(a=='rm'){rmv(TS);TS=null;trender()}return}
+if(n){TS=n.dataset.n;trender()}});
+function tlive(){TW.forEach(function(t){t.u=Math.max(80,Math.round(t.u+(rnd()-.5)*26))});['core'].concat(L.map(function(x){return x.id}),P.map(function(x){return x.id}),TW.map(function(x){return x.id})).forEach(function(id){var e=$('s-'+id);if(e)e.textContent=sb(id)});if($('v-topo').style.display!='none')$('tpd').innerHTML=panel()}
+setInterval(function(){tlive();dlive()},2000);
+var nt=document.createElement('a');nt.innerHTML='<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5H5v5M12 11.5h7v5"/></svg>Topology';$('nav').insertBefore(nt,na[1]);nt.onclick=function(){show('t')};
+function show(v){$('v-dash').style.display=v=='d'?'':'none';$('v-ddos').style.display=v=='s'?'':'none';$('v-topo').style.display=v=='t'?'':'none';var m={d:na[0],s:na[4],t:nt};[].forEach.call(document.querySelectorAll('nav a'),function(a){a.classList.toggle('on',a===m[v])});if(v=='t')trender()}
+var DV=[],DO=false,DA='',DQ='',DFL='all',dn=16,dc2=100,MD=['CCR2004','CCR2116','RB4011','CCR1036'];
+for(var i=0;i<16;i++)DV.push({id:'d'+(i+1),name:'MikroTik-'+pad(i+1),ip:'10.20.'+(i+1)+'.1',m:MD[i%4],n:'t'+((i>>1)+1),i:i});
+function dcpu(d){return d.i!=null?cp[d.i]:d.c}
+function dtr(d){return d.i!=null?tr[d.i]:d.t}
+function dus(d){return d.i!=null?us[d.i]:d.u}
+function dup(d){return d.i!=null?up[d.i]:d.s}
+function fut(s){return s<86400?Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' m':fu(s)}
+function anc(n){var a=[],x=n;while(x){a.push(x);var k=x[0];x=k=='t'?(g(TW,x)||{}).p:k=='p'?(g(P,x)||{}).l:k=='l'?'core':null}return a}
+function nm(id){var o=id=='core'?{name:'Core Router'}:(g(L,id)||g(P,id)||g(TW,id));return o?o.name:''}
+function path(id){var a=anc(id).reverse().filter(function(x){return x!='core'}).map(nm);return a.length?a.join(' \u203a '):(id=='core'?'Core Router':'')}
+function nopts(sel){var o='<option value="">Not connected</option><option value="core"'+(sel=='core'?' selected':'')+'>Core Router</option>',ad=function(id){o+='<option value="'+id+'"'+(sel==id?' selected':'')+'>'+path(id)+'</option>'};L.forEach(function(l){ad(l.id);ps(l.id).forEach(function(p){ad(p.id);ts(p.id).forEach(function(t){ad(t.id)})})});return o}
+function cpuc(c){var k=c>80?'var(--bad)':c>65?'var(--wn)':'var(--ok)';return '<b style="color:'+k+'">'+c+'%</b><span class="bar" style="width:60px"><b style="width:'+c+'%;background:'+k+'"></b></span>'}
+function stc(c){return c>80?'<span class="pill bad">HIGH CPU</span>':c>65?'<span class="pill wn">ELEVATED</span>':'<span class="pill ok">ONLINE</span>'}
+function bdg(id,x,y){var n=DV.filter(function(d){return d.n==id}).length;return n?'<rect x=\"'+(x+NW-36)+'\" y=\"'+(y+5)+'\" width=\"30\" height=\"14\" rx=\"7\" style=\"fill:#1d3550;stroke:#3d6fa3\"/><text class=\"bt\" x=\"'+(x+NW-21)+'\" y=\"'+(y+15)+'\" text-anchor=\"middle\">\u25a3 '+n+'</text>':''}
+function dsec(id){if(!id)return '';var ds=DV.filter(function(d){return d.n==id}),bn=DV.filter(function(d){return d.n&&anc(d.n).indexOf(id)>=0}).length;
+return '<div class=\"mut\" style=\"margin-top:12px\">Devices connected here ('+ds.length+')'+(bn!=ds.length?' \u00b7 '+bn+' in this branch':'')+'</div>'+(ds.map(function(d){return '<div class=\"pr\" data-d=\"'+d.id+'\"><span>'+d.name+'</span><span class=\"mut\">'+d.ip+' \u00b7 CPU '+dcpu(d)+'%</span></div>'}).join('')||'<div class=\"mut\" style=\"margin-top:6px\">No devices connected here yet.</div>')+'<button class=\"btn go\" data-a=\"newdev\" style=\"margin-top:8px\">+ Add device here</button>'}
+function dfrm(msg){var h='';if(msg)h=msg;else if(DO)h='<div class=\"card\" style=\"display:flex;flex-wrap:wrap;gap:10px;align-items:end\"><div><div class=\"mut\">Device name</div><input class=\"in\" id=\"dnm\" value=\"MikroTik-'+pad(dn+1)+'\"></div><div><div class=\"mut\">IP address</div><input class=\"in\" id=\"dip\" placeholder=\"10.20.17.1\"></div><div><div class=\"mut\">Model</div><select class=\"in\" id=\"dmd\">'+MD.map(function(m){return '<option>'+m+'</option>'}).join('')+'</select></div><div><div class=\"mut\">Group (agent)</div><select class=\"in\" id=\"dgr\">'+gopts(gdef())+'</select></div><div style=\"flex:1;min-width:240px\"><div class=\"mut\">Connect to topology</div><select class=\"in\" id=\"dat\" style=\"width:100%\">'+nopts(DA)+'</select></div><button class=\"btn go\" data-a=\"dok\">Add device</button><button class=\"btn\" data-a=\"dcx\">Cancel</button><div id=\"der\" style=\"width:100%;color:var(--bad);font-size:12px\"></div></div>';$('dvf').innerHTML=h;if(DO&&$('dip'))$('dip').focus()}
+function drev(){var hi=0,un=0,on=0;DV.forEach(function(d){var c=dcpu(d);if(c>80)hi++;else on++;if(!d.n)un++});
+$('dvk').innerHTML=[['Total devices',DV.length,'var(--tx)'],['Online',on,'var(--ok)'],['High CPU (above 80%)',hi,hi?'var(--bad)':'var(--ok)'],['Not connected to topology',un,un?'var(--wn)':'var(--ok)']].map(function(k){return '<div class=\"card k\"><div class=\"l\">'+k[0]+'</div><div class=\"v\" style=\"color:'+k[2]+'\">'+k[1]+'</div></div>'}).join('');
+$('dvt').innerHTML=[['all','All'],['hi','High CPU'],['un','Not connected']].map(function(f){return '<button class=\"btn '+(DFL==f[0]?'on':'')+'\" data-a=\"df\" data-f=\"'+f[0]+'\">'+f[1]+'</button>'}).join('')+'<button class=\"btn go\" data-a=\"dform\">+ Add device</button>';
+var h='<tr><th>Device</th><th>IP</th><th>Connected to (topology)</th><th>CPU</th><th class=\"n\">Traffic</th><th class=\"n\">Users</th><th>Uptime</th><th>Status</th><th></th></tr>';
+DV.forEach(function(d){var c=dcpu(d);if(DFL=='hi'&&c<=80||DFL=='un'&&d.n)return;
+h+='<tr class=\"'+(DQ==d.id?'fl':'')+'\"><td><b>'+d.name+'</b><div class=\"mut\" style=\"font-size:11.5px\">'+d.m+'</div></td><td>'+d.ip+'</td><td style=\"white-space:nowrap\"><select class=\"in\" data-sel=\"'+d.id+'\" style=\"width:200px\">'+nopts(d.n)+'</select> <button class=\"btn\" data-a=\"map\" data-d=\"'+d.id+'\"'+(d.n?'':' disabled')+'>Map</button></td><td id=\"dc-'+d.id+'\">'+cpuc(c)+'</td><td class=\"n\" id=\"dt-'+d.id+'\">'+(+dtr(d)).toFixed(1)+' Gbps</td><td class=\"n\" id=\"du-'+d.id+'\">'+dus(d)+'</td><td id=\"dp-'+d.id+'\">'+fut(dup(d))+'</td><td id=\"ds-'+d.id+'\">'+stc(c)+'</td><td><button class=\"btn\" data-a=\"drm\" data-d=\"'+d.id+'\">Remove</button></td></tr>'});
+$('dvl').innerHTML=h}
+function dlive(){DV.forEach(function(d){if(d.i==null){d.c=Math.max(8,Math.min(70,d.c+Math.round((rnd()-.5)*4)));d.t=Math.max(.1,d.t+(rnd()-.5)*.1);d.s+=2}});
+if($('v-dev').style.display=='none')return;DV.forEach(function(d){var c=dcpu(d),e=$('dc-'+d.id);if(!e)return;e.innerHTML=cpuc(c);$('dt-'+d.id).textContent=(+dtr(d)).toFixed(1)+' Gbps';$('dp-'+d.id).textContent=fut(dup(d));$('ds-'+d.id).innerHTML=stc(c)})}
+$('v-dev').addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a,d=b.dataset.d?g(DV,b.dataset.d):null;
+if(a=='dform'){DO=true;DA='';dfrm()}else if(a=='dcx'){DO=false;dfrm()}else if(a=='df'){DFL=b.dataset.f;drev()}
+else if(a=='map'){if(d&&d.n){TS=d.n;show('t')}}
+else if(a=='drm'){DV=DV.filter(function(x){return x!=d});drev()}
+else if(a=='dok'){var n=es($('dnm').value.trim()),ip=$('dip').value.trim(),er=function(t){$('der').textContent=t};
+if(!n)return er('Enter a device name.');if(!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)||ip.split('.').some(function(x){return +x>255}))return er('Enter a valid IPv4 address, for example 10.20.17.1');
+var dup2=DV.filter(function(x){return x.ip==ip})[0];if(dup2)return er('This IP is already used by '+dup2.name+'.');
+dn++;var nd2={id:'d'+(++dc2),name:n,ip:ip,m:$('dmd').value,n:$('dat').value,g:$('dgr').value,c:20+Math.round(rnd()*20),t:.5+rnd()*2,u:100+Math.round(rnd()*300),s:60};DV.push(nd2);SG=nd2.g||'all';DO=false;DQ=nd2.id;
+dfrm('<div class=\"card\" style=\"display:flex;align-items:center;gap:10px\"><span class=\"pill ok\">ADDED</span><span><b>'+n+'</b> '+(nd2.n?'is now connected to <b>'+path(nd2.n)+'</b>.':'was added but is not connected to the topology yet. Choose a location in the table.')+'</span><span class=\"sp\"></span>'+(nd2.n?'<button class=\"btn go\" data-a=\"map\" data-d=\"'+nd2.id+'\">View on topology</button>':'')+'</div>');drev();setTimeout(function(){DQ='';drev()},5000)}});
+$('v-dev').addEventListener('change',function(e){var s=e.target.dataset.sel;if(s){g(DV,s).n=e.target.value;drev()}});
+$('v-topo').addEventListener('click',function(e){var b=e.target.closest('[data-a=\"newdev\"]'),r=e.target.closest('[data-d]');if(b){DO=true;DA=TS||'';show('v');dfrm()}else if(r){DQ=r.dataset.d;show('v');setTimeout(function(){DQ='';drev()},5000)}});
+na[1].onclick=function(){show('v')};
+function show(v){$('v-dash').style.display=v=='d'?'':'none';$('v-ddos').style.display=v=='s'?'':'none';$('v-topo').style.display=v=='t'?'':'none';$('v-dev').style.display=v=='v'?'':'none';var m={d:na[0],s:na[4],t:nt,v:na[1]};[].forEach.call(document.querySelectorAll('nav a'),function(a){a.classList.toggle('on',a===m[v])});if(v=='t')trender();if(v=='v')drev()}
+var GR=[{id:'g1',name:'Ali'},{id:'g2',name:'Ahmad'}],SG='all',GA=false,gc=2;
+DV.forEach(function(d,i){if(d.g===undefined)d.g=i<8?'g1':i<14?'g2':''});
+function gdef(){return SG[0]=='g'?SG:''}
+function gcl(c){return c>80?'r':c>65?'w':'g'}
+function gst(ds){var o={g:0,w:0,r:0,cpu:0,tr:0,us:0};ds.forEach(function(d){var c=dcpu(d);o[gcl(c)]++;o.cpu+=c;o.tr+=+dtr(d);o.us+=dus(d)});o.n=ds.length;o.cpu=ds.length?Math.round(o.cpu/ds.length):0;return o}
+function gdv(id){return id=='all'?DV:id=='none'?DV.filter(function(d){return !d.g}):DV.filter(function(d){return d.g==id})}
+function gopts(sel){return '<option value="">Ungrouped</option>'+GR.map(function(x){return '<option value="'+x.id+'"'+(sel==x.id?' selected':'')+'>'+x.name+'</option>'}).join('')}
+function gdot(o){return o.r?'var(--bad)':o.w?'var(--wn)':'var(--ok)'}
+function gside(){var item=function(id,name){var o=gst(gdv(id));return '<div class="gi'+(SG==id?' on':'')+'" data-a="gsel" data-gr="'+id+'"><span class="gd" style="background:'+(o.n?gdot(o):'#3a4b5f')+'"></span><span class="gn">'+name+'</span><span class="gb g">'+o.g+'</span>'+(o.w?'<span class="gb w">'+o.w+'</span>':'')+(o.r?'<span class="gb r">'+o.r+'</span>':'')+'</div>'};
+var h='<div class="ch"><h2>Groups</h2><span class="sp"></span><button class="btn" data-a="gadd">+ Group</button></div>';
+if(GA)h+='<div style="display:flex;gap:6px;margin-bottom:8px"><input class="in" id="gnm" placeholder="Group / agent name" maxlength="24" style="flex:1;min-width:0"><button class="btn go" data-a="gok">Add</button><button class="btn" data-a="gcx">\u2715</button></div>';
+h+=item('all','All devices');GR.forEach(function(x){h+=item(x.id,x.name)});h+=item('none','Ungrouped');h+='<div class="mut" style="font-size:11px;margin-top:8px">Counters: <span style="color:var(--ok)">OK</span> \u00b7 <span style="color:var(--wn)">warning</span> \u00b7 <span style="color:var(--bad)">critical</span></div>';$('dvg').innerHTML=h;if(GA&&$('gnm'))$('gnm').focus()}
+function gsum(){var ds=gdv(SG),o=gst(ds),g0=g(GR,SG),t=SG=='all'?'All devices':SG=='none'?'Ungrouped devices':g0?g0.name:'',st=!o.n?['n','EMPTY']:o.r?['bad','CRITICAL']:o.w?['wn','WARNING']:['ok','HEALTHY'],pc=function(v){return o.n?v/o.n*100:0};
+$('dvs').innerHTML='<div class="card"><div class="ch"><h2 style="font-size:15px">'+t+'</h2><span class="pill '+st[0]+'">'+st[1]+'</span><span class="sp"></span>'+(g0?'<button class="btn st" data-a="gdel">Delete group</button>':'')+'</div><div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#1f2a37;margin:4px 0 10px"><i style="width:'+pc(o.g)+'%;background:var(--ok)"></i><i style="width:'+pc(o.w)+'%;background:var(--wn)"></i><i style="width:'+pc(o.r)+'%;background:var(--bad)"></i></div><div class="kv" style="grid-template-columns:repeat(5,1fr)"><div><span class="mut">Devices</span><b>'+o.n+'</b></div><div><span class="mut">Online</span><b style="color:var(--ok)">'+(o.g+o.w)+'</b></div><div><span class="mut">Warnings</span><b style="color:'+(o.w+o.r?'var(--wn)':'var(--tx)')+'">'+(o.w+o.r)+'</b></div><div><span class="mut">Avg CPU</span><b>'+o.cpu+'%</b></div><div><span class="mut">Traffic</span><b>'+o.tr.toFixed(1)+' Gbps</b></div></div></div>'}
+drev=function(){var hi=0,un=0,on=0;DV.forEach(function(d){var c=dcpu(d);if(c>80)hi++;else on++;if(!d.n)un++});
+$('dvk').innerHTML=[['Total devices',DV.length,'var(--tx)'],['Online',on,'var(--ok)'],['High CPU (above 80%)',hi,hi?'var(--bad)':'var(--ok)'],['Not connected to topology',un,un?'var(--wn)':'var(--ok)']].map(function(k){return '<div class="card k"><div class="l">'+k[0]+'</div><div class="v" style="color:'+k[2]+'">'+k[1]+'</div></div>'}).join('');
+$('dvt').innerHTML=[['all','All'],['hi','High CPU'],['un','Not connected']].map(function(f){return '<button class="btn '+(DFL==f[0]?'on':'')+'" data-a="df" data-f="'+f[0]+'">'+f[1]+'</button>'}).join('')+'<button class="btn go" data-a="dform">+ Add device</button>';
+var h='<tr><th>Device</th><th>IP</th><th>Group</th><th>Connected to (topology)</th><th>CPU</th><th class="n">Traffic</th><th>Uptime</th><th>Status</th><th></th></tr>',k=0;
+gdv(SG).forEach(function(d){var c=dcpu(d);if(DFL=='hi'&&c<=80||DFL=='un'&&d.n)return;k++;
+h+='<tr class="'+(DQ==d.id?'fl':'')+'"><td><b>'+d.name+'</b><div class="mut" style="font-size:11.5px">'+d.m+'</div></td><td>'+d.ip+'</td><td><select class="in" data-gsel="'+d.id+'" style="width:100px">'+gopts(d.g)+'</select></td><td style="white-space:nowrap"><select class="in" data-sel="'+d.id+'" style="width:190px">'+nopts(d.n)+'</select> <button class="btn" data-a="map" data-d="'+d.id+'"'+(d.n?'':' disabled')+'>Map</button></td><td id="dc-'+d.id+'">'+cpuc(c)+'</td><td class="n" id="dt-'+d.id+'">'+(+dtr(d)).toFixed(1)+' Gbps</td><td id="dp-'+d.id+'">'+fut(dup(d))+'</td><td id="ds-'+d.id+'">'+stc(c)+'</td><td><button class="btn" data-a="drm" data-d="'+d.id+'">Remove</button></td></tr>'});
+if(!k)h+='<tr><td colspan="9" class="mut" style="padding:18px 8px">No devices here yet. Use + Add device, or change a device Group in the table.</td></tr>';
+$('dvl').innerHTML=h;gside();gsum()};
+var _dl=dlive;dlive=function(){_dl();if($('v-dev').style.display!='none'){gsum();if(!GA)gside()}};
+$('v-dev').addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
+if(a=='gsel'){SG=b.dataset.gr;drev()}else if(a=='gadd'){GA=true;gside()}else if(a=='gcx'){GA=false;gside()}
+else if(a=='gok'){var n=es($('gnm').value.trim());if(n){var id='g'+(++gc);GR.push({id:id,name:n});SG=id;GA=false;drev()}}
+else if(a=='gdel'){var x=SG;GR=GR.filter(function(q){return q.id!=x});DV.forEach(function(d){if(d.g==x)d.g=''});SG='none';drev()}});
+$('v-dev').addEventListener('change',function(e){var s=e.target.dataset.gsel;if(s){g(DV,s).g=e.target.value;drev()}});
+var _s=step;step=function(){_s();adv()};
+show('v');rr();draw();tick();setInterval(step,2000);
+</script></body></html>

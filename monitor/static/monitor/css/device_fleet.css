@@ -222,4 +222,8 @@
 .tree-action:hover{border-color:var(--blue)}
 .tree-empty{padding:18px;color:var(--muted);font-size:12px}
 .tree-summary .fleet-stat strong{font-size:26px}
+/* Group deletion sits beside "+ Sub-group"; red so it reads as destructive. */
+.tree-delete-form{display:inline;margin:0}
+.tree-action-danger{color:var(--red);border-color:var(--ns-danger-border-2,var(--border))}
+.tree-action-danger:hover{border-color:var(--red);background:var(--ns-danger-surface-1)}
 @media(max-width:760px){.tree-actions{display:none}.tree-counts{display:none}}

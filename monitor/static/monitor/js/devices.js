@@ -337,5 +337,12 @@
                 dialog.showModal();
             });
         });
+        // Deleting a group is irreversible and affects nested groups, so confirm first and say
+        // exactly what will happen. Without JavaScript the form still posts (server untags).
+        document.querySelectorAll('[data-group-delete] button[data-confirm]').forEach(button => {
+            button.addEventListener('click', event => {
+                if (!window.confirm(button.dataset.confirm)) event.preventDefault();
+            });
+        });
     }
 })();

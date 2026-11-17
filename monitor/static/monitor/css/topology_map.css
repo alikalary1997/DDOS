@@ -1,0 +1,36 @@
+/* Topology map: four fixed columns with dotted connectors between real parent/child cards.
+   Shared theme tokens keep this consistent with the rest of NetShield. */
+.topo-map{margin-bottom:18px;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow-x:auto}
+.topo-columns{position:relative;display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));min-width:900px}
+/* The header row is absolutely positioned so the card columns are the only grid flow items.
+   That keeps the SVG overlay's coordinate space identical to where the cards actually sit. */
+.topo-column-heads{position:absolute;top:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));height:34px;margin:0}
+.topo-column-head{display:flex;align-items:center;gap:8px;padding:0 14px;font:600 10px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.topo-column-head em{font-style:normal;border:1px solid var(--border);border-radius:999px;padding:1px 7px;background:var(--surface-2);font-size:10px}
+.topo-column{position:relative;display:flex;flex-direction:column;padding:0 22px;padding-top:34px;z-index:2;pointer-events:none}
+/* Connectors sit between the card layer and the panel: above the panel background so the
+   dotted lines are visible in the gaps, below the cards so they never cross card text. */
+.topo-links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.topo-links path{fill:none;stroke:var(--blue);stroke-width:1.5;stroke-dasharray:3 3;stroke-linecap:round;opacity:.75;vector-effect:non-scaling-stroke}
+
+.topo-card{position:relative;z-index:1;display:grid;pointer-events:auto;grid-template-rows:auto auto auto;row-gap:5px;align-content:center;min-height:84px;padding:12px 14px;margin-bottom:26px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);box-shadow:0 3px 14px var(--ns-shadow-soft-1);transition:border-color .18s,box-shadow .18s;cursor:default}
+.topo-card:hover,.topo-card:focus-visible{border-color:var(--blue);box-shadow:0 6px 18px rgba(0,0,0,.10);outline:none}
+.topo-card-top{display:flex;align-items:center;gap:8px;min-width:0;line-height:1.35}
+.topo-card-top strong{font-size:13px;font-weight:650;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topo-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted);box-shadow:0 0 8px transparent}
+.topo-dot[data-state=online]{background:var(--green);box-shadow:0 0 8px var(--ns-status-glow-1)}
+.topo-dot[data-state=offline]{background:var(--red)}
+.topo-dot[data-state=not-tested]{background:var(--muted)}
+.topo-stat{margin:0;display:flex;align-items:baseline;gap:5px;font-size:12px;color:var(--muted);line-height:1.35;min-height:22px}
+.topo-stat b{font:650 16px/1.25 ui-monospace,Consolas,monospace;color:var(--text);letter-spacing:-.3px}
+.topo-unit{font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap}
+.topo-stat b.topo-nodata{font:600 12px/1.25 "Segoe UI",sans-serif;color:var(--amber)}
+.topo-note{font-size:10px;color:var(--muted);line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topo-site{position:absolute;top:9px;right:10px;font-size:9px;font-weight:600;color:var(--blue);border:1px solid var(--border);border-radius:999px;padding:1px 7px;background:var(--surface)}
+.topo-empty{font-size:11px;color:var(--muted);opacity:.7;padding:8px 0 20px;text-align:center}
+
+.topo-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:11px;color:var(--muted);margin:0 0 22px}
+.topo-legend-item{display:inline-flex;align-items:center;gap:6px}
+.topo-legend-note{color:var(--muted);opacity:.85}
+
+@media(max-width:900px){.topo-columns,.topo-column-heads{min-width:820px}.topo-card-top strong{font-size:12px}}
