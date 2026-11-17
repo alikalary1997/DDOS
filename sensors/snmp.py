@@ -33,6 +33,10 @@ PPP_WALK_RETRIES = 4
 PPP_READ_TIMEOUT = 120
 PPP_REQUEST_TIMEOUT = 8
 PPP_REQUEST_RETRIES = 2
+# Interface discovery on a PPPoE server returns one row per session (a real device had 1,704),
+# so the ifTable walk needs bulk reads and a far higher ceiling than the old 600-row guard.
+INTERFACE_BULK_REPETITIONS = 25
+INTERFACE_WALK_LIMIT = 20000
 
 
 class SNMPError(Exception):
@@ -90,12 +94,43 @@ class Client:
             current = oid
         raise SNMPError("SNMP table exceeds the 600-row discovery limit.")
 
+    async def bulk_walk(self, prefix, repetitions=INTERFACE_BULK_REPETITIONS, limit=INTERFACE_WALK_LIMIT):
+        """Walk a column with GETBULK instead of one GETNEXT per row.
+
+        A PPPoE server exposes one dynamic interface per connected session - a real device
+        returned 1,704 rows, which took 45 s row-by-row and tripped the 600-row guard. Bulk
+        requests fetch many rows at once, so the same table is read well within the request
+        timeout. `maxCalls` lets the walker make as many round-trips as the table needs.
+        """
+        root = tuple(map(int, prefix.split('.')))
+        result = []
+        calls = max(1, limit // max(1, repetitions) + 2)
+        async for error, status, _index, values in bulk_walk_cmd(
+                self.engine, self.auth, self.transport, ContextData(), 0, repetitions,
+                ObjectType(ObjectIdentity(prefix)), lookupMib=False, lexicographicMode=True,
+                maxCalls=calls, ignoreNonIncreasingOid=True):
+            if status or error:
+                raise SNMPError("The device rejected the SNMP read request.")
+            if not values:
+                break
+            for oid, value in values:
+                row = tuple(oid)
+                if row[:len(root)] != root:
+                    return result                # left the subtree: the walk is complete
+                if isinstance(value, (NoSuchObject, NoSuchInstance, EndOfMibView)):
+                    return result
+                result.append((row, value))
+                if len(result) >= limit:
+                    return result[:limit]
+        return result[:limit]
+
     async def uptime(self):
         return number((await self.get(UPTIME))[0], TimeTicks) / 100
 
     async def interfaces(self):
-        names = await self.walk(DESCR)
-        states = dict(await self.walk(STATUS))
+        # PPPoE servers expose a dynamic interface per session, so this table can be large.
+        names = [(row[-1], value) for row, value in await self.bulk_walk(DESCR)]
+        states = {row[-1]: value for row, value in await self.bulk_walk(STATUS)}
         result = []
         for index, name in names:
             if not isinstance(name, OctetString):
