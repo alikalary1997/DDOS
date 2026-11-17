@@ -97,18 +97,28 @@ def _rollup_status(group_ids):
 
 
 def tree_summary_with_status():
-    """Header figures for the Groups page."""
+    """KPI figures for the Devices page (reference's four cards)."""
+    rows = _device_rows()
     groups = Group.objects.count()
-    devices = Device.objects.count()
-    tagged = Device.objects.exclude(group=None).count()
-    return {"groups": groups, "devices": devices, "tagged": tagged, "untagged": devices - tagged}
+    devices = len(rows)
+    return {
+        "groups": groups,
+        "devices": devices,
+        "tagged": sum(1 for row in rows if row["group_key"]),
+        "untagged": sum(1 for row in rows if not row["group_key"]),
+        "online": sum(1 for row in rows if row["status"] == "online"),
+        "high_cpu": sum(1 for row in rows if row["cpu"] is not None and row["cpu"] > 80),
+        "unconnected": sum(1 for row in rows if not row["topology_key"]),
+    }
 
 
 def _device_rows():
     """Every device in the shape the reference's table needs: group, topology, readings."""
     from sensors.presentation import fleet_snapshot
+    from monitor.models import DeviceDDoSProtection
 
     snapshots = fleet_snapshot()
+    protection = dict(DeviceDDoSProtection.objects.values_list("device_id", "enabled"))
     rows = []
     for device in Device.objects.all().order_by("name"):
         sensors = snapshots.get(device.pk, [])
@@ -136,6 +146,8 @@ def _device_rows():
             "users": reading("pppoe", lambda s: s["pppoe_users"]),
             "status": status,
             "status_label": {"online": "ONLINE", "offline": "OFFLINE", "unknown": "NOT TESTED"}[status],
+            # Per-device DDoS Protection flag, toggled from the table.
+            "protection": bool(protection.get(device.pk, False)),
         })
     return rows
 

@@ -66,7 +66,7 @@ class AssignmentLifecycleTests(TestCase):
         self.assertEqual(FirewallSample.objects.get(device=self.a).rows, [{"id": self.other.pk}])
         dashboard = self.client.get(reverse("monitoring_data")).json()
         self.assertEqual([row["id"] for row in dashboard["rules"]], [self.other.pk])
-        devices = self.client.get(reverse("devices")).context["device_rows"]
+        devices = self.client.get(reverse("device_fleet")).context["device_rows"]
         self.assertNotIn(self.ip.address, next(row for row in devices if row["id"] == self.a.pk)["assigned_public_ips"])
         review = AssignmentReview.objects.get()
         self.assertEqual(review.action, "unassign")
@@ -92,7 +92,7 @@ class AssignmentLifecycleTests(TestCase):
         self.assertEqual(row["provisioning_status"], "review_required")
         self.assertIsNone(row["pps"]); self.assertIsNone(row["last_update"])
         self.assertEqual(AssignmentReview.objects.get().rule_references[0]["device_id"], self.a.pk)
-        devices = self.client.get(reverse("devices")).context["device_rows"]
+        devices = self.client.get(reverse("device_fleet")).context["device_rows"]
         self.assertIn(self.ip.address, next(row for row in devices if row["id"] == self.b.pk)["assigned_public_ips"])
 
     def test_unassigned_record_can_be_edited_and_reassigned(self):
@@ -163,11 +163,11 @@ class AssignmentLifecycleTests(TestCase):
         self.assertFalse(AssignmentReview.objects.exists())
 
     def test_device_expanded_actions_are_admin_only_and_credential_free(self):
-        response = self.client.get(reverse("devices"))
+        response = self.client.get(reverse("device_fleet"))
         for url in (self.edit, self.delete, self.unassign):
             self.assertContains(response, url)
         self.client.force_login(self.reader)
-        response = self.client.get(reverse("devices"))
+        response = self.client.get(reverse("device_fleet"))
         for url in (self.edit, self.delete, self.unassign):
             self.assertNotContains(response, url)
         self.assertNotContains(response, self.secret)

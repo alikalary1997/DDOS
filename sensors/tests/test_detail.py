@@ -127,7 +127,7 @@ class SensorDetailTests(TestCase):
 
     def test_devices_page_inspector_links_to_the_detail_view(self):
         """Regression: the Devices page sensor list showed names as plain text."""
-        page = self.client.get(reverse("devices")).content.decode()
+        page = self.client.get(reverse("device_fleet")).content.decode()
         url, _history, _settings = self.urls(self.cpu)
         # The inspector renders one entry per sensor, each linking to its own detail page.
         self.assertIn(f'href="{url}"', page)

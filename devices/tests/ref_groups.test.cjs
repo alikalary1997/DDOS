@@ -38,7 +38,10 @@ function build(devices, sidebar, groupOptions, topologyOptions) {
     };
     const document = {
         readyState: 'complete',
+        cookie: 'csrftoken=test-token',
         getElementById: id => byId[id] || null,
+        // The page script looks up a CSRF token for inline group creation.
+        querySelector: sel => (sel === '[name="csrfmiddlewaretoken"]' ? { value: 'test-token' } : null),
         querySelectorAll: () => [],
         addEventListener() {},
     };

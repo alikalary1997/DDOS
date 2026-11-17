@@ -111,7 +111,8 @@ class LocalAccessTests(TestCase):
         response = resumed.get(reverse("devices"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.wsgi_request.user.pk, self.admin.pk)
-        self.assertContains(response, 'id="addDeviceForm"')
+        # /devices/ is the Groups page; the Add Device form is reachable from it.
+        self.assertContains(response, "data-ref-add-device")
 
     def test_expired_session_requires_login_instead_of_automatic_authentication(self):
         self.sign_in()

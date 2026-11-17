@@ -22,12 +22,14 @@ class ProtectionToggleTests(TestCase):
                                             encrypted_password=encrypt_password("p"))
         self.url = reverse("device_ddos_protection_toggle", args=[self.device.pk])
         self.devices_url = reverse("devices")
+        # The Protection toggle lives on the fleet table, which /devices/ no longer renders.
+        self.fleet_url = reverse("device_fleet")
 
     def state(self):
         return DeviceDDoSProtection.objects.get(device=self.device).enabled
 
     def test_button_renders_disabled_red_by_default(self):
-        page = self.client.get(self.devices_url).content.decode()
+        page = self.client.get(self.fleet_url).content.decode()
         self.assertIn('data-state="disabled"', page)
         self.assertIn("Disabled", page)
 
@@ -39,7 +41,7 @@ class ProtectionToggleTests(TestCase):
 
     def test_enabled_button_is_green_and_shows_enabled(self):
         self.client.post(self.url)
-        html = self.client.get(self.devices_url).content.decode()
+        html = self.client.get(self.fleet_url).content.decode()
         self.assertIn('data-state="enabled"', html)
         self.assertIn("Enabled", html)
         # The submit posts the opposite target value so one click flips it.

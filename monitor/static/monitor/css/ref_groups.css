@@ -1,19 +1,38 @@
-/* Groups page, reproducing the reference design's groups/devices layout. The token values are
-   taken from the reference so spacing, radii and colours match exactly. */
-.ref-groups-page{--ref-side:#0a0e14;--ref-card:#131a23;--ref-line:#222d3a;--ref-tx:#d7dee8;--ref-mut:#7d8a9b;
---ref-in:#4c9be8;--ref-ok:#2fbf71;--ref-wn:#f0a030;--ref-bad:#ef4b4b;
---ref-okb:rgba(47,191,113,.14);--ref-wnb:rgba(240,160,48,.14);--ref-badb:rgba(239,75,75,.15)}
+/* Devices page — reproduces the reference design's Devices screen.
+   Class names and values (.wrap/.ch/.g4/.k/.card/.btn/.gi/.kv/.pill) are taken from the
+   reference file so the layout, spacing and type scale match it exactly. */
 
-/* Page head row: title, muted note, tools on the right. */
-.ref-head{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
-.ref-head h2{font-size:16px;margin:0;font-weight:600}
-.ref-head .mut{font-size:13px}
-.ref-head .sp{flex:1}
+/* Reference palette, scoped to this page so nothing else changes. */
+.ref-groups-page{
+    --ref-side:#0a0e14;--ref-card:#131a23;--ref-line:#222d3a;--ref-tx:#d7dee8;--ref-mut:#7d8a9b;
+    --ref-in:#4c9be8;--ref-out:#8b7fd6;--ref-ok:#2fbf71;--ref-wn:#f0a030;--ref-bad:#ef4b4b;
+    --ref-okb:rgba(47,191,113,.14);--ref-wnb:rgba(240,160,48,.14);--ref-badb:rgba(239,75,75,.15);
+    --ok:var(--ref-ok);--wn:var(--ref-wn);--bad:var(--ref-bad);--in:var(--ref-in);
+    --card:var(--ref-card);--line:var(--ref-line);--tx:var(--ref-tx);--mut:var(--ref-mut);
+    --okb:var(--ref-okb);--wnb:var(--ref-wnb);--badb:var(--ref-badb)}
+
+/* .wrap — the reference's page container. */
+.ref-wrap{padding:18px 22px;display:grid;gap:14px}
+
+/* .ch — heading row. */
+.ref-groups-page .ch{display:flex;align-items:center;gap:10px;margin:0}
+.ref-groups-page .ch h2{font-size:16px;margin:0;font-weight:600}
+.ref-groups-page .ch .mut{font-size:13px}
+.ref-groups-page .ch .sp,.ref-groups-page .sp{flex:1}
 .ref-tools{display:flex;gap:8px}
 
-/* Buttons, matching the reference's .btn family. */
-.ref-groups-page .btn{border:1px solid var(--ref-line);background:#17222f;color:var(--ref-tx);border-radius:5px;
-    padding:5px 11px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+/* .card and .g4 / .k — KPI cards. */
+.ref-groups-page .card{background:var(--ref-card);border:1px solid var(--ref-line);border-radius:7px;
+    padding:14px 16px;transition:border-color .15s}
+.ref-groups-page .card:hover{border-color:#34465a}
+.ref-groups-page .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.ref-groups-page .k{padding:13px 15px}
+.ref-groups-page .k .l{color:var(--ref-mut);font-size:12px}
+.ref-groups-page .k .v{font-size:25px;font-weight:600;margin-top:2px;letter-spacing:-.3px}
+
+/* .btn — the reference's button family. */
+.ref-groups-page .btn{border:1px solid var(--ref-line);background:#17222f;color:var(--ref-tx);
+    border-radius:5px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
 .ref-groups-page .btn:hover{border-color:#3a4b5f}
 .ref-groups-page .btn:focus-visible{outline:2px solid var(--ref-in)}
 .ref-groups-page .btn.go{background:var(--ref-okb);color:var(--ref-ok);border-color:rgba(47,191,113,.4)}
@@ -21,70 +40,132 @@
 .ref-groups-page .btn.on{background:#223245;border-color:var(--ref-in);color:#fff}
 .ref-groups-page .btn:disabled{opacity:.4;cursor:default}
 
-/* KPI cards. */
-.ref-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
-.ref-groups-page .card{background:var(--ref-card);border:1px solid var(--ref-line);border-radius:7px;padding:14px 16px}
-.ref-groups-page .card.k{padding:13px 15px}
-.ref-groups-page .card.k .l{color:var(--ref-mut);font-size:12px}
-.ref-groups-page .card.k .v{font-size:25px;font-weight:600;margin-top:2px;letter-spacing:-.3px}
+/* .in — inputs and selects. */
+.ref-groups-page .in{background:#0d1117;border:1px solid var(--ref-line);color:var(--ref-tx);
+    border-radius:5px;padding:5px 9px;font:inherit;font-size:12.5px}
+.ref-groups-page .in:focus-visible{outline:2px solid var(--ref-in)}
 
-.ref-body{display:grid;grid-template-columns:248px minmax(0,1fr);gap:14px;align-items:start}
-..ref-side{padding:12px 12px 14px;min-width:0}
-.ref-main{display:grid;gap:14px;min-width:0}
+/* Two-column body: 230px sidebar, everything else. */
+.ref-grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start}
+.ref-right{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
 
-/* Group sidebar entries. */
-.ref-groups-page .ch{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.ref-groups-page .ch h2{font-size:14px;margin:0;font-weight:600}
-.ref-groups-page .ch .sp{flex:1}
-.ref-groups-page .gi{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:6px;cursor:pointer;
-    border:1px solid transparent;margin-bottom:3px}
+/* .gi — group sidebar entries. */
+.ref-side{padding:12px 12px 14px;min-width:0}
+.ref-side .ch{margin-bottom:10px}
+.ref-groups-page .gi{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:6px;
+    cursor:pointer;border:1px solid transparent;margin-bottom:3px}
 .ref-groups-page .gi:hover{background:#16202b}
 .ref-groups-page .gi.on{background:#17283a;border-color:var(--ref-in)}
 .ref-groups-page .gd{width:9px;height:9px;border-radius:50%;flex:none}
 .ref-groups-page .gn{flex:1;font-weight:500;font-size:13px;white-space:nowrap}
-.ref-side .gi{gap:6px}
-.ref-side .gi .gb{padding:0 4px;min-width:18px;font-size:10.5px}
-.ref-side .gi-del{flex:none;margin-left:0}
 .ref-groups-page .gb{min-width:20px;text-align:center;border-radius:4px;font-size:11px;font-weight:600;padding:0 5px}
 .ref-groups-page .gb.g{background:var(--ref-okb);color:var(--ref-ok)}
 .ref-groups-page .gb.w{background:var(--ref-wnb);color:var(--ref-wn)}
 .ref-groups-page .gb.r{background:var(--ref-badb);color:var(--ref-bad)}
-.ref-groups-page .gi-del{margin-left:4px;border:0;background:transparent;color:var(--ref-mut);cursor:pointer;
-    font-size:13px;line-height:1;padding:2px 3px;border-radius:4px}
+.ref-groups-page .gi-del{margin-left:4px;border:0;background:transparent;color:var(--ref-mut);
+    cursor:pointer;font-size:13px;line-height:1;padding:2px 3px;border-radius:4px;flex:none}
 .ref-groups-page .gi-del:hover{color:var(--ref-bad);background:var(--ref-badb)}
-.ref-groups-page .mut{color:var(--ref-mut)}
 
-/* Pills and meters. */
-.ref-groups-page .pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:11px;
-    font-size:11.5px;font-weight:500}
+/* Inline create-group row (reference `gadd`). */
+.ref-add-row{display:flex;gap:6px;margin-bottom:8px}
+.ref-add-row .in{flex:1;min-width:0}
+.ref-add-error{color:var(--ref-bad);font-size:11.5px;margin:-4px 0 8px}
+.ref-add-error:empty{display:none}
+
+/* .kv — summary stat grid. */
+.ref-groups-page .kv{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0 0}
+.ref-groups-page .kv div{background:#0f151d;border:1px solid var(--ref-line);border-radius:6px;padding:8px 10px}
+.ref-groups-page .kv span{display:block;font-size:12px}
+.ref-groups-page .kv b{display:block;font-size:17px;font-weight:600}
+
+/* .pill — status pills. */
+.ref-groups-page .pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;
+    border-radius:11px;font-size:11.5px;font-weight:500}
 .ref-groups-page .pill.ok{background:var(--ref-okb);color:var(--ref-ok)}
 .ref-groups-page .pill.wn{background:var(--ref-wnb);color:var(--ref-wn)}
 .ref-groups-page .pill.bad{background:var(--ref-badb);color:var(--ref-bad)}
 .ref-groups-page .pill.n{background:#1c2633;color:var(--ref-mut)}
-.ref-groups-page .kv{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0 0}
-.ref-groups-page .kv div{background:#0f151d;border:1px solid var(--ref-line);border-radius:6px;padding:8px 10px}
-.ref-groups-page .kv b{display:block;font-size:17px;font-weight:600}
 
-/* Devices table, mirroring the reference's row rhythm. */
+/* Protection toggle and Settings link in the table, styled as compact pills. */
+.ref-groups-page .ref-protection{border-radius:11px;padding:3px 11px;font-size:11.5px;font-weight:600}
+.ref-groups-page .ref-protection[data-state=enabled]{color:var(--ref-ok);background:var(--ref-okb);border-color:rgba(47,191,113,.45)}
+.ref-groups-page .ref-protection[data-state=disabled]{color:var(--ref-bad);background:var(--ref-badb);border-color:rgba(239,75,75,.45)}
+.ref-groups-page .ref-protection:disabled{opacity:.6;cursor:wait}
+.ref-groups-page .ref-settings{padding:4px 11px;font-size:12px;text-decoration:none;display:inline-block;white-space:nowrap}
+.ref-groups-page .ref-table td:nth-last-child(3) .pill{padding:2px 8px;font-size:10.5px}
+
+/* Save bar: shown whenever rows have unsaved Group/Topology edits. */
+.ref-savebar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;
+    border:1px solid rgba(240,160,48,.45);background:var(--ref-wnb);color:var(--ref-tx);font-size:13px}
+.ref-savebar[hidden]{display:none}
+.ref-save-error{color:var(--ref-bad);font-size:12px}
+/* A row with unsaved edits is marked so it is obvious what saves. */
+.ref-groups-page .ref-table tr[data-dirty="true"] td{background:rgba(240,160,48,.08)}
+.ref-row-actions{white-space:nowrap}
+.ref-row-actions .btn{padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
+.ref-row-actions .btn+.btn{margin-left:5px}
+
+/* Table, matching the reference's row density. */
 .ref-table-card{padding:6px 8px}
 .ref-table-wrap{overflow-x:auto}
 .ref-groups-page .ref-table{width:100%;border-collapse:collapse;font-size:13px}
-.ref-groups-page .ref-table th{text-align:left;font-weight:500;color:var(--ref-mut);font-size:11.5px;
-    padding:8px;border-bottom:1px solid var(--ref-line);white-space:nowrap}
-.ref-groups-page .ref-table td{padding:8px;border-bottom:1px solid #1a2330;vertical-align:middle}
+.ref-groups-page .ref-table th{text-align:left;color:var(--ref-mut);font-weight:500;font-size:11.5px;
+    padding:8px;border-bottom:1px solid var(--ref-line);white-space:nowrap;background:var(--ref-card)}
+.ref-groups-page .ref-table td{padding:6px 8px;border-bottom:1px solid #1a2330;vertical-align:middle}
 .ref-groups-page .ref-table tr:hover td{background:#16202b}
 .ref-groups-page .ref-table td.n,.ref-groups-page .ref-table th.n{text-align:right}
 .ref-groups-page .ref-table td b{font-weight:600}
 .ref-groups-page .ref-table td .mut{font-size:11.5px}
 .ref-groups-page .ref-table tr.fl td{background:rgba(76,155,232,.14)}
-.ref-groups-page .in{background:#0d1117;border:1px solid var(--ref-line);color:var(--ref-tx);border-radius:5px;
-    padding:5px 9px;font:inherit;font-size:12.5px}
-.ref-groups-page .in:focus-visible{outline:2px solid var(--ref-in)}
-.ref-groups-page .bar{display:inline-block;width:52px;height:5px;background:#1f2a37;border-radius:3px;
-    vertical-align:middle;margin-left:8px;overflow:hidden}
-.ref-groups-page .bar b{display:block;height:100%;border-radius:3px}
+.ref-groups-page .ref-table .in{padding:4px 7px;font-size:12px}
+
+/* .bar — CPU mini meter. */
+.ref-groups-page .bar{display:inline-block;width:46px;height:5px;background:#1f2a37;border-radius:3px;
+    vertical-align:middle;margin-left:7px;overflow:hidden}
+.ref-groups-page .bar b{display:block;height:100%}
+
+/* Inline Add Device form (`#dvf`): a wrapping flex card, labels above inputs. */
+.ref-device-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px}
+.ref-device-form[hidden]{display:none}
+.ref-field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ref-field-sm{max-width:96px}
+.ref-field-grow{flex:1 1 240px;min-width:240px}
+.ref-field .mut{font-size:12px}
+.ref-field input[type=text],.ref-field input[type=password],.ref-field input[type=number],
+.ref-field select,.ref-field textarea{background:#0d1117;border:1px solid var(--ref-line);color:var(--ref-tx);
+    border-radius:5px;padding:5px 9px;font:inherit;font-size:12.5px;min-width:150px;height:30px;width:100%}
+.ref-field select{min-width:150px}
+.ref-field textarea{min-width:100%;height:auto;min-height:52px;resize:vertical;line-height:1.45}
+.ref-field input:focus,.ref-field select:focus,.ref-field textarea:focus{outline:2px solid var(--ref-in)}
+.ref-field-error{color:var(--ref-bad);font-size:11px;max-width:230px}
+.ref-field-desc{flex:1 1 100%;min-width:100%}
+.ref-form-error{flex:1 1 100%;color:var(--ref-bad);font-size:12px;background:var(--ref-badb);
+    border:1px solid rgba(239,75,75,.45);border-radius:5px;padding:7px 10px}
+.ref-form-error ul{margin:0;padding-left:16px}
+.ref-form-actions{display:flex;gap:8px;align-items:flex-end;padding-bottom:1px}
+.ref-form-note{flex:1 1 100%;color:var(--ref-mut);font-size:11px;margin-top:2px}
+/* The inline Edit card reuses the server's own form markup, so neutralise the dialog grid. */
+.ref-device-form .form-grid{display:contents}
+.ref-device-form > label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ref-device-form > label > span{font-size:12px;color:var(--ref-mut)}
+.ref-device-form > label > small{color:var(--ref-mut);font-size:10.5px;line-height:1.4;max-width:200px}
+.ref-device-form > label > input,.ref-device-form > label > select,.ref-device-form > label > textarea{
+    background:#0d1117;border:1px solid var(--ref-line);color:var(--ref-tx);border-radius:5px;
+    padding:5px 9px;font:inherit;font-size:12.5px;min-width:150px;height:30px;width:100%}
+/* Password hints are long; give them room rather than clipping the placeholder. */
+.ref-device-form > label:has(input[type=password]){min-width:210px}
+.ref-device-form > label > textarea{height:auto;min-height:52px;resize:vertical}
+.ref-device-form > label.full-width{flex:1 1 100%;min-width:100%}
+/* An empty error box must not paint the red banner. */
+.ref-form-error:empty{display:none}
+.ref-device-form [data-management-errors]{flex:1 1 100%}
 
 @media(max-width:1100px){
-    .ref-body{grid-template-columns:1fr}
-    .ref-kpis{grid-template-columns:repeat(2,1fr)}
+    .ref-grid{grid-template-columns:1fr}
+    .ref-groups-page .g4{grid-template-columns:repeat(2,1fr)}
+    .ref-groups-page .kv{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:640px){
+    .ref-groups-page .g4,.ref-groups-page .kv{grid-template-columns:1fr 1fr}
+    .ref-ch{flex-wrap:wrap;gap:8px}
 }

@@ -13,7 +13,10 @@ urlpatterns = [
     path("<int:device_id>/monitoring-interface/", views.save_monitoring_interface, name="device_monitoring_interface"),
     path("<int:device_id>/interfaces/", views.monitoring_interfaces, name="device_monitoring_interfaces"),
     path("<int:device_id>/test-connection/", views.test_connection, name="device_test_connection"),
-    path("", views.inventory, name="devices"),
+    # The Devices entry point is the Groups page (reference layout). The old fleet table is
+    # still served at /devices/fleet/ for anything that still links to it.
+    path("", views.tree, name="devices"),
+    path("fleet/", views.inventory, name="device_fleet"),
     path("groups/", views.create_group, name="device_group_add"),
     path("groups/<int:group_id>/delete/", views.delete_group, name="device_group_delete"),
     path("tree/", views.tree, name="device_tree"),

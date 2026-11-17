@@ -129,12 +129,15 @@ class GroupNestingTests(Base):
         self.device("NCS")
         self.group("Limit")
         page = self.client.get(reverse("device_tree")).content.decode()
-        picker = page.split('name="parent"')[1].split("</select>")[0]
-        options = [value for value in
-                   (part.split('"')[0] for part in picker.split('value="')[1:])]
-        self.assertTrue(options)
-        self.assertFalse([value for value in options if value.startswith("d:")])
-        # The fleet's Add/Edit group picker is groups-only too.
+        # The reference's group form asks only for a name, so no parent picker is rendered here.
+        self.assertNotIn('name="parent"', page)
+        # The sidebar (and its "+ Group" control) is rendered client-side from the JSON payload.
+        self.assertIn('id="ref-sidebar"', page)
+        self.assertIn('ref_groups.js', page)
+        # Nesting still cannot involve a device: the model refuses it outright.
+        with self.assertRaises(ValidationError):
+            self.group("Nested").set_parent(self.device("A-Device"))
+        # The device edit form's group picker is groups-only too.
         edit = self.client.get(reverse("device_edit", args=[Device.objects.first().pk])).content.decode()
         group_picker = edit.split('name="edit-group"')[1].split("</select>")[0]
         self.assertNotIn('value="d:', group_picker)

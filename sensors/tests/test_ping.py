@@ -276,6 +276,6 @@ class PingSensorTests(TestCase):
         sensor = self.make()
         SensorSample.objects.create(sensor=sensor, timestamp=timezone.now(), ping_ms=12.5, packet_loss=0.0)
         with patch('sensors.presentation.worker_running', return_value=True):
-            page = self.client.get(reverse('devices'))
+            page = self.client.get(reverse('device_fleet'))
         for value in ('<th scope="col">Ping</th>', 'data-device-sensor="ping"', '12.5 ms', 'Live ping'):
             self.assertContains(page, value)

@@ -200,7 +200,7 @@ class AddDeviceInventoryTests(TestCase):
         self.add()
         device = Device.objects.get()
         with CaptureQueriesContext(connection) as queries:
-            response = self.client.get(reverse("devices"))
+            response = self.client.get(reverse("device_fleet"))
         self.assertEqual(response.context["total_devices"], 1)
         row = response.context["device_rows"][0]
         self.assertEqual(row["name"], device.name)
@@ -232,7 +232,7 @@ class AddDeviceInventoryTests(TestCase):
     def test_inventory_escapes_router_names_and_models(self):
         self.client.force_login(self.admin)
         self.add({**self.payload, "name": "<script>alert(1)</script>"})
-        response = self.client.get(reverse("devices"))
+        response = self.client.get(reverse("device_fleet"))
         self.assertContains(response, "&lt;script&gt;")
         self.assertNotContains(response, "<script>alert(1)</script>")
 

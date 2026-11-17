@@ -1,44 +1,75 @@
 {% extends "monitor/base.html" %}{% load static %}
-{% block title %}Groups | NetShield{% endblock %}
+{% block title %}Devices | NetShield{% endblock %}
 {% block body_class %}devices-page fleet-page tree-page ref-groups-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/ref_groups.css' %}?v=20261118-ref">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script><script src="{% static 'monitor/js/ref_groups.js' %}?v=20261118-ref" defer></script>{% endblock %}
-{% block footer_note %}Groups{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/ref_groups.css' %}?v=20261119-ref">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261119-ref" defer></script><script src="{% static 'monitor/js/ref_groups.js' %}?v=20261119-ref" defer></script>{% endblock %}
+{% block footer_note %}Devices{% endblock %}
 {% block content %}
 {% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
 
-<div class="ref-head">
-    <h2>Devices</h2>
-    <span class="mut">MikroTik routers grouped by owner, and where each connects</span>
-    <span class="sp"></span>
-    <span class="ref-tools">
-        <button type="button" class="btn{% if not active_group or active_group == 'all' %} on{% endif %}" data-ref-filter="all">All</button>
-        <button type="button" class="btn{% if active_group == 'none' %} on{% endif %}" data-ref-filter="un">Not grouped</button>
-        {% if can_add_devices %}<button type="button" class="btn go" data-ref-add-device>+ Add device</button>{% endif %}
-    </span>
-</div>
+<div class="ref-wrap">
+    {# Heading row, as in the reference: title, subtitle, spacer, tools. #}
+    <div class="ch ref-ch">
+        <h2>Devices</h2>
+        <span class="mut ref-ch-note">MikroTik routers and where each one connects in the network</span>
+        <span class="sp"></span>
+        <span class="ref-tools">
+            <button type="button" class="btn on" data-ref-filter="all">All</button>
+            <button type="button" class="btn" data-ref-filter="hi">High CPU</button>
+            <button type="button" class="btn" data-ref-filter="un">Not connected</button>
+            {% if can_add_devices %}<button type="button" class="btn go" data-ref-add-device>+ Add device</button>{% endif %}
+        </span>
+    </div>
 
-<div class="ref-kpis">
-    <div class="card k"><div class="l">Total devices</div><div class="v">{{ tree_summary.devices }}</div></div>
-    <div class="card k"><div class="l">In a group</div><div class="v" style="color:var(--ok)">{{ tree_summary.tagged }}</div></div>
-    <div class="card k"><div class="l">Not grouped</div><div class="v" style="color:{% if tree_summary.untagged %}var(--wn){% else %}var(--ok){% endif %}">{{ tree_summary.untagged }}</div></div>
-    <div class="card k"><div class="l">Groups</div><div class="v">{{ tree_summary.groups }}</div></div>
-</div>
+    {# Four KPI cards, `#dvk`. #}
+    <div class="g4" id="refKpis">
+        <div class="card k"><div class="l">Total devices</div><div class="v">{{ tree_summary.devices }}</div></div>
+        <div class="card k"><div class="l">Online</div><div class="v" style="color:var(--ref-ok)">{{ tree_summary.online }}</div></div>
+        <div class="card k"><div class="l">High CPU (above 80%)</div><div class="v" style="color:{% if tree_summary.high_cpu %}var(--ref-bad){% else %}var(--ref-ok){% endif %}">{{ tree_summary.high_cpu }}</div></div>
+        <div class="card k"><div class="l">Not connected to topology</div><div class="v" style="color:{% if tree_summary.unconnected %}var(--ref-wn){% else %}var(--ref-ok){% endif %}">{{ tree_summary.unconnected }}</div></div>
+    </div>
 
-<div class="ref-body">
-    <aside class="card ref-side" id="refSide" aria-label="Groups"></aside>
-    <div class="ref-main">
-        <div id="refSummary"></div>
-        <div class="card ref-table-card">
-            <div class="ref-table-wrap">
-                <table class="ref-table" id="refTable">
-                    <thead><tr>
-                        <th>Device</th><th>IP</th><th>Group</th><th>Connected to (topology)</th>
-                        <th>CPU</th><th class="n">Traffic</th><th class="n">Users</th><th>Status</th><th></th>
-                    </tr></thead>
-                    <tbody id="refRows"></tbody>
-                </table>
+    {# Inline add-device form, `#dvf`, exactly as the reference lays it out. #}
+    {% if can_add_devices %}<div id="refAddDevice">
+        <form id="addDeviceForm" class="card ref-device-form" method="post" action="{% url 'device_add' %}" autocomplete="off"{% if not open_add_device %} hidden{% endif %}>
+            {% csrf_token %}
+            {% if add_device_form.errors %}<div class="ref-form-error" role="alert"><b>Device was not saved.</b> {{ add_device_form.non_field_errors }} Correct the fields below and enter the password again.</div>{% endif %}
+            <div class="ref-field"><div class="mut">Device name</div>{{ add_device_form.name }}{% if add_device_form.name.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.name.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">IP address</div>{{ add_device_form.management_ip }}{% if add_device_form.management_ip.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.management_ip.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field ref-field-sm"><div class="mut">API port</div>{{ add_device_form.api_port }}{% if add_device_form.api_port.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.api_port.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">API-SSL</div>{{ add_device_form.use_ssl }}</div>
+            <div class="ref-field"><div class="mut">User</div>{{ add_device_form.username }}{% if add_device_form.username.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.username.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">Password</div>{{ add_device_form.password }}{% if add_device_form.password.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.password.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">Interface</div>{{ add_device_form.incoming_monitoring_interface }}{% if add_device_form.incoming_monitoring_interface.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.incoming_monitoring_interface.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">Group (agent)</div>{{ add_device_form.group }}{% if add_device_form.group.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.group.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field ref-field-grow"><div class="mut">Connect to topology</div>{{ add_device_form.topology_parent }}{% if add_device_form.topology_parent.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.topology_parent.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-form-actions"><button class="btn go" type="submit" id="saveDeviceButton">Add device</button><button class="btn" type="button" id="cancelDeviceDialog">Cancel</button></div>
+            <div class="ref-field ref-field-desc"><div class="mut">Description</div>{{ add_device_form.description }}</div>
+            <div class="ref-form-note">Credentials are stored encrypted. Saving does not test the connection or change router configuration.</div>
+        </form>
+    </div>{% endif %}
+
+    {# Inline Edit Device card, filled from the edit form and shown instead of leaving the page. #}
+    {% if can_add_devices %}<div id="refEditDevice" hidden></div>{% endif %}
+
+    {# Groups sidebar + summary + table, `#dvg` / `#dvs` / table. #}
+    <div class="ref-grid">
+        <div class="card ref-side" id="refSide" aria-label="Groups"></div>
+        <div class="ref-right">
+            <div id="refSummary"></div>
+            <div class="ref-savebar" id="refSaveBar" role="status" aria-live="polite" hidden></div>
+            <div class="card ref-table-card">
+                <div class="ref-table-wrap">
+                    <table class="ref-table" id="refTable">
+                        <thead><tr>
+                            <th>Device</th><th>IP</th><th>Group</th><th>Connected to (topology)</th>
+                            <th>CPU</th><th class="n">Traffic</th><th class="n">Users</th><th>Status</th>
+                            <th>Protection</th><th>Settings</th><th></th>
+                        </tr></thead>
+                        <tbody id="refRows"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -47,20 +78,6 @@
 
 {% block dialogs %}
 {% if can_add_devices %}
-<dialog id="addGroupDialog" class="device-dialog" aria-labelledby="addGroupTitle">
-    <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="addGroupTitle">New Group</h2></div><button class="icon-button" type="button" data-close-group aria-label="Close New Group">&times;</button></div>
-    <p class="dialog-description">A label devices can be tagged with. Groups nest under other groups, or sit at top level.</p>
-    <form method="post" action="{% url 'device_group_add' %}" autocomplete="off">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="tree">
-        <div class="form-grid">
-            <label for="treeGroupName"><span>Group name</span><input id="treeGroupName" type="text" name="group_name" maxlength="120" required placeholder="e.g. Ahmad"></label>
-            <label for="treeGroupParent"><span>Parent</span><select id="treeGroupParent" name="parent">{% for key, label in parent_choices %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
-        </div>
-        <div class="dialog-footer"><span></span><button type="button" class="secondary-button" data-close-group>Cancel</button><button type="submit" class="primary-button">Create</button></div>
-    </form>
-</dialog>
-
 <dialog id="refDeleteGroupDialog" class="device-dialog" aria-labelledby="refDeleteGroupTitle">
     <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="refDeleteGroupTitle">Delete Group</h2></div><button class="icon-button" type="button" data-close-group-delete aria-label="Close Delete Group">&times;</button></div>
     <p>Delete the group <strong name="group_label">this group</strong>?</p>
@@ -75,5 +92,5 @@
 {{ sidebar_json|json_script:"ref-sidebar" }}
 {{ group_options|json_script:"ref-group-options" }}
 {{ topology_options|json_script:"ref-topology-options" }}
-<script id="ref-config" type="application/json">{"canAdd": {{ can_add_devices|yesno:"true,false" }}, "canDelete": {{ can_add_devices|yesno:"true,false" }}}</script>
+<script id="ref-config" type="application/json">{"canAdd": {{ can_add_devices|yesno:"true,false" }}, "canDelete": {{ can_add_devices|yesno:"true,false" }}, "groupCreateUrl": "{% url 'device_group_add' %}"}</script>
 {% endblock %}

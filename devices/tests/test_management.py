@@ -39,7 +39,7 @@ class DeviceManagementTests(TestCase):
             self.assertNotIn(secret, response.content.decode())
 
     def test_actions_and_prefilled_edit_form_never_display_password(self):
-        page = self.client.get(reverse("devices"))
+        page = self.client.get(reverse("device_fleet"))
         self.assertContains(page, self.edit); self.assertContains(page, self.delete)
         self.assertContains(page, "Add Sensor")
         self.assertNotContains(page, "Test Connection")
@@ -183,9 +183,9 @@ class DeviceManagementTests(TestCase):
         client.force_login(self.reader)
         for url in (self.edit, self.delete):
             self.assertEqual(client.get(url).status_code, 403)
-        page = client.get(reverse("devices"))
+        page = client.get(reverse("device_fleet"))
         self.assertNotContains(page, self.edit); self.assertNotContains(page, self.delete)
-        client.force_login(self.admin); client.get(reverse("devices"))
+        client.force_login(self.admin); client.get(reverse("device_fleet"))
         token = client.cookies["csrftoken"].value
         for url, payload in ((self.edit, self.payload), (self.delete, {"confirm": "yes"})):
             self.assertEqual(client.post(url, payload).status_code, 403)
@@ -213,7 +213,7 @@ class DeviceManagementTests(TestCase):
 
     def test_fleet_rows_expose_edit_and_delete_in_both_views(self):
         """Regression: the fleet lost every Edit/Delete entry point."""
-        page = self.client.get(reverse("devices")).content.decode()
+        page = self.client.get(reverse("device_fleet")).content.decode()
         actions = page.split('<td class="noc-card-actions fleet-actions"', 1)[1]
         self.assertIn(f'href="{self.edit}" data-manage-device="{self.device.pk}"', actions)
         self.assertIn(f'href="{self.delete}" data-manage-device="{self.device.pk}"', actions)

@@ -86,7 +86,7 @@ class SensorTests(TestCase):
     def test_device_fleet_shows_sensor_values_without_snmp_requests(self):
         SensorSample.objects.create(sensor=self.sensor, timestamp=timezone.now(), in_mbps=1.5, out_mbps=0, uptime_seconds=90)
         with patch('sensors.snmp.read') as probe:
-            page = self.client.get(reverse('devices'))
+            page = self.client.get(reverse('device_fleet'))
             response = self.client.get(reverse('device_sensor_data'))
         probe.assert_not_called()
         self.assertContains(page, 'data-device-add-sensor')

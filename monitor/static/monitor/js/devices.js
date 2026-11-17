@@ -2,26 +2,39 @@
     "use strict";
     const dialog = document.getElementById("addDeviceDialog");
     const form = document.getElementById("addDeviceForm");
+    // The Add Device form is rendered inline (reference layout) and revealed on demand.
+    const inline = form && !dialog ? form.closest("#refAddDevice") : null;
     let opener = null;
-    if (dialog && form) {
-        document.querySelectorAll("[data-open-device]").forEach((button) => {
+    const openForm = () => {
+        if (dialog) { dialog.showModal(); return; }
+        if (form) { form.hidden = false; form.querySelector('[name="name"]')?.focus(); }
+    };
+    const closeForm = () => {
+        if (dialog) { dialog.close(); return; }
+        if (form) form.hidden = true;
+    };
+    if ((dialog || inline) && form) {
+        document.querySelectorAll("[data-open-device], [data-ref-add-device]").forEach((button) => {
             button.disabled = false;
             button.addEventListener("click", () => {
                 opener = button;
                 form.querySelectorAll('[role="alert"]').forEach((alert) => alert.remove());
                 form.reset();
                 form.querySelector('[name="password"]').value = "";
-                dialog.showModal();
+                openForm();
             });
         });
-        document.getElementById("closeDeviceDialog").addEventListener("click", () => dialog.close());
-        document.getElementById("cancelDeviceDialog").addEventListener("click", () => dialog.close());
-        dialog.addEventListener("close", () => {
+        document.getElementById("closeDeviceDialog")?.addEventListener("click", closeForm);
+        document.getElementById("cancelDeviceDialog")?.addEventListener("click", () => {
+            closeForm();
+            opener?.focus();
+        });
+        dialog?.addEventListener("close", () => {
             form.reset();
             form.querySelector('[name="password"]').value = "";
             opener?.focus();
         });
-        dialog.addEventListener("click", (event) => {
+        dialog?.addEventListener("click", (event) => {
             if (event.target !== dialog) return;
             const bounds = dialog.getBoundingClientRect();
             if (event.clientX < bounds.left || event.clientX > bounds.right ||
@@ -31,9 +44,9 @@
         form.addEventListener("submit", () => {
             const save = document.getElementById("saveDeviceButton");
             save.disabled = true;
-            save.textContent = "Saving…";
+            save.textContent = "Saving\u2026";
         });
-        if (dialog.dataset.hasErrors === "true") {
+        if (dialog && dialog.dataset.hasErrors === "true") {
             // Upgrade the server-rendered open dialog to a modal without losing errors.
             dialog.removeAttribute("open");
             dialog.showModal();
@@ -61,9 +74,10 @@
         });
         noMatches.hidden = rows.length === 0 || visible > 0;
     }
-    search.addEventListener("input", filterRows);
-    status.addEventListener("change", filterRows);
-    type.addEventListener("change", filterRows);
+    // The Groups page has its own toolbar; these filters only exist on the fleet table.
+    search?.addEventListener("input", filterRows);
+    status?.addEventListener("change", filterRows);
+    type?.addEventListener("change", filterRows);
     raw?.addEventListener("change", filterRows);
     group?.addEventListener("change", filterRows);
     const groupDialog = document.getElementById("addGroupDialog");

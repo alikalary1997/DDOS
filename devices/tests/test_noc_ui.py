@@ -22,7 +22,7 @@ class DeviceNOCUITests(TestCase):
 
     def test_grid_matrix_inspector_and_actions_use_real_rows_without_router_calls(self):
         with patch("routeros_api.RouterOsApiPool") as pool:
-            response = self.client.get(reverse("devices"))
+            response = self.client.get(reverse("device_fleet"))
         pool.assert_not_called()
         self.assertContains(response, f'data-inspect-device="{self.device.pk}"', count=1)
         self.assertContains(response, f'aria-label="Settings for {self.device.name}"')
@@ -40,13 +40,13 @@ class DeviceNOCUITests(TestCase):
     def test_real_zero_metrics_and_failed_snapshots(self):
         Device.objects.filter(pk=self.device.pk).update(last_connection_test=timezone.now(),
             last_connection_test_succeeded=True, cpu_usage=0, total_memory=1024, free_memory=1024)
-        response = self.client.get(reverse("devices"))
+        response = self.client.get(reverse("device_fleet"))
         row = response.context["device_rows"][0]
         self.assertEqual(row["cpu_display"], "0%")
         self.assertEqual(row["ram_usage_percent"], 0)
         self.assertContains(response, "Last Test Successful")
         Device.objects.filter(pk=self.device.pk).update(last_connection_test_succeeded=False)
-        row = self.client.get(reverse("devices")).context["device_rows"][0]
+        row = self.client.get(reverse("device_fleet")).context["device_rows"][0]
         self.assertEqual(row["cpu_display"], "Not available")
         self.assertIsNone(row["ram_usage_percent"])
 
@@ -54,7 +54,7 @@ class DeviceNOCUITests(TestCase):
         Device.objects.filter(pk=self.device.pk).update(raw_preflight_message="Device configuration changed. Validate again.")
         reader = get_user_model().objects.create_user(username="noc-reader")
         self.client.force_login(reader)
-        response = self.client.get(reverse("devices"))
+        response = self.client.get(reverse("device_fleet"))
         self.assertContains(response, "Needs Revalidation")
         self.assertNotContains(response, 'data-test-connection')
         self.assertNotContains(response, reverse("device_delete", args=[self.device.pk]))
