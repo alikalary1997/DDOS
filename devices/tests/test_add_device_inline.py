@@ -37,10 +37,30 @@ class AddDeviceInlineFormTests(TestCase):
 
     def test_form_offers_every_required_field(self):
         html = self.page()
-        for field in ("name", "management_ip", "api_port", "use_ssl", "username", "password",
-                      "incoming_monitoring_interface", "group", "topology_parent", "description"):
+        for field in ("name", "management_ip", "device_type", "api_port", "use_ssl", "username",
+                      "password", "incoming_monitoring_interface", "group", "topology_parent",
+                      "description"):
             with self.subTest(field=field):
                 self.assertIn(f'name="{field}"', html)
+
+    def test_device_type_is_a_required_select_with_real_choices(self):
+        # It is required by the form, so it must be present or the save fails validation.
+        form = self.page().split('id="addDeviceForm"')[1]
+        marker = form.find('name="device_type"')
+        self.assertGreaterEqual(marker, 0, "Device type must be offered")
+        snippet = form[marker:marker + 400]
+        for choice in ("MikroTik", "Cisco", "Other"):
+            self.assertIn(choice, snippet)
+
+    def test_adding_a_device_records_the_chosen_device_type(self):
+        self.client.post(reverse("device_add"), {
+            "name": "Cisco-Core", "management_ip": "10.55.1.1", "device_type": "cisco",
+            "api_port": "8729", "use_ssl": "true", "username": "api", "password": "secret123",
+            "incoming_monitoring_interface": "", "group": "", "topology_parent": "",
+            "description": "",
+        })
+        device = Device.objects.get(name="Cisco-Core")
+        self.assertEqual(device.device_type, "cisco")
 
     def test_model_field_is_not_offered(self):
         self.assertNotIn('name="model"', self.page())
