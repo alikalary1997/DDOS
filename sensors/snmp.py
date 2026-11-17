@@ -21,6 +21,11 @@ DISCONTINUITY = "1.3.6.1.2.1.31.1.1.1.19"
 # MikroTik enterprise table of active PPP/PPPoE sessions. Verified against real devices:
 # every binding is <root>.<column>.<session index>, so one row = one active session.
 PPP_TABLE = "1.3.6.1.4.1.14988.1.1.14.1.1"
+# Column 1 enumerates every session exactly once. Walking the whole table repeats each session
+# across all its columns (111,869 bindings / 109 s on a 1,617-session device) for no gain.
+PPP_COLUMN = PPP_TABLE + ".1"
+# Allow the bulk walker as many round-trips as the column needs; it stops at the table edge.
+PPP_MAX_CALLS = 100000
 # A real 218-session device returned ~14,283 bindings; keep generous headroom.
 PPP_BINDING_LIMIT = 200000
 # Larger GETBULK batches cut round-trips. Measured on a 218-session RouterOS device:
@@ -145,32 +150,31 @@ class Client:
     async def pppoe_users(self):
         """Count active PPP/PPPoE sessions in the MikroTik PPP table.
 
-        PPP tables can be large: a real device returned 14,283 bindings (207 sessions) and
-        needed ~25 s, which is longer than a single request timeout window and longer than
-        the read budget used by scalar sensors. Two things keep that reliable:
+        Only column 1 is walked. It enumerates every session (one row per session), while the
+        full table repeats every session across all of its columns: on a real 1,617-session
+        device the whole table was 111,869 bindings and took 109 s, whereas column 1 alone
+        returned the same count in about 1.3 s. That difference is what made Detect PPPoE
+        appear to hang past the read budget.
 
-        * the walk is resumed from the last OID we saw whenever a request times out, so a
-          mid-table timeout costs one retry instead of failing the whole reading; and
-        * an empty (but readable) table counts as zero sessions, which is a real reading.
-
-        Only an unrecoverable SNMP failure raises SNMPError.
+        An empty (but readable) table counts as zero sessions, which is a real reading. Only an
+        unrecoverable SNMP failure raises SNMPError.
         """
-        root = tuple(map(int, PPP_TABLE.split('.')))
-        indexes, bindings = set(), 0
-        cursor, stalls = None, 0
+        root = tuple(map(int, PPP_COLUMN.split('.')))
+        indexes = set()
+        bindings = 0
         # Some RouterOS builds reject large GETBULK batches; fall back once, then keep it.
         repetitions = PPP_BULK_REPETITIONS
         degraded = False
         while True:
-            start = PPP_TABLE if cursor is None else cursor
             advanced = False
             failed = False
             async for error, status, _index, values in bulk_walk_cmd(
                     self.engine, self.auth, self.transport, ContextData(), 0, repetitions,
-                    ObjectType(ObjectIdentity(start)), lookupMib=False, lexicographicMode=False):
+                    ObjectType(ObjectIdentity(PPP_COLUMN)), lookupMib=False, lexicographicMode=True,
+                    maxCalls=PPP_MAX_CALLS, ignoreNonIncreasingOid=True):
                 if status:
                     if not degraded and repetitions > PPP_BULK_REPETITIONS_FALLBACK:
-                        # This build rejected the batch size: resume from the same point, smaller.
+                        # This build rejected the batch size: retry with a smaller batch.
                         degraded, repetitions = True, PPP_BULK_REPETITIONS_FALLBACK
                         break
                     raise SNMPError("The device rejected the SNMP read request.")
@@ -178,32 +182,27 @@ class Client:
                     failed = True
                     break
                 if not values:
-                    return len(indexes)        # answered, but the table is exhausted
+                    return len(indexes)        # answered, but the column is exhausted
                 for oid, _value in values:
                     row = tuple(oid)
                     if row[:len(root)] != root:
-                        return len(indexes)        # left the table: the walk is complete
+                        return len(indexes)        # left the column: the walk is complete
                     advanced = True
                     bindings += 1
                     if bindings > PPP_BINDING_LIMIT:
                         raise SNMPError("The PPP session table exceeds the discovery limit.")
-                    suffix = row[len(root):]
-                    # <root>.<column>.<session index>; column 1 enumerates every session.
-                    if len(suffix) == 2 and suffix[0] == 1:
-                        indexes.add(suffix[1])
-                    cursor = '.'.join(map(str, row))
+                    indexes.add(row[len(root):])
             else:
-                return len(indexes)                # generator finished cleanly: table exhausted
+                return len(indexes)                # generator finished cleanly: column exhausted
             if not failed:
-                continue                           # progressed: resume from the cursor
+                continue                           # progressed or degraded: run again
             if advanced:
-                stalls = 0                         # timed out mid-table: resume where we stopped
-                continue
-            stalls += 1                            # timed out with no progress: retry, bounded
-            if stalls > PPP_WALK_RETRIES:
-                raise SNMPError(
-                    "The PPP session table could not be read. The device stopped "
-                    "responding part-way through the SNMP walk.")
+                continue                           # timed out mid-column: the retry resumes
+            raise SNMPError(
+                "The PPP session table could not be read. The device stopped "
+                "responding part-way through the SNMP walk.")
+
+            
 
     async def sample(self, sensor):
         uptime = await self.uptime()

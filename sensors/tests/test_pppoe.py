@@ -15,15 +15,17 @@ from devices.models import Device
 from devices.services.credentials import encrypt_password
 from sensors.models import Sensor, SensorRuntime, SNMPProfile
 from sensors.polling import Poller
-from sensors.snmp import Client, PPP_TABLE, SNMPError
+from sensors.snmp import Client, PPP_COLUMN, SNMPError
 from sensors import snmp
 
-ROOT = tuple(map(int, PPP_TABLE.split(".")))
+# The counter walks column 1 only, which enumerates every session once.
+ROOT = tuple(map(int, PPP_COLUMN.split(".")))
 
 
 def binding(column, index, value=0):
-    """One real table binding: <root>.<column>.<session index>."""
-    return (ROOT + (column, index), value)
+    """One binding in the walked column: <root>.<session index>;
+    `column` is kept in the signature so call sites read the same as before."""
+    return (ROOT + (index,), value)
 
 
 class FakeWalk:
@@ -34,12 +36,18 @@ class FakeWalk:
         self.error = error
         self.reject_above = reject_above
         self.repetitions = []
+        self.started_at = None
 
     def __call__(self, *args, **kwargs):
         bindings, error = self.bindings, self.error
-        # maxRepetitions is the 6th positional argument.
+        # maxRepetitions is the 6th positional argument; the target OID is the 7th.
         repetitions = args[5]
         self.repetitions.append(repetitions)
+        if self.started_at is None and len(args) > 6:
+            try:
+                self.started_at = str(args[6][0])
+            except Exception:
+                self.started_at = None
         rejected = self.reject_above is not None and repetitions > self.reject_above
 
         async def stream():
@@ -69,10 +77,24 @@ class PppoeCountTests(TestCase):
         return asyncio.run(go())
 
     def test_count_is_the_number_of_distinct_sessions(self):
-        # 3 sessions x 3 columns = 9 bindings -> 3 users (rows, not bindings).
-        rows = [binding(col, idx) for idx in (1, 2, 3) for col in (1, 2, 11)]
+        # Column 1 lists each session once, so 3 rows means 3 users.
+        rows = [binding(1, idx) for idx in (1, 2, 3)]
         with patch("sensors.snmp.bulk_walk_cmd", new=FakeWalk(rows)):
             self.assertEqual(self.count(), 3)
+
+    def test_only_column_one_is_walked(self):
+        # Walking the whole table repeats every session across all columns: a real device
+        # produced 111,869 bindings (109 s) for 1,617 sessions, versus 1.3 s for column 1.
+        # Detect PPPoE appeared to hang because of that. Pin the narrowed walk.
+        self.assertTrue(snmp.PPP_COLUMN.endswith(".1"))
+        walk = FakeWalk([binding(1, 1), binding(1, 2)])
+        with patch("sensors.snmp.bulk_walk_cmd", new=walk):
+            self.assertEqual(self.count(), 2)
+        # The walk must be rooted at the column, not the table: assert on the code's constant.
+        import inspect
+        body = inspect.getsource(Client.pppoe_users)
+        self.assertIn("PPP_COLUMN", body)
+        self.assertNotIn("PPP_TABLE", body, "the whole table is no longer walked")
 
     def test_an_empty_table_is_a_real_zero(self):
         with patch("sensors.snmp.bulk_walk_cmd", new=FakeWalk([])):
@@ -87,7 +109,7 @@ class PppoeCountTests(TestCase):
     def test_a_rejected_batch_size_retries_smaller_instead_of_failing(self):
         # Some RouterOS builds refuse large GETBULK batches. That is not a sensor failure:
         # fall back to the conservative size and still return the real count.
-        rows = [binding(col, idx) for idx in (1, 2) for col in (1, 11)]
+        rows = [binding(1, idx) for idx in (1, 2)]
         walk = FakeWalk(rows, reject_above=snmp.PPP_BULK_REPETITIONS_FALLBACK)
         with patch("sensors.snmp.bulk_walk_cmd", new=walk):
             self.assertEqual(self.count(), 2)
