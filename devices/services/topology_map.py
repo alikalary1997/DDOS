@@ -24,6 +24,7 @@ LEVELS = (
     ("pppoe", "PPPoE Servers"),
     ("tower", "Towers"),
 )
+LEVELS_INDEX = {key: index for index, (key, _label) in enumerate(LEVELS)}
 
 
 def _level_key(depth, device=None):
@@ -151,14 +152,61 @@ def _stats(node, subtree):
     return ("Site", None, "", "No data")
 
 
-# Card geometry, mirrored in CSS (.topo-card) so SVG lines meet the real boxes.
-CARD_HEIGHT = 84
-GAP = 26
-TOP = 34
+# Canvas geometry, mirroring the reference design: four fixed columns, row-based vertical flow.
+NODE_WIDTH = 156
+NODE_HEIGHT = 52
+ROW_HEIGHT = 64
+COLUMN_X = (10, 210, 410, 610)
+HEADER_HEIGHT = 30
+CANVAS_WIDTH = 776
+
+
+def _assign_rows(ordered, children_of):
+    """Row index per device, with each parent centred on its children (reference `lay()`).
+
+    Leaves are numbered first, top to bottom, so the canvas stays compact. Parents are then
+    placed at the midpoint of their children's rows, which keeps every fan-out symmetrical
+    regardless of how deep or lopsided the chain is.
+    """
+    rows = {}
+    cursor = 0
+
+    # Pass 1: leaves take successive rows in document order.
+    for node in ordered:
+        kids = [child for child in children_of.get(node.device.pk, []) if child.device.pk != node.device.pk]
+        if not kids:
+            rows[node.device.pk] = cursor
+            cursor += 1
+
+    # Pass 2: resolve parents deepest-first so a child's row is always known.
+    def resolve(node, seen):
+        if node.device.pk in rows:
+            return rows[node.device.pk]
+        kids = [child for child in children_of.get(node.device.pk, [])
+                if child.device.pk not in seen and child.device.pk != node.device.pk]
+        if not kids:
+            rows[node.device.pk] = cursor
+            return rows[node.device.pk]
+        placed = [resolve(child, seen | {child.device.pk}) for child in kids]
+        rows[node.device.pk] = (min(placed) + max(placed)) / 2
+        return rows[node.device.pk]
+
+    for node in ordered:
+        resolve(node, frozenset({node.device.pk}))
+    return rows
+
+
+def _device_state(device):
+    tested = device.last_connection_test_succeeded
+    if device.last_connection_test is None or tested is None:
+        return "not-tested"
+    if not device.enabled:
+        return "offline"
+    return "online" if tested else "offline"
 
 
 def build_map():
-    """Columns of cards plus the connector paths between parent and child cards."""
+    """Nodes laid out in four columns plus the connector curves between them."""
     ordered = _build_chain()
     descendants = {node.device.pk: [] for node in ordered}
 
@@ -177,60 +225,56 @@ def build_map():
         if node.depth == 0:
             collect(node, frozenset({node.device.pk}))
 
-    columns = {key: [] for key, _label in LEVELS}
+    children_of = {node.device.pk: list(node.children) for node in ordered}
+    rows = _assign_rows(ordered, children_of)
+    row_count = max(rows.values(), default=0) + 1
+    height = HEADER_HEIGHT + row_count * ROW_HEIGHT
+
+    nodes = []
     for node in ordered:
-        columns[node.level].append(node)
+        subtree = descendants[node.device.pk]
+        label, value, unit, note = _stats(node, subtree)
+        site_group = 1 + sum(1 for n in subtree if n.level == "tower")
+        nodes.append({
+            "key": node.device.pk, "name": node.device.name,
+            "ip": str(node.device.management_ip), "state": _device_state(node.device),
+            "level": node.level, "label": label, "value": value, "unit": unit, "note": note,
+            "x": COLUMN_X[LEVELS_INDEX[node.level]],
+            "y": round(HEADER_HEIGHT + rows[node.device.pk] * ROW_HEIGHT),
+            "w": NODE_WIDTH, "h": NODE_HEIGHT,
+            "summary": _summary(node, value, unit),
+            "site_count": site_group if node.level == "tower" and site_group > 1 else 0,
+        })
 
-    # Rows are assigned per column; the tallest column sets the canvas height.
-    positions = {}
-    for key, items in columns.items():
-        for index, node in enumerate(items):
-            positions[node.device.pk] = (key, index)
-
-    tallest = max((len(items) for items in columns.values()), default=0)
-    height = TOP + tallest * (CARD_HEIGHT + GAP) + GAP
-
-    rendered = {}
-    for key, items in columns.items():
-        rendered[key] = []
-        for index, node in enumerate(items):
-            subtree = descendants[node.device.pk]
-            label, value, unit, note = _stats(node, subtree)
-            tested = node.device.last_connection_test_succeeded
-            if node.device.last_connection_test is None or tested is None:
-                state = "not-tested"
-            elif not node.device.enabled:
-                state = "offline"
-            else:
-                state = "online" if tested else "offline"
-            site_group = 1 + sum(1 for n in subtree if n.level == "tower")
-            rendered[key].append({
-                "key": node.device.pk, "name": node.device.name,
-                "ip": str(node.device.management_ip), "state": state,
-                "label": label, "value": value, "unit": unit, "note": note,
-                "column": list(columns).index(key), "row": index,
-                "site_count": site_group if node.level == "tower" and site_group > 1 else 0,
-            })
-
-    # Connector: parent's right edge -> child's left edge, drawn as a cubic curve.
+    by_key = {node["key"]: node for node in nodes}
     links = []
     for node in ordered:
         for child in node.children:
-            if child.device.pk not in positions or node.device.pk not in positions:
+            parent_node, child_node = by_key.get(node.device.pk), by_key.get(child.device.pk)
+            if not parent_node or not child_node:
                 continue
-            parent_column, parent_row = positions[node.device.pk]
-            child_column, child_row = positions[child.device.pk]
-            # Trace the straight row each card sits on across its column slot.
             links.append({
                 "id": f"{node.device.pk}-{child.device.pk}",
-                "from_column": list(columns).index(parent_column),
-                "to_column": list(columns).index(child_column),
-                "from_index": round(TOP + parent_row * (CARD_HEIGHT + GAP) + CARD_HEIGHT / 2),
-                "to_index": round(TOP + child_row * (CARD_HEIGHT + GAP) + CARD_HEIGHT / 2),
+                "from": node.device.pk, "to": child.device.pk,
+                "x1": parent_node["x"] + NODE_WIDTH, "y1": parent_node["y"] + NODE_HEIGHT / 2,
+                "x2": child_node["x"], "y2": child_node["y"] + NODE_HEIGHT / 2,
             })
 
     return {
-        "columns": [{"key": key, "label": label, "cards": rendered[key]} for key, label in LEVELS],
-        "links": links, "height": height, "card_height": CARD_HEIGHT,
-        "total": len(ordered), "core_count": len(columns["core"]),
+        "nodes": nodes, "links": links, "height": height,
+        "width": CANVAS_WIDTH, "node_width": NODE_WIDTH, "node_height": NODE_HEIGHT,
+        "header_height": HEADER_HEIGHT, "row_height": ROW_HEIGHT,
+        "columns": [
+            {"key": key, "label": label, "x": COLUMN_X[index],
+             "count": sum(1 for node in nodes if node["level"] == key)}
+            for index, (key, label) in enumerate(LEVELS)
+        ],
+        "total": len(ordered), "core_count": sum(1 for node in nodes if node["level"] == "core"),
     }
+
+
+def _summary(node, value, unit):
+    """One short line under the node name, as in the reference cards."""
+    if value is None:
+        return "No data"
+    return f"{value} {unit}".strip()

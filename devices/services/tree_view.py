@@ -57,9 +57,129 @@ def _row(group, depth, children, direct):
         # Recursive: everything in this branch, including nested sub-groups.
         "group_count": len(subtree) - 1,
         "device_count": device_count,
+        "status": _rollup_status(subtree),
         # Plain-language delete confirmation, so the impact is visible before it is undone.
         "delete_warning": _delete_warning(device_count, len(subtree) - 1),
     }
+
+
+def device_status(device):
+    """One status vocabulary for group rollups, matching the fleet's online/offline rules."""
+    tested = device.last_connection_test_succeeded
+    if device.last_connection_test is None or tested is None:
+        return "unknown"
+    if not device.enabled:
+        return "offline"
+    return "online" if tested else "offline"
+
+
+def _rollup_status(group_ids):
+    """Worst status across a branch, plus a count per status (reference-style badges)."""
+    counts = {"online": 0, "offline": 0, "unknown": 0}
+    for status in Device.objects.filter(group_id__in=group_ids).values_list(
+            "last_connection_test", "last_connection_test_succeeded", "enabled"):
+        tested_at, succeeded, enabled = status
+        if tested_at is None or succeeded is None:
+            counts["unknown"] += 1
+        elif not enabled or not succeeded:
+            counts["offline"] += 1
+        else:
+            counts["online"] += 1
+    if counts["offline"]:
+        tone = "critical"
+    elif counts["unknown"]:
+        tone = "warning"
+    elif counts["online"]:
+        tone = "healthy"
+    else:
+        tone = "empty"
+    return {"counts": counts, "tone": tone, "total": sum(counts.values())}
+
+
+def tree_summary_with_status():
+    """Header figures for the Groups page."""
+    groups = Group.objects.count()
+    devices = Device.objects.count()
+    tagged = Device.objects.exclude(group=None).count()
+    return {"groups": groups, "devices": devices, "tagged": tagged, "untagged": devices - tagged}
+
+
+def _device_rows():
+    """Every device in the shape the reference's table needs: group, topology, readings."""
+    from sensors.presentation import fleet_snapshot
+
+    snapshots = fleet_snapshot()
+    rows = []
+    for device in Device.objects.all().order_by("name"):
+        sensors = snapshots.get(device.pk, [])
+        # Only a live/valid sensor contributes a reading; otherwise the cell shows no data.
+        def reading(kind, pick):
+            for sensor in sensors:
+                if sensor["kind"] == kind and sensor.get("has_reading"):
+                    value = pick(sensor)
+                    if value is not None:
+                        return value
+            return None
+
+        traffic = reading("traffic", lambda s: (s["in_mbps"] or 0) + (s["out_mbps"] or 0))
+        status = device_status(device)
+        rows.append({
+            "id": device.pk,
+            "name": device.name,
+            "ip": str(device.management_ip),
+            "model": device.model or dict(Device.DeviceType.choices).get(device.device_type, ""),
+            "group_key": f"g:{device.group_id}" if device.group_id else "",
+            "topology_key": f"d:{device.topology_parent_id}" if device.topology_parent_id else "",
+            # Readings are None when no fresh sample exists; the template shows an em dash.
+            "cpu": reading("cpu", lambda s: s["cpu"]),
+            "traffic_mbps": round(traffic, 2) if traffic is not None else None,
+            "users": reading("pppoe", lambda s: s["pppoe_users"]),
+            "status": status,
+            "status_label": {"online": "ONLINE", "offline": "OFFLINE", "unknown": "NOT TESTED"}[status],
+        })
+    return rows
+
+
+def _group_options(groups):
+    """"Ungrouped" plus every group, for the inline group select on each row."""
+    return [{"key": "", "label": "Ungrouped"}] + [
+        {"key": f"g:{group.pk}", "label": group.name} for group in groups]
+
+
+def _topology_options(devices, names):
+    """"Not connected" plus every device except this one, matching the reference picker."""
+    return [{"key": f"d:{device.pk}", "label": names.get(device.pk, device.name)} for device in devices]
+
+
+def build_group_page():
+    """Data for the reference-style Groups page: sidebar groups, summary and device rows."""
+    groups = list(Group.objects.all().order_by("name"))
+    devices = _device_rows()
+    names = {device.pk: device.name for device in Device.objects.all()}
+
+    # Sidebar entries mirror the reference: All devices, each group, then Ungrouped.
+    sidebar = [{"key": "all", "label": "All devices", "counts": _status_counts(devices)}]
+    for group in groups:
+        tagged = [row for row in devices if row["group_key"] == f"g:{group.pk}"]
+        sidebar.append({"key": f"g:{group.pk}", "label": group.name, "counts": _status_counts(tagged)})
+    untagged = [row for row in devices if not row["group_key"]]
+    sidebar.append({"key": "none", "label": "Ungrouped", "counts": _status_counts(untagged)})
+
+    return {
+        "groups": [{"key": f"g:{g.pk}", "name": g.name, "pk": g.pk} for g in groups],
+        "devices_json": devices,
+        "sidebar_json": sidebar,
+        "group_options": _group_options(groups),
+        "topology_options": _topology_options(Device.objects.all().order_by("name"), names),
+        "tree_summary": tree_summary_with_status(),
+    }
+
+
+def _status_counts(rows):
+    counts = {"online": 0, "offline": 0, "unknown": 0}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return counts
 
 
 def _delete_warning(devices, subgroups):

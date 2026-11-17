@@ -118,10 +118,15 @@ class GroupDeleteTests(TestCase):
         limit = self.group("Limit-1", core)
         self.device("Leaf", group=limit)
         html = self.client.get(reverse("device_tree")).content.decode()
-        self.assertIn("data-group-delete", html)
-        self.assertIn("will be untagged and kept in inventory", html)
+        # The delete confirmation lives in a dialog and is opened from the group sidebar.
+        self.assertIn("refDeleteGroupDialog", html)
+        self.assertIn("Devices are kept", html)
         self.assertIn("cannot be undone", html)
-        # The row's own warning names the real numbers.
+        # The sidebar is rendered client-side from JSON (as in the reference), so the group list
+        # is asserted through the payload the script consumes.
+        self.assertIn('"label": "Core"', html)
+        self.assertIn('ref_groups.js', html)
+        # The service still computes a row-level warning with the real numbers.
         row = build_tree()[0]
         self.assertIn("1 device will be untagged", row["delete_warning"])
         self.assertIn("1 nested sub-group will be removed", row["delete_warning"])

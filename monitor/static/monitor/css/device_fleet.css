@@ -226,4 +226,17 @@
 .tree-delete-form{display:inline;margin:0}
 .tree-action-danger{color:var(--red);border-color:var(--ns-danger-border-2,var(--border))}
 .tree-action-danger:hover{border-color:var(--red);background:var(--ns-danger-surface-1)}
+/* Status dot per group branch: worst state inside it (reference-style). */
+.tree-status-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted);display:inline-block}
+.tree-status-dot[data-tone=healthy]{background:var(--green);box-shadow:0 0 8px var(--ns-status-glow-1)}
+.tree-status-dot[data-tone=warning]{background:var(--amber)}
+.tree-status-dot[data-tone=critical]{background:var(--red)}
+.tree-status-dot[data-tone=empty]{background:#3a4b5f}
+.tree-pill.ok{color:var(--green);border-color:var(--ns-success-border-1,var(--border));background:var(--ns-success-surface-1,var(--surface-2))}
+.tree-pill.wn{color:var(--amber);border-color:var(--ns-warning-border-1,var(--border));background:var(--ns-warning-surface-1,var(--surface-2))}
+.tree-pill.bad{color:var(--red);border-color:var(--ns-danger-border-2,var(--border));background:var(--ns-danger-surface-1,var(--surface-2))}
+/* Two-column Groups page: tree on the left, legend on the right. */
+.tree-layout .tree-panel{min-width:0}
+.tree-legend .tmap-detail dt{display:flex;align-items:center;gap:7px}
+.tree-summary .fleet-stat strong.attention{color:var(--amber)}
 @media(max-width:760px){.tree-actions{display:none}.tree-counts{display:none}}

@@ -2,44 +2,55 @@
 {% block title %}Topology Map | NetShield{% endblock %}
 {% block body_class %}devices-page fleet-page topology-map-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261117-map">{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261117-svg">{% endblock %}
 {% block footer_note %}Topology map{% endblock %}
 {% block content %}
-<section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology map</h2><p class="muted">Core &rarr; limits &rarr; PPPoE servers &rarr; towers, laid out from the real device chain. Read-only: no changes are made from this page.</p></div>
+<section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology map</h2><p class="muted">Core &rarr; limit servers &rarr; PPPoE servers &rarr; towers, drawn from the real device chain. Read-only: no changes are made from this page.</p></div>
 <div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
 
-<section class="topo-map" aria-label="Network topology map" data-topo-map>
-    <div class="topo-columns">
-        <div class="topo-column-heads" aria-hidden="true">
-            {% for column in topology_map.columns %}<div class="topo-column-head"><span>{{ column.label }}</span><em>{{ column.cards|length }}</em></div>{% endfor %}
+<div class="tmap-layout">
+    <section class="panel tmap-panel" aria-label="Network topology map" data-topo-map>
+        <div class="panel-heading"><div><p class="eyebrow">NETWORK</p><h2>Topology</h2></div>
+            <span class="tmap-live"><span class="pulse-dot small"></span>{{ topology_map.total }} device{{ topology_map.total|pluralize }}</span></div>
+        <div class="tmap-canvas">
+            <svg class="tmap-svg" data-topo-svg viewBox="0 0 {{ topology_map.width }} {{ topology_map.height }}" role="img" aria-label="Device topology: core, limit servers, PPPoE servers and towers">
+                {% for column in topology_map.columns %}
+                <text class="tmap-col" x="{{ column.x }}" y="16">{{ column.label }}<tspan class="tmap-col-count"> {{ column.count }}</tspan></text>
+                {% endfor %}
+                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.x1|add:60 }},{{ link.y1 }} {{ link.x2|add:-60 }},{{ link.y2 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
+                <g class="tmap-nodes">
+                    {% for node in topology_map.nodes %}
+                    <g class="tmap-node" data-node="{{ node.key }}" data-level="{{ node.level }}" data-state="{{ node.state }}" transform="translate({{ node.x }},{{ node.y }})" tabindex="0" role="button" aria-label="{{ node.name }}, {{ node.summary }}">
+                        <rect class="tmap-box" width="{{ node.w }}" height="{{ node.h }}" rx="7"/>
+                        <circle class="tmap-dot" data-state="{{ node.state }}" cx="13" cy="15" r="3.5"/>
+                        <text class="tmap-name" x="23" y="19">{{ node.name }}</text>
+                        <text class="tmap-sum" x="13" y="38">{{ node.summary }}</text>
+                        {% if node.site_count %}<g class="tmap-badge" transform="translate({{ node.w|add:-44 }},6)"><rect width="38" height="14" rx="7"/><text x="19" y="10.5" text-anchor="middle">{{ node.site_count }}</text></g>{% endif %}
+                    </g>
+                    {% endfor %}
+                </g>
+            </svg>
         </div>
-        <svg class="topo-links" data-topo-links viewBox="0 0 1000 {{ topology_map.height }}" preserveAspectRatio="none" aria-hidden="true"></svg>
-        {% for column in topology_map.columns %}
-        <div class="topo-column" data-column="{{ column.key }}">
-            {% for card in column.cards %}
-            <article class="topo-card" data-state="{{ card.state }}" data-topo-card="{{ card.key }}" tabindex="0" title="{{ card.name }} · {{ card.ip }}">
-                <div class="topo-card-top"><span class="topo-dot" data-state="{{ card.state }}"></span><strong>{{ card.name }}</strong></div>
-                {% if card.site_count %}<span class="topo-site">{{ card.site_count }} devices at site</span>{% endif %}
-                <p class="topo-stat">
-                    {% if card.value is not None %}<b>{{ card.value }}</b> <span class="topo-unit">{{ card.unit }}</span>
-                    {% else %}<b class="topo-nodata">No data</b>{% endif %}
-                </p>
-                <small class="topo-note">{{ card.note }}</small>
-            </article>
-            {% empty %}
-            <p class="topo-empty">None in this column</p>
-            {% endfor %}
+        {% if not topology_map.links %}<p class="tmap-note">No device is connected to another yet. Set a device's <strong>Connects to</strong> in its form to build the chain.</p>{% endif %}
+    </section>
+
+    <aside class="panel tmap-inspect" data-topo-inspect aria-live="polite">
+        <div class="panel-heading"><div><p class="eyebrow">DETAIL</p><h2 data-inspect-title>Network overview</h2></div></div>
+        <p class="tmap-hint" data-inspect-hint>Select a node to see what it connects to. This view is read-only.</p>
+        <dl class="tmap-detail" data-inspect-detail hidden></dl>
+        <div class="tmap-kv">
+            <div><span>Core</span><b>{{ topology_map.core_count }}</b></div>
+            <div><span>Devices</span><b>{{ topology_map.total }}</b></div>
         </div>
-        {% endfor %}
-    </div>
-</section>
+    </aside>
+</div>
 
 <p class="topo-legend">
     <span class="topo-legend-item"><i class="topo-dot" data-state="online"></i>Online</span>
     <span class="topo-legend-item"><i class="topo-dot" data-state="offline"></i>Offline / disabled</span>
     <span class="topo-legend-item"><i class="topo-dot" data-state="not-tested"></i>Not tested</span>
-    <span class="topo-legend-note">Cards show stored sensor readings only. "No data" means no fresh reading exists — nothing is estimated.</span>
+    <span class="topo-legend-note">Node figures come from stored sensor readings. "No data" means no fresh reading exists — nothing is estimated.</span>
 </p>
-{{ topology_map.links|json_script:"topo-links-data" }}
-<script src="{% static 'monitor/js/topology_map.js' %}?v=20261117-map" defer></script>
+{{ topology_map.nodes|json_script:"topo-nodes-data" }}
+<script src="{% static 'monitor/js/topology_map.js' %}?v=20261117-svg" defer></script>
 {% endblock %}

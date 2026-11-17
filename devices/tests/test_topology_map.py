@@ -45,15 +45,18 @@ class MapTests(TestCase):
         return sensor
 
     def columns(self, data=None):
+        """Device names grouped by column, read from the node list."""
         data = data or build_map()
-        return {column["key"]: [card["name"] for card in column["cards"]] for column in data["columns"]}
+        grouped = {column["key"]: [] for column in data["columns"]}
+        for node in data["nodes"]:
+            grouped[node["level"]].append(node["name"])
+        return grouped
 
     def card(self, name, data=None):
         data = data or build_map()
-        for column in data["columns"]:
-            for card in column["cards"]:
-                if card["name"] == name:
-                    return card
+        for node in data["nodes"]:
+            if node["name"] == name:
+                return node
         raise AssertionError(f"{name} is not on the map")
 
     def test_full_depth_branch_puts_each_device_in_its_column(self):
@@ -76,10 +79,14 @@ class MapTests(TestCase):
         self.device("Tower-B", limit)
         data = build_map()
         columns = self.columns(data)
-        self.assertEqual(columns["pppoe"], [], "no placeholder card is inserted for the gap")
+        self.assertEqual(columns["pppoe"], [], "no placeholder node is inserted for the gap")
         self.assertEqual(columns["tower"], ["Tower-B"])
-        link = [item for item in data["links"] if item["from_column"] == 1][0]
-        self.assertEqual(link["to_column"], 3, "the connector spans the empty PPPoE column")
+        # The link still spans from the limit across to the tower.
+        link = [item for item in data["links"] if item["from"] == limit.pk][0]
+        limit_node = self.card("Limit-6", data)
+        tower_node = self.card("Tower-B", data)
+        self.assertEqual(link["to"], tower_node["key"])
+        self.assertLess(limit_node["x"], tower_node["x"], "the tower sits in a later column")
 
     def test_any_number_of_devices_per_level(self):
         core = self.device("Core")
@@ -87,12 +94,19 @@ class MapTests(TestCase):
         for limit in limits:
             server = self.device(f"Server-{limit.name}", limit)
             self.sensor(server, kind="pppoe", value=3)
-        columns = self.columns()
+        data = build_map()
+        columns = self.columns(data)
         self.assertEqual(len(columns["core"]), 1)
         self.assertEqual(len(columns["limit"]), 4)
         self.assertEqual(len(columns["pppoe"]), 4)
-        heights = {card["row"] for column in build_map()["columns"] for card in column["cards"]}
-        self.assertTrue(heights, "rows are assigned per column")
+        # Every column is laid out without two nodes sitting on the same row.
+        for column, names in columns.items():
+            ys = [self.card(name, data)["y"] for name in names]
+            self.assertEqual(len(ys), len(set(ys)), f"overlapping nodes in {column}")
+        core_node = self.card("Core", data)
+        child_ys = [self.card(f"Limit-{n}", data)["y"] for n in range(1, 5)]
+        self.assertAlmostEqual(core_node["y"], (min(child_ys) + max(child_ys)) / 2, delta=1,
+                               msg="the core is vertically centred on its limits")
 
     def test_status_colour_reflects_the_device_state(self):
         self.device("Online-Dev", tested=True)
@@ -162,14 +176,15 @@ class MapTests(TestCase):
 
     def test_a_zero_count_is_always_labelled_never_a_bare_number(self):
         core = self.device("NCS")
-        # A limit with no PPPoE servers used to render a lone "0" on its own line.
+        # A limit with no PPPoE servers used to render a lone "0".
         self.device("Limit-6", core)
         html = self.client.get(reverse("device_topology_map")).content.decode()
-        self.assertIn("0</b> <span class=\"topo-unit\">PPPoE servers</span>", html)
-        self.assertNotIn(">0</b>\n", html)
-        for card in [c for col in build_map()["columns"] for c in col["cards"]]:
-            if card["value"] is not None:
-                self.assertTrue(card["unit"], f"{card['name']} shows a number with no unit")
+        self.assertIn("0 PPPoE servers", html, "a zero is always shown with its noun")
+        for node in build_map()["nodes"]:
+            if node["value"] is not None:
+                self.assertTrue(node["unit"], f"{node['name']} shows a number with no unit")
+                self.assertIn(str(node["value"]), node["summary"])
+                self.assertNotEqual(node["summary"].strip(), str(node["value"]), "never a bare number")
 
     def test_map_requires_login(self):
         self.client.logout()

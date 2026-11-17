@@ -1,112 +1,127 @@
-/* Dotted connectors for the topology map.
-   Geometry is read from the real rendered card boxes, so the lines stay correct whatever
-   number of cards each column holds. Nothing here navigates or mutates app state. */
+/* Topology map interaction: select a node to trace its branch and show its details.
+   Purely presentational - nothing here edits or navigates away from the page. */
 (function () {
     'use strict';
 
-    function data() {
-        const node = document.getElementById('topo-links-data');
-        if (!node) return [];
+    function nodes() {
+        const el = document.getElementById('topo-nodes-data');
+        if (!el) return [];
         try {
-            const parsed = JSON.parse(node.textContent || '[]');
+            const parsed = JSON.parse(el.textContent || '[]');
             return Array.isArray(parsed) ? parsed : [];
         } catch (_) {
             return [];
         }
     }
 
-    function draw() {
-        const svg = document.querySelector('[data-topo-links]');
-        const wrap = document.querySelector('[data-topo-map]');
-        const grid = document.querySelector('.topo-columns');
-        if (!svg || !wrap || !grid) return;
+    function start() {
+        const svg = document.querySelector('[data-topo-svg]');
+        const map = document.querySelector('[data-topo-map]');
+        if (!svg || !map) return;
 
-        const links = data();
-        const box = grid.getBoundingClientRect();
-        if (!box.width) return;
+        const byKey = new Map(nodes().map(node => [String(node.key), node]));
+        const nodeEls = Array.from(svg.querySelectorAll('[data-node]'));
+        const linkEls = Array.from(svg.querySelectorAll('.tmap-link'));
+        const panel = document.querySelector('[data-topo-inspect]');
+        const title = panel?.querySelector('[data-inspect-title]');
+        const hint = panel?.querySelector('[data-inspect-hint]');
+        const detail = panel?.querySelector('[data-inspect-detail]');
 
-        svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
-        svg.setAttribute('preserveAspectRatio', 'none');
-        svg.replaceChildren();
-
-        // `data-topo-card` surfaces as dataset.topoCard - the camelCase form is what the DOM
-        // actually exposes, and reading the wrong key silently draws no lines at all.
-        const cards = new Map();
-        grid.querySelectorAll('[data-topo-card]').forEach(card => {
-            const rect = card.getBoundingClientRect();
-            cards.set(String(card.dataset.topoCard), {
-                key: String(card.dataset.topoCard),
-                left: rect.left - box.left,
-                right: rect.right - box.left,
-                middle: rect.top - box.top + rect.height / 2,
-            });
+        // Parent/child adjacency, so a selected branch can be traced in both directions.
+        const parents = new Map(), children = new Map();
+        linkEls.forEach(link => {
+            const from = link.dataset.from, to = link.dataset.to;
+            if (!children.has(from)) children.set(from, []);
+            children.get(from).push(to);
+            parents.set(to, from);
         });
 
-        const ns = 'http://www.w3.org/2000/svg';
-
-        // Group links by parent so a parent with several children shares one stub that leaves
-        // its right edge, then branches to each child. This is the org-chart fan-out shape:
-        // a short horizontal stub, a vertical trunk, then a horizontal run into each child.
-        const byParent = new Map();
-        links.forEach(link => {
-            const [parentKey, childKey] = String(link.id).split('-');
-            const from = cards.get(parentKey), to = cards.get(childKey);
-            if (!from || !to) return;
-            if (to.left <= from.right) return;          // child must sit to the right of the parent
-            if (!byParent.has(parentKey)) byParent.set(parentKey, { from, children: [] });
-            byParent.get(parentKey).children.push(to);
-        });
-
-        const addPath = (d, id) => {
-            const path = document.createElementNS(ns, 'path');
-            path.setAttribute('d', d);
-            if (id) path.setAttribute('data-link', id);
-            svg.appendChild(path);
-            return path;
-        };
-
-        const STUB = 14;   // horizontal distance the shared trunk sits out from the parent
-        byParent.forEach((group, parentKey) => {
-            const { from, children } = group;
-            const startX = from.right;                       // exactly on the card's edge
-            const startY = from.middle;
-            // Nearest child edge drives the trunk position, so even tight gutters get a trunk.
-            const nearestLeft = Math.min(...children.map(child => child.left));
-            const trunkX = Math.min(startX + STUB, startX + (nearestLeft - startX) / 2);
-
-            // Shared stub out of the parent, always drawn edge-first.
-            addPath(`M ${startX} ${startY} L ${trunkX} ${startY}`, `${parentKey}-stub`);
-
-            // The vertical trunk spans from the parent's row to the furthest child's row.
-            const ys = children.map(child => child.middle).concat([startY]);
-            const topY = Math.min(...ys), bottomY = Math.max(...ys);
-            if (bottomY - topY > 0.5) {
-                addPath(`M ${trunkX} ${topY} L ${trunkX} ${bottomY}`, `${parentKey}-trunk`);
+        function branchOf(key) {
+            const branch = new Set([key]);
+            // Walk down through every descendant.
+            const down = [key];
+            while (down.length) {
+                const current = down.pop();
+                (children.get(current) || []).forEach(child => {
+                    if (!branch.has(child)) { branch.add(child); down.push(child); }
+                });
             }
+            // Walk up to the root so the selected node's own path stays highlighted.
+            let up = parents.get(key);
+            const seen = new Set();
+            while (up && !seen.has(up)) { seen.add(up); branch.add(up); up = parents.get(up); }
+            return branch;
+        }
 
-            // One branch per child, running to that child's left edge.
-            children.forEach(child => {
-                addPath(`M ${trunkX} ${child.middle} L ${child.left} ${child.middle}`,
-                        `${parentKey}-${child.key ?? ''}`);
+        function clear() {
+            nodeEls.forEach(el => el.classList.remove('is-selected', 'is-dim'));
+            linkEls.forEach(el => el.classList.remove('is-active', 'is-dim'));
+            if (title) title.textContent = 'Network overview';
+            if (hint) hint.hidden = false;
+            if (detail) { detail.hidden = true; detail.replaceChildren(); }
+        }
+
+        function row(label, value) {
+            const dt = document.createElement('dt');
+            dt.textContent = label;
+            const dd = document.createElement('dd');
+            dd.textContent = value;
+            return [dt, dd];
+        }
+
+        function select(key) {
+            const node = byKey.get(key);
+            if (!node) return;
+            const branch = branchOf(key);
+            nodeEls.forEach(el => {
+                const inBranch = branch.has(el.dataset.node);
+                el.classList.toggle('is-selected', el.dataset.node === key);
+                el.classList.toggle('is-dim', !inBranch);
+            });
+            linkEls.forEach(el => {
+                // A link belongs to the branch when both ends are in it.
+                const inBranch = branch.has(el.dataset.from) && branch.has(el.dataset.to);
+                el.classList.toggle('is-active', inBranch);
+                el.classList.toggle('is-dim', !inBranch);
+            });
+            if (title) title.textContent = node.name;
+            if (hint) hint.hidden = true;
+            if (detail) {
+                detail.hidden = false;
+                detail.replaceChildren(...[
+                    row('Address', node.ip),
+                    row('Role', node.label || node.level),
+                    row('Reading', node.summary || 'No data'),
+                    row('Detail', node.note || 'No data'),
+                    row('Upstream', (parents.get(key) && byKey.get(parents.get(key)))?.name || 'Top level'),
+                    row('Downstream', String((children.get(key) || []).length)),
+                ].flat());
+            }
+            if (panel && window.matchMedia('(max-width: 1100px)').matches) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        nodeEls.forEach(el => {
+            el.addEventListener('click', () => {
+                if (el.classList.contains('is-selected')) clear();
+                else select(el.dataset.node);
+            });
+            el.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    if (el.classList.contains('is-selected')) clear();
+                    else select(el.dataset.node);
+                }
             });
         });
-    }
 
-    let frame = null;
-    function schedule() {
-        if (frame) cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => { frame = null; draw(); });
+        svg.addEventListener('click', event => {
+            if (!event.target.closest('[data-node]')) clear();
+        });
     }
 
     if (typeof document !== 'undefined') {
-        const start = () => {
-            draw();
-            window.addEventListener('resize', schedule);
-            if (typeof ResizeObserver === 'function') {
-                const grid = document.querySelector('.topo-columns');
-                if (grid) new ResizeObserver(schedule).observe(grid);
-            }
-        };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
         else start();
     }

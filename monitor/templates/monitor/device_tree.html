@@ -1,29 +1,48 @@
 {% extends "monitor/base.html" %}{% load static %}
 {% block title %}Groups | NetShield{% endblock %}
-{% block body_class %}devices-page fleet-page tree-page{% endblock %}
+{% block body_class %}devices-page fleet-page tree-page ref-groups-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script>{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/ref_groups.css' %}?v=20261118-ref">{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script><script src="{% static 'monitor/js/ref_groups.js' %}?v=20261118-ref" defer></script>{% endblock %}
 {% block footer_note %}Groups{% endblock %}
 {% block content %}
 {% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
-<section class="page-intro"><div><p class="eyebrow">DEVICE / GROUPS</p><h2>Groups</h2><p class="muted">Labels devices can be tagged with. Groups nest under other groups, to any depth.</p></div>
-<div class="tree-intro-actions"><button type="button" class="secondary-button" data-open-group>+ Group</button><a class="secondary-button" href="{% url 'device_topology' %}">Topology</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
 
-<section class="fleet-summary tree-summary" aria-label="Groups summary">
-    <article class="fleet-stat"><div class="fleet-stat-top"><span>Groups</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10H3Z"/></svg></div><strong data-tree-stat="groups">{{ tree_summary.groups }}</strong><span>Nested groups in total</span></article>
-    <article class="fleet-stat"><div class="fleet-stat-top"><span>Deepest level</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M6 8l6-5 6 5"/></svg></div><strong data-tree-stat="depth">{{ tree_summary.depth }}</strong><span>Nesting levels in use</span></article>
-</section>
+<div class="ref-head">
+    <h2>Devices</h2>
+    <span class="mut">MikroTik routers grouped by owner, and where each connects</span>
+    <span class="sp"></span>
+    <span class="ref-tools">
+        <button type="button" class="btn{% if not active_group or active_group == 'all' %} on{% endif %}" data-ref-filter="all">All</button>
+        <button type="button" class="btn{% if active_group == 'none' %} on{% endif %}" data-ref-filter="un">Not grouped</button>
+        {% if can_add_devices %}<button type="button" class="btn go" data-ref-add-device>+ Add device</button>{% endif %}
+    </span>
+</div>
 
-<section class="panel inventory-panel fleet-panel tree-panel" aria-labelledby="treeTitle">
-    <div class="panel-heading"><div><p class="eyebrow">STRUCTURE</p><h2 id="treeTitle">Group tree</h2></div>
-        <div class="tree-tools"><button type="button" class="secondary-button" data-tree-expand>Expand all</button><button type="button" class="secondary-button" data-tree-collapse>Collapse all</button></div></div>
-    <ul class="tree-outline" id="treeOutline" aria-label="Group tree">
-    {% for row in tree %}{% include "monitor/components/group_row.html" with row=row %}{% empty %}
-        <li class="tree-empty">No groups yet. Use <strong>+ Group</strong> to create one.</li>
-    {% endfor %}
-    </ul>
-</section>
+<div class="ref-kpis">
+    <div class="card k"><div class="l">Total devices</div><div class="v">{{ tree_summary.devices }}</div></div>
+    <div class="card k"><div class="l">In a group</div><div class="v" style="color:var(--ok)">{{ tree_summary.tagged }}</div></div>
+    <div class="card k"><div class="l">Not grouped</div><div class="v" style="color:{% if tree_summary.untagged %}var(--wn){% else %}var(--ok){% endif %}">{{ tree_summary.untagged }}</div></div>
+    <div class="card k"><div class="l">Groups</div><div class="v">{{ tree_summary.groups }}</div></div>
+</div>
+
+<div class="ref-body">
+    <aside class="card ref-side" id="refSide" aria-label="Groups"></aside>
+    <div class="ref-main">
+        <div id="refSummary"></div>
+        <div class="card ref-table-card">
+            <div class="ref-table-wrap">
+                <table class="ref-table" id="refTable">
+                    <thead><tr>
+                        <th>Device</th><th>IP</th><th>Group</th><th>Connected to (topology)</th>
+                        <th>CPU</th><th class="n">Traffic</th><th class="n">Users</th><th>Status</th><th></th>
+                    </tr></thead>
+                    <tbody id="refRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block dialogs %}
@@ -41,5 +60,20 @@
         <div class="dialog-footer"><span></span><button type="button" class="secondary-button" data-close-group>Cancel</button><button type="submit" class="primary-button">Create</button></div>
     </form>
 </dialog>
+
+<dialog id="refDeleteGroupDialog" class="device-dialog" aria-labelledby="refDeleteGroupTitle">
+    <div class="dialog-heading"><div><p class="eyebrow">DEVICE MANAGEMENT</p><h2 id="refDeleteGroupTitle">Delete Group</h2></div><button class="icon-button" type="button" data-close-group-delete aria-label="Close Delete Group">&times;</button></div>
+    <p>Delete the group <strong name="group_label">this group</strong>?</p>
+    <p class="modal-notice"><strong>Devices are kept.</strong> Any device tagged with this group becomes <strong>Ungrouped</strong> and stays in inventory. Nested sub-groups are removed with it. This cannot be undone.</p>
+    <form method="post" action="" data-group-delete>{% csrf_token %}<input type="hidden" name="next" value="tree">
+        <div class="dialog-footer"><button type="button" class="secondary-button" data-close-group-delete>Cancel</button><button type="submit" class="primary-button">Delete Group</button></div>
+    </form>
+</dialog>
 {% endif %}
+
+{{ devices_json|json_script:"ref-devices" }}
+{{ sidebar_json|json_script:"ref-sidebar" }}
+{{ group_options|json_script:"ref-group-options" }}
+{{ topology_options|json_script:"ref-topology-options" }}
+<script id="ref-config" type="application/json">{"canAdd": {{ can_add_devices|yesno:"true,false" }}, "canDelete": {{ can_add_devices|yesno:"true,false" }}}</script>
 {% endblock %}

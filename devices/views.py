@@ -241,11 +241,10 @@ def delete_group(request, group_id):
 @login_required(login_url="device_login")
 @require_GET
 def tree(request):
-    """Groups view: nested group outline (groups only) with recursive counts."""
-    from .services.tree_view import build_tree
+    """Groups view, laid out like the reference: group sidebar, summary and device table."""
+    from .services.tree_view import build_group_page
     context = inventory_context(request)
-    context.update(active_page="devices", tree=build_tree(), tree_summary=tree_summary(),
-                   parent_choices=group_choices())
+    context.update(active_page="devices", parent_choices=group_choices(), **build_group_page())
     return render(request, "monitor/device_tree.html", context)
 
 
