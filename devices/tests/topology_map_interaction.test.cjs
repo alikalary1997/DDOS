@@ -22,8 +22,9 @@ function classesFor(name) {
 function el(name, dataset = {}, children = []) {
     const node = {
         tagName: name, dataset, children, _classes: classesFor(),
-        classList: null, textContent: '', hidden: false,
+        classList: null, textContent: '', innerHTML: '', hidden: false,
         replaceChildren(...kids) { this.children = kids; },
+        append(...kids) { this.children.push(...kids); },
         addEventListener(type, fn) { (this._handlers ||= {})[type] = fn; },
         querySelector(sel) { return findIn(this, sel); },
         querySelectorAll(sel) { return findAllIn(this, sel); },
@@ -111,8 +112,7 @@ test('the detail panel shows the selected device', () => {
     ui.nodeEls[3]._handlers.click();
     assert.strictEqual(ui.title.textContent, 'Kalar');
     assert.strictEqual(ui.detail.hidden, false);
-    assert.ok(ui.detail.children.length >= 8, 'label/value pairs rendered');
-    const text = ui.detail.children.map(child => child.textContent).join(' ');
+    const text = panelMarkup(ui);
     assert.match(text, /Limit-1/, 'reports its upstream');
     assert.match(text, /10\.0\.4\.1/, 'reports its address');
 });
@@ -130,19 +130,72 @@ test('clicking the selected node again clears the highlight', () => {
 test('a leaf node has no downstream children counted', () => {
     const ui = build(NODES, LINKS);
     ui.nodeEls[4]._handlers.click();          // Tower-A
-    const text = ui.detail.children.map(child => child.textContent).join(' ');
-    assert.match(text, /No data/);
+    const text = panelMarkup(ui);
+    assert.match(text, /Downstream 0 devices/);
+    assert.match(text, /Upstream Kalar/);
 });
 
 test('a root reports top level as its upstream', () => {
     const ui = build(NODES, LINKS);
     ui.nodeEls[0]._handlers.click();
-    const text = ui.detail.children.map(child => child.textContent).join(' ');
-    assert.match(text, /Top level/);
+    assert.match(panelMarkup(ui), /Top level/);
 });
 
 test('a graph with no links still renders without throwing', () => {
     const ui = build([NODES[0], NODES[1]], []);
     ui.nodeEls[0]._handlers.click();
     assert.strictEqual(ui.title.textContent, 'NCS');
+});
+
+// --- Sensor readings in the detail panel -------------------------------------
+
+function panelMarkup(ui) {
+    const parts = [];
+    (function walk(node) {
+        if (node.innerHTML) parts.push(node.innerHTML);
+        if (node.textContent) parts.push(node.textContent);
+        node.children?.forEach(walk);
+    })(ui.detail);
+    return parts.join(' ');
+}
+
+const READINGS = [
+    {
+        key: 1, name: 'NCS', ip: '10.0.0.1', level: 'core', label: 'Network throughput', summary: '100 Mbps', note: 'root',
+        readings: { cpu: 82.4, bandwidth_in: 4057.7, bandwidth_out: 3966.96, users: 1700, uptime: '5d 14h 05m 46s', ping_ms: 76.34, packet_loss: 0 },
+    },
+    {
+        key: 2, name: 'Limit-1', ip: '10.0.1.1', level: 'limit', label: 'PPPoE servers', summary: '1', note: 'ok',
+        readings: { cpu: 41, bandwidth_in: 12.5, bandwidth_out: 0.5, users: null, uptime: null, ping_ms: null, packet_loss: null },
+    },
+];
+
+test('the detail panel shows CPU, Bandwidth, Users and Uptime for the selected device', () => {
+    const ui = build(READINGS, [{ from: 1, to: 2 }]);
+    ui.nodeEls[0]._handlers.click();
+    const text = panelMarkup(ui);
+    ['CPU', 'Bandwidth', 'Users', 'Uptime'].forEach(label => assert.match(text, new RegExp(label), `${label} stat is shown`));
+    assert.match(text, /82<em>%/, 'CPU is rounded and unit-suffixed');
+    assert.match(text, /8024\.66<em>Mbps/, 'bandwidth is in + out');
+    assert.match(text, /1700/, 'user count is shown');
+    assert.match(text, /5d 14h 05m 46s/, 'uptime is shown verbatim');
+    assert.match(text, /data-tone="bad"/, 'high CPU uses the bad tone');
+});
+
+test('missing readings render as an em dash, never a fabricated zero', () => {
+    const ui = build(READINGS, [{ from: 1, to: 2 }]);
+    ui.nodeEls[1]._handlers.click();          // Limit-1: no users/uptime sample
+    const text = panelMarkup(ui);
+    assert.match(text, /is-empty[^>]*>\s*<span>Users<\/span><b>\u2014/, 'users shows a dash, not 0');
+    assert.match(text, /is-empty[^>]*>\s*<span>Uptime<\/span><b>\u2014/, 'uptime shows a dash');
+    assert.ok(!/Users<\/span><b>0</.test(text), 'a missing user count is not reported as zero');
+    assert.match(text, /data-tone="ok"/, 'moderate CPU uses the ok tone');
+});
+
+test('a node with no readings at all keeps the panel usable', () => {
+    const ui = build([{ key: 9, name: 'Bare', ip: '10.0.9.1', level: 'tower', label: 'Site', summary: 'No data', note: 'No data' }], []);
+    ui.nodeEls[0]._handlers.click();
+    const text = panelMarkup(ui);
+    assert.match(text, /CPU/);
+    assert.match(text, /10\.0\.9\.1/, 'connection facts still render');
 });

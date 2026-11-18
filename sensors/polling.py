@@ -157,3 +157,15 @@ def format_uptime(seconds):
     hours, rest = divmod(rest, 3600)
     minutes, seconds = divmod(rest, 60)
     return f'{days}d {hours:02}h {minutes:02}m {seconds:02}s'
+
+
+# Sensors on one device are polled over a single serialized connection, and a table walk (PPPoE)
+# can take seconds. A reading is therefore allowed to be older than three intervals without
+# being called stale: on a busy server that margin was being exceeded constantly, so healthy
+# sensors reported "Waiting for data".
+STALE_FLOOR_SECONDS = 120
+
+
+def staleness_window(interval):
+    """How old a reading may be before it is reported as stale."""
+    return max(STALE_FLOOR_SECONDS, (interval or 0) * 3)

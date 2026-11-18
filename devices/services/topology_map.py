@@ -47,7 +47,8 @@ def _level_key(depth, device=None):
 
 def _fresh_cutoff(sensor):
     # Same staleness rule the sensor list and detail pages use.
-    return timedelta(seconds=max(30, sensor.interval * 3))
+    from sensors.polling import staleness_window
+    return timedelta(seconds=staleness_window(sensor.interval))
 
 
 def _latest(device, kind):
@@ -75,6 +76,32 @@ def _traffic_mbps(device):
 def _pppoe_users(device):
     sample = _latest(device, "pppoe")
     return None if sample is None else sample.pppoe_users
+
+
+def _readings(device):
+    """This device's own sensor readings, for the detail panel.
+
+    Every figure is None when that sensor has no fresh valid sample, so the panel can show a
+    dash rather than a stale or invented number.
+    """
+    from sensors.polling import format_uptime
+
+    cpu = _latest(device, "cpu")
+    traffic = _latest(device, "traffic")
+    uptime = _latest(device, "uptime")
+    ping = _latest(device, "ping")
+    pppoe = _latest(device, "pppoe")
+    return {
+        "cpu": cpu.cpu if cpu else None,
+        "bandwidth_in": traffic.in_mbps if traffic else None,
+        "bandwidth_out": traffic.out_mbps if traffic else None,
+        "bandwidth_interface": (traffic.interface_status or "") if traffic else "",
+        "uptime": format_uptime(uptime.uptime_seconds) if uptime else None,
+        "uptime_seconds": uptime.uptime_seconds if uptime else None,
+        "users": pppoe.pppoe_users if pppoe else None,
+        "ping_ms": ping.ping_ms if ping else None,
+        "packet_loss": ping.packet_loss if ping else None,
+    }
 
 
 class _Node:
@@ -152,48 +179,82 @@ def _stats(node, subtree):
     return ("Site", None, "", "No data")
 
 
-# Canvas geometry, mirroring the reference design: four fixed columns, row-based vertical flow.
-NODE_WIDTH = 156
-NODE_HEIGHT = 52
-ROW_HEIGHT = 64
-COLUMN_X = (10, 210, 410, 610)
-HEADER_HEIGHT = 30
-CANVAS_WIDTH = 776
+# Canvas geometry: four fixed stages stacked vertically. Each stage is a full-width band of
+# cards flowing left to right, and connectors drop from the bottom edge of a parent card to the
+# top edge of its children's cards. Cards are wide-but-short so a name and its stat share a row.
+NODE_WIDTH = 260
+NODE_HEIGHT = 62
+NODE_GAP = 18              # horizontal distance between cards in the same row
+ROW_HEIGHT = 78            # vertical pitch inside a stage
+STAGE_HEADER = 26          # stage title band above its first row
+STAGE_GAP = 40             # breathing room between two stages, also where connectors run
+CANVAS_WIDTH = 900
+CANVAS_PADDING = 12
 
 
-def _assign_rows(ordered, children_of):
-    """Row index per device, with each parent centred on its children (reference `lay()`).
+def _assign_columns(ordered, children_of):
+    """Column index per device inside its stage, with each parent centred on its children.
 
-    Leaves are numbered first, top to bottom, so the canvas stays compact. Parents are then
-    placed at the midpoint of their children's rows, which keeps every fan-out symmetrical
-    regardless of how deep or lopsided the chain is.
+    Leaves are numbered first, left to right, so a stage stays compact. Parents are then
+    placed at the midpoint of their children's columns, which keeps every fan-out symmetrical
+    regardless of how many devices a stage holds. Same rule as the horizontal version's rows,
+    just applied along the other axis.
     """
-    rows = {}
+    columns = {}
     cursor = 0
 
-    # Pass 1: leaves take successive rows in document order.
+    # Pass 1: leaves take successive columns in document order.
     for node in ordered:
         kids = [child for child in children_of.get(node.device.pk, []) if child.device.pk != node.device.pk]
         if not kids:
-            rows[node.device.pk] = cursor
+            columns[node.device.pk] = cursor
             cursor += 1
 
-    # Pass 2: resolve parents deepest-first so a child's row is always known.
+    # Pass 2: resolve parents deepest-first so a child's column is always known.
     def resolve(node, seen):
-        if node.device.pk in rows:
-            return rows[node.device.pk]
+        if node.device.pk in columns:
+            return columns[node.device.pk]
         kids = [child for child in children_of.get(node.device.pk, [])
                 if child.device.pk not in seen and child.device.pk != node.device.pk]
         if not kids:
-            rows[node.device.pk] = cursor
-            return rows[node.device.pk]
+            columns[node.device.pk] = cursor
+            return columns[node.device.pk]
         placed = [resolve(child, seen | {child.device.pk}) for child in kids]
-        rows[node.device.pk] = (min(placed) + max(placed)) / 2
-        return rows[node.device.pk]
+        columns[node.device.pk] = (min(placed) + max(placed)) / 2
+        return columns[node.device.pk]
 
     for node in ordered:
         resolve(node, frozenset({node.device.pk}))
-    return rows
+    return columns
+
+
+def _stage_layout(ordered, columns, children_of):
+    """Vertical band per stage: top y, its row count, and each card's rank inside the band.
+
+    Cards fill a stage left to right and wrap onto a new row only when they no longer fit across
+    the canvas, so a branch with a dozen towers grows the TOWERS band instead of shrinking every
+    card. An empty stage keeps its header and a little breathing room.
+    """
+    layout = {}
+    y = CANVAS_PADDING
+    for key, _label in LEVELS:
+        members = [node for node in ordered if node.level == key]
+        per_row = max(1, (CANVAS_WIDTH - CANVAS_PADDING * 2 + NODE_GAP) // (NODE_WIDTH + NODE_GAP))
+        rows_needed = max(1, -(-len(members) // per_row)) if members else 0
+        layout[key] = {
+            "top": y, "per_row": per_row,
+            "height": STAGE_HEADER + rows_needed * ROW_HEIGHT,
+            "rows": rows_needed,
+            "count": len(members),
+            # Rank each card left to right inside its stage; that rank is what decides its
+            # column, so two cards can never be rounded onto the same slot.
+            "rank": {
+                node.device.pk: rank
+                for rank, node in enumerate(sorted(members, key=lambda n: columns[n.device.pk]))
+            },
+        }
+        y += STAGE_HEADER + rows_needed * ROW_HEIGHT + STAGE_GAP
+    return layout, y - STAGE_GAP + CANVAS_PADDING
 
 
 def _device_state(device):
@@ -226,24 +287,36 @@ def build_map():
             collect(node, frozenset({node.device.pk}))
 
     children_of = {node.device.pk: list(node.children) for node in ordered}
-    rows = _assign_rows(ordered, children_of)
-    row_count = max(rows.values(), default=0) + 1
-    height = HEADER_HEIGHT + row_count * ROW_HEIGHT
+    columns = _assign_columns(ordered, children_of)
+    stage, canvas_height = _stage_layout(ordered, columns, children_of)
 
     nodes = []
     for node in ordered:
         subtree = descendants[node.device.pk]
         label, value, unit, note = _stats(node, subtree)
         site_group = 1 + sum(1 for n in subtree if n.level == "tower")
+        band = stage[node.level]
+        rank = band["rank"][node.device.pk]
+        # Centre the whole stage when it fits on a single row.
+        padding = 0
+        if band["rows"] == 1:
+            room = CANVAS_WIDTH - CANVAS_PADDING * 2
+            used_width = band["count"] * NODE_WIDTH + (band["count"] - 1) * NODE_GAP
+            padding = max(0, (room - used_width) // 2)
+        col = rank % band["per_row"]
+        row = rank // band["per_row"]
         nodes.append({
             "key": node.device.pk, "name": node.device.name,
             "ip": str(node.device.management_ip), "state": _device_state(node.device),
             "level": node.level, "label": label, "value": value, "unit": unit, "note": note,
-            "x": COLUMN_X[LEVELS_INDEX[node.level]],
-            "y": round(HEADER_HEIGHT + rows[node.device.pk] * ROW_HEIGHT),
+            "x": CANVAS_PADDING + padding + col * (NODE_WIDTH + NODE_GAP),
+            "y": round(band["top"] + STAGE_HEADER + row * ROW_HEIGHT),
             "w": NODE_WIDTH, "h": NODE_HEIGHT,
             "summary": _summary(node, value, unit),
             "site_count": site_group if node.level == "tower" and site_group > 1 else 0,
+            # Per-device readings for the detail panel.
+            "readings": _readings(node.device),
+            "children_count": len(node.children),
         })
 
     by_key = {node["key"]: node for node in nodes}
@@ -253,21 +326,22 @@ def build_map():
             parent_node, child_node = by_key.get(node.device.pk), by_key.get(child.device.pk)
             if not parent_node or not child_node:
                 continue
+            # Downward flow: out of the parent's bottom edge, into the child's top edge.
             links.append({
                 "id": f"{node.device.pk}-{child.device.pk}",
                 "from": node.device.pk, "to": child.device.pk,
-                "x1": parent_node["x"] + NODE_WIDTH, "y1": parent_node["y"] + NODE_HEIGHT / 2,
-                "x2": child_node["x"], "y2": child_node["y"] + NODE_HEIGHT / 2,
+                "x1": parent_node["x"] + NODE_WIDTH / 2, "y1": parent_node["y"] + NODE_HEIGHT,
+                "x2": child_node["x"] + NODE_WIDTH / 2, "y2": child_node["y"],
             })
 
     return {
-        "nodes": nodes, "links": links, "height": height,
+        "nodes": nodes, "links": links, "height": canvas_height,
         "width": CANVAS_WIDTH, "node_width": NODE_WIDTH, "node_height": NODE_HEIGHT,
-        "header_height": HEADER_HEIGHT, "row_height": ROW_HEIGHT,
         "columns": [
-            {"key": key, "label": label, "x": COLUMN_X[index],
-             "count": sum(1 for node in nodes if node["level"] == key)}
-            for index, (key, label) in enumerate(LEVELS)
+            {"key": key, "label": label,
+             "x": CANVAS_PADDING, "y": stage[key]["top"] + 15,
+             "count": stage[key]["count"]}
+            for key, label in LEVELS
         ],
         "total": len(ordered), "core_count": sum(1 for node in nodes if node["level"] == "core"),
     }

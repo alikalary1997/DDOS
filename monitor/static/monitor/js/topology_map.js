@@ -3,6 +3,9 @@
 (function () {
     'use strict';
 
+    const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ESCAPES[char]);
+
     function nodes() {
         const el = document.getElementById('topo-nodes-data');
         if (!el) return [];
@@ -88,18 +91,58 @@
             if (hint) hint.hidden = true;
             if (detail) {
                 detail.hidden = false;
-                detail.replaceChildren(...[
-                    row('Address', node.ip),
-                    row('Role', node.label || node.level),
-                    row('Reading', node.summary || 'No data'),
-                    row('Detail', node.note || 'No data'),
-                    row('Upstream', (parents.get(key) && byKey.get(parents.get(key)))?.name || 'Top level'),
-                    row('Downstream', String((children.get(key) || []).length)),
-                ].flat());
+                detail.replaceChildren(...renderDetail(node, key));
             }
             if (panel && window.matchMedia('(max-width: 1100px)').matches) {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
+        }
+
+        // Sensor readings belong in a stat grid; the connection facts stay a definition list.
+        const sensorStat = (label, value, unit, tone) => {
+            const empty = value === null || value === undefined;
+            const text = empty ? '—' : (typeof value === 'number' ? formatNumber(value) : value);
+            return `<div class="tmap-stat${empty ? ' is-empty' : ''}"${tone ? ` data-tone="${tone}"` : ''}>
+                <span>${esc(label)}</span><b>${esc(text)}${empty ? '' : `<em>${esc(unit || '')}</em>`}</b></div>`;
+        };
+
+        function formatNumber(value) {
+            // Two decimals for MB/s figures, whole numbers for counts and percentages.
+            return Number.isInteger(value) ? String(value) : value.toFixed(2);
+        }
+
+        function cpuTone(cpu) {
+            if (cpu === null || cpu === undefined) return '';
+            return cpu > 80 ? 'bad' : cpu > 65 ? 'wn' : 'ok';
+        }
+
+        function renderDetail(node, key) {
+            const r = node.readings || {};
+            const bandwidth = (r.bandwidth_in === null || r.bandwidth_in === undefined)
+                ? null : r.bandwidth_in + (r.bandwidth_out || 0);
+            const upstream = (parents.get(key) && byKey.get(parents.get(key)))?.name || 'Top level';
+            const downstream = (children.get(key) || []).length;
+
+            const facts = document.createElement('dl');
+            facts.className = 'tmap-detail';
+            facts.append(...[
+                row('Address', node.ip),
+                row('Role', node.label || node.level),
+                row('Upstream', upstream),
+                row('Downstream', `${downstream} device${downstream === 1 ? '' : 's'}`),
+                r.ping_ms !== null && r.ping_ms !== undefined ? row('Ping', `${r.ping_ms.toFixed(1)} ms · ${r.packet_loss ?? 0}% loss`) : null,
+            ].filter(Boolean).flat());
+
+            const grid = document.createElement('div');
+            grid.className = 'tmap-stats';
+            grid.innerHTML = [
+                sensorStat('CPU', r.cpu === null || r.cpu === undefined ? null : Math.round(r.cpu), '%', cpuTone(r.cpu)),
+                sensorStat('Bandwidth', bandwidth, 'Mbps'),
+                sensorStat('Users', r.users, ''),
+                sensorStat('Uptime', r.uptime, ''),
+            ].join('');
+
+            return [grid, facts];
         }
 
         nodeEls.forEach(el => {

@@ -18,7 +18,7 @@ from devices.services.credentials import encrypt_password, decrypt_password, Cre
 from . import ping, snmp
 from .forms import ProfileForm, AddSensorForm, EditSensorForm
 from .models import SNMPProfile, Sensor, SensorRuntime
-from .polling import authorized, format_uptime
+from .polling import authorized, format_uptime, staleness_window
 from .locking import worker_running
 from .runtime import start_sensors, StartupError
 
@@ -384,7 +384,7 @@ def sensor_status(sensor, gate, running, device_enabled, last):
         return 'Paused'
     if not last:
         return 'Waiting for data'
-    if last.timestamp < timezone.now() - timedelta(seconds=max(30, sensor.interval * 3)):
+    if last.timestamp < timezone.now() - timedelta(seconds=staleness_window(sensor.interval)):
         return 'Stale'
     return 'Active' if last.valid else 'Connection Failed'
 
@@ -512,7 +512,7 @@ def data(request, device_id):
     for sensor in Sensor.objects.filter(device=device):
         samples = list(sensor.samples.order_by('-timestamp', '-pk')[:120])[::-1]
         last = samples[-1] if samples else None
-        fresh = last and last.timestamp >= timezone.now() - timedelta(seconds=max(30, sensor.interval * 3))
+        fresh = last and last.timestamp >= timezone.now() - timedelta(seconds=staleness_window(sensor.interval))
         if not sensor.enabled:
             status = 'Stopped'
         elif not gate or not running or not device.enabled:

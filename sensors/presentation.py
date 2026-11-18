@@ -4,7 +4,7 @@ from django.db.models import F, Window
 from django.db.models.functions import RowNumber
 from django.utils import timezone
 from .models import Sensor, SensorSample
-from .polling import authorized, format_uptime
+from .polling import authorized, format_uptime, staleness_window
 from .locking import worker_running
 
 
@@ -36,7 +36,7 @@ def fleet_snapshot():
                 status = 'Paused'
             elif not sample:
                 status = 'Waiting for data'
-            elif sample.timestamp < now - timedelta(seconds=max(30, sensor['interval'] * 3)):
+            elif sample.timestamp < now - timedelta(seconds=staleness_window(sensor['interval'])):
                 status = 'Stale'
             else:
                 status = 'Active' if sample.valid else 'Connection Failed'

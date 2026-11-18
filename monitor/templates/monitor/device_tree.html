@@ -63,9 +63,14 @@
             <div class="card ref-table-card">
                 <div class="ref-table-wrap">
                     <table class="ref-table" id="refTable">
+                        <colgroup>
+                            <col class="c-device"><col class="c-ip"><col class="c-group"><col class="c-topo">
+                            <col class="c-cpu"><col class="c-traffic"><col class="c-users"><col class="c-uptime">
+                            <col class="c-protect"><col class="c-settings"><col class="c-actions">
+                        </colgroup>
                         <thead><tr>
                             <th>Device</th><th>IP</th><th>Group</th><th>Connected to (topology)</th>
-                            <th>CPU</th><th class="n">Traffic</th><th class="n">Users</th><th>Status</th>
+                            <th>CPU</th><th class="n">Traffic in / out</th><th class="n">Users</th><th>Uptime</th>
                             <th>Protection</th><th>Settings</th><th></th>
                         </tr></thead>
                         <tbody id="refRows"></tbody>

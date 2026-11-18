@@ -57,14 +57,14 @@
         function buildSidebar() {
             const item = entry => {
                 const counts = entry.counts || {};
-                const n = (counts.online || 0) + (counts.unknown || 0) + (counts.offline || 0);
+                const n = (counts.ok || 0) + (counts.wn || 0) + (counts.bad || 0) + (counts.idle || 0);
                 const deletable = CONFIG.canDelete && entry.key.startsWith('g:');
                 return `<div class="gi${state.group === entry.key ? ' on' : ''}" data-ref-group="${esc(entry.key)}">
                     <span class="gd" style="background:${n ? dotColor(counts) : '#3a4b5f'}"></span>
                     <span class="gn">${esc(entry.label)}</span>
-                    <span class="gb g">${counts.online || 0}</span>
-                    ${counts.unknown ? `<span class="gb w">${counts.unknown}</span>` : ''}
-                    ${counts.offline ? `<span class="gb r">${counts.offline}</span>` : ''}
+                    <span class="gb g">${counts.ok || 0}</span>
+                    ${counts.wn ? `<span class="gb w">${counts.wn}</span>` : ''}
+                    ${counts.bad ? `<span class="gb r">${counts.bad}</span>` : ''}
                     ${deletable ? `<button type="button" class="gi-del" data-ref-delete-group="${esc(entry.key)}" title="Delete group ${esc(entry.label)}" aria-label="Delete group ${esc(entry.label)}">&times;</button>` : ''}
                 </div>`;
             };
@@ -79,24 +79,24 @@
                 ${SIDEBAR.filter(e => e.key === 'all').map(item).join('')}
                 ${grouped.map(item).join('')}
                 ${SIDEBAR.filter(e => e.key === 'none').map(item).join('')}
-                <div class="mut" style="font-size:11px;margin-top:8px">Counters: <span style="color:var(--ref-ok)">OK</span> ·
-                    <span style="color:var(--ref-wn)">warning</span> · <span style="color:var(--ref-bad)">critical</span></div>`;
+                <div class="mut" style="font-size:11px;margin-top:8px">Sensors: <span style="color:var(--ref-ok)">reporting</span> ·
+                    <span style="color:var(--ref-wn)">partial</span> · <span style="color:var(--ref-bad)">failed</span></div>`;
             // The reference focuses the new input immediately so you can type straight away.
             if (state.adding) document.getElementById('refGroupName')?.focus();
         }
 
         function dotColor(counts) {
-            return counts.offline ? 'var(--ref-bad)' : counts.unknown ? 'var(--ref-wn)' : 'var(--ref-ok)';
+            return counts.bad ? 'var(--ref-bad)' : counts.wn ? 'var(--ref-wn)' : counts.ok ? 'var(--ref-ok)' : '#3a4b5f';
         }
 
         function buildSummary() {
             const target = document.getElementById('refSummary');
             if (!target) return;
             const list = visible();
-            const counts = { online: 0, unknown: 0, offline: 0 };
+            const counts = { ok: 0, wn: 0, bad: 0, idle: 0 };
             let cpu = 0, cpuN = 0, traffic = 0, users = 0;
             list.forEach(d => {
-                counts[d.status] = (counts[d.status] || 0) + 1;
+                counts[sensorTone(d)] += 1;
                 if (d.cpu !== null && d.cpu !== undefined) { cpu += d.cpu; cpuN++; }
                 if (d.traffic_mbps !== null) traffic += d.traffic_mbps;
                 if (d.users !== null && d.users !== undefined) users += d.users;
@@ -104,8 +104,8 @@
             const label = state.group === 'all' ? 'All devices'
                 : state.group === 'none' ? 'Ungrouped devices'
                 : (SIDEBAR.find(e => e.key === state.group) || {}).label || '';
-            const pill = !list.length ? ['n', 'EMPTY'] : counts.offline ? ['bad', 'CRITICAL']
-                : counts.unknown ? ['wn', 'WARNING'] : ['ok', 'HEALTHY'];
+            const pill = !list.length ? ['n', 'EMPTY'] : counts.bad ? ['bad', 'DEGRADED']
+                : counts.wn ? ['wn', 'WARNING'] : counts.idle === list.length ? ['n', 'NO SENSORS'] : ['ok', 'HEALTHY'];
             const pct = v => (list.length ? (v / list.length) * 100 : 0);
             const groupEntry = state.group.startsWith('g:');
 
@@ -115,14 +115,14 @@
                     ${groupEntry && CONFIG.canDelete ? `<button type="button" class="btn st" data-ref-delete-group="${esc(state.group)}">Delete group</button>` : ''}
                 </div>
                 <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#1f2a37;margin:4px 0 10px">
-                    <i style="width:${pct(counts.online)}%;background:var(--ref-ok)"></i>
-                    <i style="width:${pct(counts.unknown)}%;background:var(--ref-wn)"></i>
-                    <i style="width:${pct(counts.offline)}%;background:var(--ref-bad)"></i>
+                    <i style="width:${pct(counts.ok)}%;background:var(--ref-ok)"></i>
+                    <i style="width:${pct(counts.wn)}%;background:var(--ref-wn)"></i>
+                    <i style="width:${pct(counts.bad)}%;background:var(--ref-bad)"></i>
                 </div>
                 <div class="kv">
                     <div><span class="mut">Devices</span><b>${list.length}</b></div>
-                    <div><span class="mut">Online</span><b style="color:var(--ref-ok)">${counts.online}</b></div>
-                    <div><span class="mut">Warnings</span><b style="color:${counts.unknown + counts.offline ? 'var(--ref-wn)' : 'var(--ref-tx)'}">${counts.unknown + counts.offline}</b></div>
+                    <div><span class="mut">Sensors OK</span><b style="color:var(--ref-ok)">${counts.ok}</b></div>
+                    <div><span class="mut">Attention</span><b style="color:${counts.wn + counts.bad ? 'var(--ref-wn)' : 'var(--ref-tx)'}">${counts.wn + counts.bad}</b></div>
                     <div><span class="mut">Avg CPU</span><b>${cpuN ? Math.round(cpu / cpuN) + '%' : '—'}</b></div>
                     <div><span class="mut">Traffic</span><b>${traffic ? traffic.toFixed(1) + ' Mbps' : '—'}</b></div>
                 </div>
@@ -134,7 +134,8 @@
                 `<option value="${esc(option.key)}"${option.key === selected ? ' selected' : ''}>${esc(option.label)}</option>`).join('');
         }
 
-        // Topology picker: "Not connected" plus every other device.
+        // Topology picker: "Not connected" plus every other device, labelled by name so the
+        // column stays narrow (the IP is already shown in its own column).
         function topologyOptions(device, selected) {
             const value = selected === undefined ? device.topology_key : selected;
             const others = TOPOLOGY_OPTIONS.filter(option => String(option.key) !== `d:${device.id}`);
@@ -161,13 +162,61 @@
         function cpuCell(cpu) {
             if (cpu === null || cpu === undefined) return '<span class="mut">—</span>';
             const colour = cpu > 80 ? 'var(--ref-bad)' : cpu > 65 ? 'var(--ref-wn)' : 'var(--ref-ok)';
-            return `<b style="color:${colour}">${Math.round(cpu)}%</b><span class="bar"><b style="width:${Math.min(100, cpu)}%;background:${colour}"></b></span>`;
+            return `<b style="color:${colour}">${Math.round(cpu)}%</b>`;
+        }
+
+        // Traffic: one compact line, "↓4.21 ↑4.13 Gbps" — two stacked lines overflowed the row.
+        function trafficCell(device) {
+            if (device.traffic_mbps === null || device.traffic_mbps === undefined) {
+                return '<span class="mut">—</span>';
+            }
+            const unit = device.traffic_mbps >= 1000 ? 'G' : 'M';
+            const scale = unit === 'G' ? 1000 : 1;
+            const inbound = device.traffic_in === null ? '—' : (device.traffic_in / scale).toFixed(2);
+            const outbound = device.traffic_out === null ? '—' : (device.traffic_out / scale).toFixed(2);
+            return `<span class="ref-traffic" title="${esc(device.traffic_interface || '')} — in ${inbound} / out ${outbound} ${unit}bps">
+                <span class="in">↓${inbound}</span><span class="out">↑${outbound}</span><em>${unit}</em></span>`;
+        }
+
+        // Uptime is shown compactly: days and hours matter, seconds do not.
+        function uptimeCell(device) {
+            const seconds = device.uptime_seconds;
+            if (seconds === null || seconds === undefined) return '<span class="mut">—</span>';
+            const total = Math.floor(seconds);
+            const days = Math.floor(total / 86400);
+            const hours = Math.floor((total % 86400) / 3600);
+            const minutes = Math.floor((total % 3600) / 60);
+            const label = days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+            // A device that rebooted recently is worth noticing in an uptime column.
+            const tone = days < 1 ? 'ref-uptime fresh' : 'ref-uptime';
+            return `<span class="${tone}" title="${esc(device.uptime || '')}">${label}</span>`;
+        }
+
+        // PPPoE users: a missing count says why, briefly, rather than showing a bare dash.
+        function usersCell(device) {
+            if (device.users !== null && device.users !== undefined) {
+                return `<b>${device.users}</b>`;
+            }
+            if (device.users_state && device.users_state !== 'Active') {
+                const short = device.users_state === 'Connection Failed' ? 'Failed' : device.users_state;
+                return `<span class="ref-noread" title="PPPoE sensor: ${esc(device.users_state)}">${esc(short)}</span>`;
+            }
+            return '<span class="mut">—</span>';
         }
 
         function statusPill(device) {
             if (device.status === 'online') return '<span class="pill ok">ONLINE</span>';
             if (device.status === 'offline') return '<span class="pill bad">OFFLINE</span>';
             return '<span class="pill n">NOT TESTED</span>';
+        }
+
+        // Group health now comes from the device's own sensors: a device is healthy when all of
+        // its enabled sensors are reporting, and critical when any of them has failed.
+        function sensorTone(device) {
+            if (!device.sensor_count) return 'idle';        // no sensors configured
+            if (device.sensor_active === device.sensor_count) return 'ok';
+            if (device.sensor_active === 0) return 'bad';
+            return 'wn';
         }
 
         // Green when enabled, red when disabled (matches the fleet table's toggle).
@@ -232,14 +281,14 @@
                 <tr class="${state.flash === String(device.id) ? 'fl' : ''}" data-ref-row="${device.id}" data-dirty="${dirty}">
                     <td><b>${esc(device.name)}</b><div class="mut">${esc(device.model)}</div></td>
                     <td>${esc(device.ip)}</td>
-                    <td><select class="in" data-ref-set-group="${device.id}" style="min-width:110px">
+                    <td><select class="in" data-ref-set-group="${device.id}">
                         ${options(GROUP_OPTIONS, groupValue)}</select></td>
-                    <td style="white-space:nowrap"><select class="in" data-ref-set-topology="${device.id}" style="min-width:170px">
+                    <td><select class="in" data-ref-set-topology="${device.id}">
                         ${topologyOptions(device, topologyValue)}</select></td>
                     <td>${cpuCell(device.cpu)}</td>
-                    <td class="n">${device.traffic_mbps === null ? '<span class="mut">—</span>' : device.traffic_mbps.toFixed(2) + ' Mbps'}</td>
-                    <td class="n">${device.users === null || device.users === undefined ? '<span class="mut">—</span>' : device.users}</td>
-                    <td>${statusPill(device)}</td>
+                    <td class="n">${trafficCell(device)}</td>
+                    <td class="n">${usersCell(device)}</td>
+                    <td>${uptimeCell(device)}</td>
                     <td>${protectionButton(device)}</td>
                     <td><a class="btn ref-settings" href="/devices/${device.id}/sensors/?view=settings" title="Open settings for ${esc(device.name)}">Settings</a></td>
                     <td class="ref-row-actions">
@@ -380,8 +429,8 @@
                 const subset = entry.key === 'all' ? DEVICES
                     : entry.key === 'none' ? DEVICES.filter(d => !d.group_key)
                     : DEVICES.filter(d => d.group_key === entry.key);
-                const counts = { online: 0, unknown: 0, offline: 0 };
-                subset.forEach(d => { counts[d.status] = (counts[d.status] || 0) + 1; });
+                const counts = { ok: 0, wn: 0, bad: 0, idle: 0 };
+                subset.forEach(d => { counts[sensorTone(d)] += 1; });
                 entry.counts = counts;
             });
             SIDEBAR.forEach(entry => { if (entry.key.startsWith('g:')) entry.label = nameOfGroup(entry.key) || entry.label; });

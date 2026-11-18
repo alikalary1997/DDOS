@@ -81,12 +81,12 @@ class MapTests(TestCase):
         columns = self.columns(data)
         self.assertEqual(columns["pppoe"], [], "no placeholder node is inserted for the gap")
         self.assertEqual(columns["tower"], ["Tower-B"])
-        # The link still spans from the limit across to the tower.
+        # The link still spans from the limit straight down to the tower, skipping the empty stage.
         link = [item for item in data["links"] if item["from"] == limit.pk][0]
         limit_node = self.card("Limit-6", data)
         tower_node = self.card("Tower-B", data)
         self.assertEqual(link["to"], tower_node["key"])
-        self.assertLess(limit_node["x"], tower_node["x"], "the tower sits in a later column")
+        self.assertLess(limit_node["y"], tower_node["y"], "the tower sits in a lower stage")
 
     def test_any_number_of_devices_per_level(self):
         core = self.device("Core")
@@ -99,14 +99,20 @@ class MapTests(TestCase):
         self.assertEqual(len(columns["core"]), 1)
         self.assertEqual(len(columns["limit"]), 4)
         self.assertEqual(len(columns["pppoe"]), 4)
-        # Every column is laid out without two nodes sitting on the same row.
+        # Every stage is laid out without two cards sitting in the same slot.
         for column, names in columns.items():
-            ys = [self.card(name, data)["y"] for name in names]
-            self.assertEqual(len(ys), len(set(ys)), f"overlapping nodes in {column}")
+            slots = [(self.card(name, data)["x"], self.card(name, data)["y"]) for name in names]
+            self.assertEqual(len(slots), len(set(slots)), f"overlapping nodes in {column}")
+
+    def test_a_parent_is_centred_over_its_children_within_one_row(self):
+        core = self.device("Core")
+        for n in range(1, 4):
+            self.device(f"Limit-{n}", core)
+        data = build_map()
         core_node = self.card("Core", data)
-        child_ys = [self.card(f"Limit-{n}", data)["y"] for n in range(1, 5)]
-        self.assertAlmostEqual(core_node["y"], (min(child_ys) + max(child_ys)) / 2, delta=1,
-                               msg="the core is vertically centred on its limits")
+        child_xs = [self.card(f"Limit-{n}", data)["x"] for n in range(1, 4)]
+        centre = (min(child_xs) + max(child_xs)) / 2
+        self.assertAlmostEqual(core_node["x"], centre, delta=1, msg="the core sits over its limits")
 
     def test_status_colour_reflects_the_device_state(self):
         self.device("Online-Dev", tested=True)
@@ -166,6 +172,40 @@ class MapTests(TestCase):
         self.assertEqual(self.card("NCS")["note"], "1 limits below")
         self.assertEqual(self.card("Limit-1")["value"], 1, "one PPPoE server below the limit")
         self.assertEqual(self.card("Kalar")["value"], 2, "two towers below the PPPoE server")
+
+    def test_stages_are_stacked_vertically_in_chain_order(self):
+        """The map flows top to bottom, so each stage sits below the one before it."""
+        core = self.device("NCS")
+        limit = self.device("Limit-1", core)
+        server = self.device("Kalar", limit)
+        self.sensor(server, kind="pppoe", value=4)
+        self.device("Tower-A", server)
+        data = build_map()
+        order = [column["key"] for column in data["columns"]]
+        self.assertEqual(order, ["core", "limit", "pppoe", "tower"])
+        tops = [column["y"] for column in data["columns"]]
+        self.assertEqual(tops, sorted(tops), "stage headers run downwards")
+        self.assertEqual(len({column["x"] for column in data["columns"]}), 1,
+                         "all stages start at the same left edge")
+        # Each device sits below its parent and its connector runs downwards.
+        self.assertLess(self.card("NCS", data)["y"], self.card("Limit-1", data)["y"])
+        self.assertLess(self.card("Limit-1", data)["y"], self.card("Kalar", data)["y"])
+        self.assertLess(self.card("Kalar", data)["y"], self.card("Tower-A", data)["y"])
+        for link in data["links"]:
+            self.assertLess(link["y1"], link["y2"], "connectors leave the bottom edge")
+
+    def test_cards_never_overlap_even_in_a_wide_stage(self):
+        core = self.device("Core")
+        limit = self.device("Limit-1", core)
+        for index in range(12):
+            self.device(f"Tower-{index:02d}", limit)
+        data = build_map()
+        boxes = [(n["x"], n["y"], n["w"], n["h"]) for n in data["nodes"]]
+        for index, first in enumerate(boxes):
+            for second in boxes[index + 1:]:
+                overlaps = (first[0] < second[0] + second[2] and second[0] < first[0] + first[2]
+                            and first[1] < second[1] + second[3] and second[1] < first[1] + first[3])
+                self.assertFalse(overlaps, "two cards are drawn on top of each other")
 
     def test_map_page_renders_four_fixed_columns_in_order(self):
         self.device("NCS")

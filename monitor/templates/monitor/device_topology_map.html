@@ -5,8 +5,7 @@
 <link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261117-svg">{% endblock %}
 {% block footer_note %}Topology map{% endblock %}
 {% block content %}
-<section class="page-intro"><div><p class="eyebrow">DEVICE / TOPOLOGY</p><h2>Topology map</h2><p class="muted">Core &rarr; limit servers &rarr; PPPoE servers &rarr; towers, drawn from the real device chain. Read-only: no changes are made from this page.</p></div>
-<div class="tree-intro-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div></section>
+<div class="tmap-tree-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div>
 
 <div class="tmap-layout">
     <section class="panel tmap-panel" aria-label="Network topology map" data-topo-map>
@@ -15,16 +14,17 @@
         <div class="tmap-canvas">
             <svg class="tmap-svg" data-topo-svg viewBox="0 0 {{ topology_map.width }} {{ topology_map.height }}" role="img" aria-label="Device topology: core, limit servers, PPPoE servers and towers">
                 {% for column in topology_map.columns %}
-                <text class="tmap-col" x="{{ column.x }}" y="16">{{ column.label }}<tspan class="tmap-col-count"> {{ column.count }}</tspan></text>
+                <text class="tmap-col" x="{{ column.x }}" y="{{ column.y }}">{{ column.label }}<tspan class="tmap-col-count"> {{ column.count }}</tspan></text>
                 {% endfor %}
-                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.x1|add:60 }},{{ link.y1 }} {{ link.x2|add:-60 }},{{ link.y2 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
+                {# Vertical flow: a soft S-curve from the parent's bottom edge to the child's top edge. #}
+                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.x1 }},{{ link.y1|add:30 }} {{ link.x2 }},{{ link.y2|add:-30 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
                 <g class="tmap-nodes">
                     {% for node in topology_map.nodes %}
                     <g class="tmap-node" data-node="{{ node.key }}" data-level="{{ node.level }}" data-state="{{ node.state }}" transform="translate({{ node.x }},{{ node.y }})" tabindex="0" role="button" aria-label="{{ node.name }}, {{ node.summary }}">
-                        <rect class="tmap-box" width="{{ node.w }}" height="{{ node.h }}" rx="7"/>
-                        <circle class="tmap-dot" data-state="{{ node.state }}" cx="13" cy="15" r="3.5"/>
-                        <text class="tmap-name" x="23" y="19">{{ node.name }}</text>
-                        <text class="tmap-sum" x="13" y="38">{{ node.summary }}</text>
+                        <rect class="tmap-box" width="{{ node.w }}" height="{{ node.h }}" rx="8"/>
+                        <circle class="tmap-dot" data-state="{{ node.state }}" cx="16" cy="21" r="4"/>
+                        <text class="tmap-name" x="28" y="25">{{ node.name }}</text>
+                        <text class="tmap-sum" x="16" y="46">{{ node.summary }}</text>
                         {% if node.site_count %}<g class="tmap-badge" transform="translate({{ node.w|add:-44 }},6)"><rect width="38" height="14" rx="7"/><text x="19" y="10.5" text-anchor="middle">{{ node.site_count }}</text></g>{% endif %}
                     </g>
                     {% endfor %}
@@ -37,7 +37,7 @@
     <aside class="panel tmap-inspect" data-topo-inspect aria-live="polite">
         <div class="panel-heading"><div><p class="eyebrow">DETAIL</p><h2 data-inspect-title>Network overview</h2></div></div>
         <p class="tmap-hint" data-inspect-hint>Select a node to see what it connects to. This view is read-only.</p>
-        <dl class="tmap-detail" data-inspect-detail hidden></dl>
+        <div class="tmap-detail-body" data-inspect-detail hidden></div>
         <div class="tmap-kv">
             <div><span>Core</span><b>{{ topology_map.core_count }}</b></div>
             <div><span>Devices</span><b>{{ topology_map.total }}</b></div>

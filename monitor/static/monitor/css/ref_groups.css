@@ -45,8 +45,8 @@
     border-radius:5px;padding:5px 9px;font:inherit;font-size:12.5px}
 .ref-groups-page .in:focus-visible{outline:2px solid var(--ref-in)}
 
-/* Two-column body: 230px sidebar, everything else. */
-.ref-grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start}
+/* Two-column body: a narrow groups sidebar so the table has room without scrolling. */
+.ref-grid{display:grid;grid-template-columns:196px minmax(0,1fr);gap:12px;align-items:start}
 .ref-right{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
 
 /* .gi — group sidebar entries. */
@@ -87,12 +87,12 @@
 .ref-groups-page .pill.n{background:#1c2633;color:var(--ref-mut)}
 
 /* Protection toggle and Settings link in the table, styled as compact pills. */
-.ref-groups-page .ref-protection{border-radius:11px;padding:3px 11px;font-size:11.5px;font-weight:600}
+.ref-groups-page .ref-protection{border-radius:11px;padding:2px 6px;font-size:10px;font-weight:600;white-space:nowrap}
 .ref-groups-page .ref-protection[data-state=enabled]{color:var(--ref-ok);background:var(--ref-okb);border-color:rgba(47,191,113,.45)}
 .ref-groups-page .ref-protection[data-state=disabled]{color:var(--ref-bad);background:var(--ref-badb);border-color:rgba(239,75,75,.45)}
 .ref-groups-page .ref-protection:disabled{opacity:.6;cursor:wait}
-.ref-groups-page .ref-settings{padding:4px 11px;font-size:12px;text-decoration:none;display:inline-block;white-space:nowrap}
-.ref-groups-page .ref-table td:nth-last-child(3) .pill{padding:2px 8px;font-size:10.5px}
+.ref-groups-page .ref-settings{padding:3px 6px;font-size:10.5px;text-decoration:none;display:inline-block;white-space:nowrap}
+.ref-groups-page .ref-table td:nth-last-child(3) .pill{padding:2px 6px;font-size:10px;white-space:nowrap}
 
 /* Save bar: shown whenever rows have unsaved Group/Topology edits. */
 .ref-savebar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;
@@ -102,22 +102,69 @@
 /* A row with unsaved edits is marked so it is obvious what saves. */
 .ref-groups-page .ref-table tr[data-dirty="true"] td{background:rgba(240,160,48,.08)}
 .ref-row-actions{white-space:nowrap}
-.ref-row-actions .btn{padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
+.ref-row-actions .btn{padding:3px 7px;font-size:10.5px;text-decoration:none;display:inline-block}
 .ref-row-actions .btn+.btn{margin-left:5px}
 
-/* Table, matching the reference's row density. */
+/* Table, matching the reference's row density. Columns are sized so the whole row fits at a
+   normal desktop width; the wrapper only scrolls if the window is genuinely too small. */
 .ref-table-card{padding:6px 8px}
 .ref-table-wrap{overflow-x:auto}
-.ref-groups-page .ref-table{width:100%;border-collapse:collapse;font-size:13px}
-.ref-groups-page .ref-table th{text-align:left;color:var(--ref-mut);font-weight:500;font-size:11.5px;
-    padding:8px;border-bottom:1px solid var(--ref-line);white-space:nowrap;background:var(--ref-card)}
-.ref-groups-page .ref-table td{padding:6px 8px;border-bottom:1px solid #1a2330;vertical-align:middle}
+.ref-groups-page .ref-table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+/* Fixed layout keeps the selects from forcing the table wider than its container. */
+.ref-groups-page .ref-table col.c-device{width:13%}
+.ref-groups-page .ref-table col.c-ip{width:10.5%}
+.ref-groups-page .ref-table col.c-group{width:7.5%}
+.ref-groups-page .ref-table col.c-topo{width:11%}
+.ref-groups-page .ref-table col.c-cpu{width:8%}
+.ref-groups-page .ref-table col.c-traffic{width:14.5%}
+.ref-groups-page .ref-table col.c-users{width:7%}
+.ref-groups-page .ref-table col.c-uptime{width:8%}
+.ref-groups-page .ref-table col.c-protect{width:8.5%}
+.ref-groups-page .ref-table col.c-settings{width:7%}
+.ref-groups-page .ref-table col.c-actions{width:5%}
+.ref-groups-page .ref-table th{text-align:left;color:var(--ref-mut);font-weight:500;font-size:11px;
+    padding:7px 6px;border-bottom:1px solid var(--ref-line);white-space:normal;line-height:1.3;
+    background:var(--ref-card);vertical-align:bottom}
+.ref-groups-page .ref-table td{padding:5px 4px;border-bottom:1px solid #1a2330;vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
 .ref-groups-page .ref-table tr:hover td{background:#16202b}
 .ref-groups-page .ref-table td.n,.ref-groups-page .ref-table th.n{text-align:right}
 .ref-groups-page .ref-table td b{font-weight:600}
-.ref-groups-page .ref-table td .mut{font-size:11.5px}
+.ref-groups-page .ref-table td .mut{font-size:11px}
 .ref-groups-page .ref-table tr.fl td{background:rgba(76,155,232,.14)}
-.ref-groups-page .ref-table .in{padding:4px 7px;font-size:12px}
+/* Inline selects shrink to their column instead of forcing a fixed 110/170px. */
+.ref-groups-page .ref-table .in{padding:4px 4px;font-size:11px;width:100%;min-width:0;max-width:100%;
+    text-overflow:ellipsis}
+.ref-groups-page .ref-table td:has(select){min-width:0}
+/* The device cell holds a name plus its model; keep it on one line and let it truncate. */
+.ref-groups-page .ref-table td:nth-child(1) b,
+.ref-groups-page .ref-table td:nth-child(1) .mut{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* CPU: the percentage alone is enough here; the meter needs room the table no longer has. */
+.ref-groups-page .ref-table .bar{display:none}
+.ref-groups-page .ref-table td:nth-child(5) b{font-variant-numeric:tabular-nums}
+
+/* Traffic: a compact one-line "↓in ↑out G" readout with the unit as a small suffix. */
+.ref-groups-page .ref-traffic{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap;
+    font-variant-numeric:tabular-nums;font-size:11.5px}
+.ref-groups-page .ref-traffic .in{color:var(--ref-in)}
+.ref-groups-page .ref-traffic .out{color:var(--ref-out)}
+.ref-groups-page .ref-traffic em{font-style:normal;color:var(--ref-mut);font-size:9.5px}
+
+/* Uptime: compact and tabular; a sub-day uptime is tinted amber (recent reboot). */
+.ref-groups-page .ref-uptime{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:11.5px}
+.ref-groups-page .ref-uptime.fresh{color:var(--ref-wn)}
+
+/* A sensor that is not reporting says why instead of showing a blank cell. */
+.ref-groups-page .ref-noread{color:var(--ref-wn);font-size:10px;padding:1px 5px;border-radius:4px;
+    background:var(--ref-wnb);white-space:nowrap}
+
+.ref-groups-page .ref-table th:nth-child(8),
+.ref-groups-page .ref-table td:nth-child(8){white-space:nowrap}
+.ref-groups-page .ref-table td:nth-child(5),
+.ref-groups-page .ref-table td:nth-child(6),
+.ref-groups-page .ref-table td:nth-child(7){white-space:nowrap;font-variant-numeric:tabular-nums}
+/* Action cells keep their buttons on one line. */
+.ref-groups-page .ref-table td:last-child{white-space:nowrap}
 
 /* .bar — CPU mini meter. */
 .ref-groups-page .bar{display:inline-block;width:46px;height:5px;background:#1f2a37;border-radius:3px;

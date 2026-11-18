@@ -1,16 +1,23 @@
-/* Topology map — four fixed columns of SVG nodes with bezier connectors.
+/* Topology map — four stages stacked vertically, each a band of cards flowing left to right.
+   Connectors drop from a parent's bottom edge to its children's top edges.
    Follows the reference design's diagram treatment on NetShield's own theme tokens. */
-.tmap-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px;align-items:start;margin-bottom:16px}
+.tmap-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start;margin-bottom:16px}
 .tmap-panel{padding:16px 18px}
+/* The page intro was removed; the secondary links now sit as a compact row above the map. */
+.tmap-tree-actions{display:flex;justify-content:flex-end;gap:8px;padding:18px 0 14px}
+.tmap-tree-actions .secondary-button{font-size:11.5px}
 .tmap-live{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--muted);background:var(--surface-2)}
-.tmap-canvas{overflow-x:auto}
-.tmap-svg{width:100%;min-width:720px;height:auto;display:block}
+.tmap-canvas{overflow:auto}
+/* Render at the diagram's own scale. Stretching a 1060px-wide viewBox to fill the panel (or
+   squashing it on a narrow one) is what made the card text unreadable; instead the canvas
+   scrolls in whichever direction is short. */
+.tmap-svg{display:block;width:auto;height:auto;min-width:100%;max-width:100%}
 
-.tmap-col{fill:var(--muted);font:700 10px ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase}
+.tmap-col{fill:var(--muted);font:700 11px ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase}
 .tmap-col-count{fill:var(--muted);opacity:.6;font-weight:500}
 
 /* Connectors: dashed, animated like the reference, dimmed when a branch is not selected. */
-.tmap-link{fill:none;stroke:var(--blue);stroke-width:1.4;stroke-dasharray:4 5;opacity:.6;transition:opacity .15s,stroke-width .15s}
+.tmap-link{fill:none;stroke:var(--blue);stroke-width:1.6;stroke-dasharray:5 6;opacity:.6;transition:opacity .15s,stroke-width .15s}
 .tmap-link.is-active{opacity:1;stroke-width:2}
 .tmap-link.is-dim{opacity:.12}
 
@@ -20,8 +27,8 @@
 .tmap-node:focus-visible .tmap-box{stroke:var(--blue);stroke-width:2}
 .tmap-node.is-selected .tmap-box{fill:var(--ns-info-surface-1,var(--surface));stroke:var(--blue);stroke-width:1.8}
 .tmap-node.is-dim{opacity:.3}
-.tmap-name{fill:var(--text);font:650 12px "Segoe UI",Arial,sans-serif}
-.tmap-sum{fill:var(--muted);font:11px ui-monospace,Consolas,monospace}
+.tmap-name{fill:var(--text);font:650 14px "Segoe UI",Arial,sans-serif}
+.tmap-sum{fill:var(--muted);font:12px ui-monospace,Consolas,monospace}
 .tmap-dot{fill:var(--muted)}
 .tmap-dot[data-state=online]{fill:var(--green)}
 .tmap-dot[data-state=offline]{fill:var(--red)}
@@ -34,6 +41,17 @@
 .tmap-detail{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0 0 14px;font-size:12px}
 .tmap-detail dt{color:var(--muted)}
 .tmap-detail dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+/* Sensor readings for the selected device: a 2x2 stat grid. */
+.tmap-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}
+.tmap-stat{border:1px solid var(--border);border-radius:7px;padding:9px 11px;background:var(--surface-2);min-width:0}
+.tmap-stat span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.tmap-stat b{display:block;margin-top:2px;font:650 17px/1.35 "Segoe UI",Arial,sans-serif;
+    color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tmap-stat b em{font-style:normal;font-size:10px;font-weight:500;color:var(--muted);margin-left:3px}
+.tmap-stat.is-empty b{color:var(--muted);font-weight:500}
+.tmap-stat[data-tone=ok] b{color:var(--green)}
+.tmap-stat[data-tone=wn] b{color:var(--amber)}
+.tmap-stat[data-tone=bad] b{color:var(--red)}
 .tmap-kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--border);padding-top:12px}
 .tmap-kv div{border:1px solid var(--border);border-radius:7px;padding:9px 11px;background:var(--surface-2)}
 .tmap-kv span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}

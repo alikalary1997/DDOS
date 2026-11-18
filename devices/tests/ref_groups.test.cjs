@@ -49,15 +49,16 @@ function build(devices, sidebar, groupOptions, topologyOptions) {
     return { rowsEl, sideEl, summaryEl };
 }
 
+// Health is derived from each device's own sensors, not from a connection test.
 const DEVICES = [
-    { id: 1, name: 'RB-3011', ip: '10.3.15.126', model: 'MikroTik', group_key: '', topology_key: '', cpu: 23, traffic_mbps: 164.85, users: null, status: 'online', status_label: 'ONLINE' },
-    { id: 2, name: 'Ranya-Connection', ip: '172.21.20.2', model: 'MikroTik', group_key: 'g:1', topology_key: 'd:1', cpu: null, traffic_mbps: null, users: 216, status: 'unknown', status_label: 'NOT TESTED' },
-    { id: 3, name: 'Kalar', ip: '10.30.1.1', model: 'RB4011', group_key: 'g:1', topology_key: 'd:1', cpu: 91, traffic_mbps: 88.2, users: 121, status: 'offline', status_label: 'OFFLINE' },
+    { id: 1, name: 'RB-3011', ip: '10.3.15.126', model: 'MikroTik', group_key: '', topology_key: '', cpu: 23, traffic_mbps: 164.85, traffic_in: 100, traffic_out: 64.85, uptime_seconds: 90000, users: null, users_state: '', sensor_count: 3, sensor_active: 3 },
+    { id: 2, name: 'Ranya-Connection', ip: '172.21.20.2', model: 'MikroTik', group_key: 'g:1', topology_key: 'd:1', cpu: null, traffic_mbps: null, users: 216, users_state: 'Active', sensor_count: 4, sensor_active: 2 },
+    { id: 3, name: 'Kalar', ip: '10.30.1.1', model: 'RB4011', group_key: 'g:1', topology_key: 'd:1', cpu: 91, traffic_mbps: 88.2, users: null, users_state: 'Connection Failed', sensor_count: 2, sensor_active: 0 },
 ];
 const SIDEBAR = [
-    { key: 'all', label: 'All devices', counts: { online: 1, offline: 1, unknown: 1 } },
-    { key: 'g:1', label: 'Ali', counts: { online: 0, offline: 1, unknown: 1 } },
-    { key: 'none', label: 'Ungrouped', counts: { online: 1, offline: 0, unknown: 0 } },
+    { key: 'all', label: 'All devices', counts: { ok: 1, wn: 1, bad: 1, idle: 0 } },
+    { key: 'g:1', label: 'Ali', counts: { ok: 0, wn: 1, bad: 1, idle: 0 } },
+    { key: 'none', label: 'Ungrouped', counts: { ok: 1, wn: 0, bad: 0, idle: 0 } },
 ];
 const GROUPS = [{ key: '', label: 'Ungrouped' }, { key: 'g:1', label: 'Ali' }];
 const TOPO = [{ key: 'd:1', label: 'RB-3011' }, { key: 'd:2', label: 'Ranya-Connection' }];
@@ -92,21 +93,29 @@ test('readings that do not exist render as a dash, never as zero', () => {
     assert.match(ranya, />216</, 'the real user count is shown');
 });
 
-test('status pills reflect the real device state', () => {
+test('there is no Status column: health comes from the sensors', () => {
     const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
-    assert.match(ui.rowsEl.innerHTML, /pill ok">ONLINE/);
-    assert.match(ui.rowsEl.innerHTML, /pill bad">OFFLINE/);
-    assert.match(ui.rowsEl.innerHTML, /pill n">NOT TESTED/);
+    assert.doesNotMatch(ui.rowsEl.innerHTML, /pill (ok|bad|n)">(ONLINE|OFFLINE|NOT TESTED)/);
+    // A failed PPPoE sensor names itself instead of leaving a blank cell.
+    assert.match(ui.rowsEl.innerHTML, /ref-noread[^>]*>Failed</);
+});
+
+test('sensor readings render in their columns', () => {
+    const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
+    const html = ui.rowsEl.innerHTML;
+    assert.match(html, /ref-traffic/, 'traffic has an in/out readout');
+    assert.match(html, /ref-uptime/, 'uptime is shown');
+    assert.match(html, /23%/, 'CPU percentage is shown');
 });
 
 test('the summary counts only the selected group', () => {
     const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
     // Default view is all devices.
     assert.match(ui.summaryEl.innerHTML, /All devices/);
-    assert.match(ui.summaryEl.innerHTML, /CRITICAL/, 'one offline device makes the branch critical');
+    assert.match(ui.summaryEl.innerHTML, /DEGRADED/, 'a device with no working sensor makes the branch degraded');
     const kv = ui.summaryEl.innerHTML;
     assert.match(kv, /<b>3<\/b>/, 'three devices counted');
-    assert.match(kv, /Warnings/);
+    assert.match(kv, /Sensors OK/);
 });
 
 test('an empty filter says so instead of rendering a broken table', () => {

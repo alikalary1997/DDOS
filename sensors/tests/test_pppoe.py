@@ -238,7 +238,7 @@ class PppoeSensorTests(TestCase):
                                    validated_ip=fresh.management_ip, tested_at=timezone.now())
         url = reverse("sensor_add", args=[fresh.pk])
         with patch("sensors.views.start_sensors") as start:
-            response = self.client.post(url, {"kind": "pppoe", "interval": "10"})
+            response = self.client.post(url, {"kind": "pppoe", "interval": "30"})
         self.assertEqual(response.status_code, 302)
         created = Sensor.objects.get(device=fresh, kind="pppoe")
         self.assertEqual(created.name, "PPPoE Active Users")

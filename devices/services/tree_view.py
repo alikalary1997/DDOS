@@ -113,7 +113,11 @@ def tree_summary_with_status():
 
 
 def _device_rows():
-    """Every device in the shape the reference's table needs: group, topology, readings."""
+    """Every device plus the readings from its own SNMP sensors.
+
+    Only sensors that are actually reporting contribute a value: a stopped, stale or failed
+    sensor yields None and the table shows an em dash rather than a stale number.
+    """
     from sensors.presentation import fleet_snapshot
     from monitor.models import DeviceDDoSProtection
 
@@ -122,16 +126,22 @@ def _device_rows():
     rows = []
     for device in Device.objects.all().order_by("name"):
         sensors = snapshots.get(device.pk, [])
-        # Only a live/valid sensor contributes a reading; otherwise the cell shows no data.
-        def reading(kind, pick):
-            for sensor in sensors:
-                if sensor["kind"] == kind and sensor.get("has_reading"):
-                    value = pick(sensor)
-                    if value is not None:
-                        return value
-            return None
 
-        traffic = reading("traffic", lambda s: (s["in_mbps"] or 0) + (s["out_mbps"] or 0))
+        def sensor_of(kind):
+            return next((s for s in sensors if s["kind"] == kind), None)
+
+        def reading(kind, pick):
+            """A value only when that sensor is live and its latest sample was valid."""
+            sensor = sensor_of(kind)
+            if not sensor or not sensor.get("has_reading"):
+                return None
+            value = pick(sensor)
+            return None if value is None else value
+
+        traffic_in = reading("traffic", lambda s: s["in_mbps"])
+        traffic_out = reading("traffic", lambda s: s["out_mbps"])
+        traffic = (traffic_in + traffic_out) if traffic_in is not None and traffic_out is not None else None
+        pppoe_sensor = sensor_of("pppoe")
         status = device_status(device)
         rows.append({
             "id": device.pk,
@@ -140,10 +150,22 @@ def _device_rows():
             "model": device.model or dict(Device.DeviceType.choices).get(device.device_type, ""),
             "group_key": f"g:{device.group_id}" if device.group_id else "",
             "topology_key": f"d:{device.topology_parent_id}" if device.topology_parent_id else "",
-            # Readings are None when no fresh sample exists; the template shows an em dash.
+            # Readings are None when no fresh sample exists; the table shows an em dash.
             "cpu": reading("cpu", lambda s: s["cpu"]),
             "traffic_mbps": round(traffic, 2) if traffic is not None else None,
+            "traffic_in": round(traffic_in, 2) if traffic_in is not None else None,
+            "traffic_out": round(traffic_out, 2) if traffic_out is not None else None,
+            "traffic_interface": (sensor_of("traffic") or {}).get("interface_name") or "",
+            "uptime": reading("uptime", lambda s: s["uptime"]),
+            "uptime_seconds": reading("uptime", lambda s: s["uptime_seconds"]),
             "users": reading("pppoe", lambda s: s["pppoe_users"]),
+            # A PPPoE sensor that is not reporting is called out rather than hidden, because a
+            # missing user count on a PPPoE server usually means the device is busy.
+            "users_state": (pppoe_sensor or {}).get("status", "") if pppoe_sensor else "",
+            "ping_ms": reading("ping", lambda s: s["ping_ms"]),
+            "packet_loss": reading("ping", lambda s: s["packet_loss"]),
+            "sensor_count": sum(1 for s in sensors if s["enabled"]),
+            "sensor_active": sum(1 for s in sensors if s["status"] == "Active"),
             "status": status,
             "status_label": {"online": "ONLINE", "offline": "OFFLINE", "unknown": "NOT TESTED"}[status],
             # Per-device DDoS Protection flag, toggled from the table.
@@ -188,9 +210,19 @@ def build_group_page():
 
 
 def _status_counts(rows):
-    counts = {"online": 0, "offline": 0, "unknown": 0}
+    """Group health comes from each device's own sensors, not from a connection test."""
+    counts = {"ok": 0, "wn": 0, "bad": 0, "idle": 0}
     for row in rows:
-        counts[row["status"]] = counts.get(row["status"], 0) + 1
+        total = row.get("sensor_count") or 0
+        active = row.get("sensor_active") or 0
+        if not total:
+            counts["idle"] += 1
+        elif active == total:
+            counts["ok"] += 1
+        elif active == 0:
+            counts["bad"] += 1
+        else:
+            counts["wn"] += 1
     return counts
 
 
