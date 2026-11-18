@@ -51,7 +51,7 @@
 <p class="modal-notice">Database changes only. Leave the password blank to keep it. Connection or interface changes clear old connection results and require provisioning review for assigned IPs. Existing router rules are retained.</p>
 <form method="post" action="{% url 'device_edit' edit_device.id %}" autocomplete="off" data-device-edit-form>{% csrf_token %}
 <div data-management-errors role="alert">{% if edit_device_form.errors %}<strong>Device was not saved.</strong>{{ edit_device_form.non_field_errors }}{% endif %}</div>
-<div class="form-grid">{% for field in edit_device_form %}<label for="{{ field.id_for_label }}"{% if field.name == 'description' %} class="full-width"{% endif %}><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<span role="alert">{{ field.errors }}</span>{% endif %}</label>{% endfor %}</div>
+<div class="form-grid">{% for field in edit_device_form %}<label for="{{ field.id_for_label }}"{% if field.name == 'description' %} class="full-width"{% elif field.name == 'api_port' or field.name == 'use_ssl' or field.name == 'username' or field.name == 'password' or field.name == 'incoming_monitoring_interface' %} data-api-field{% endif %}><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<span role="alert">{{ field.errors }}</span>{% endif %}</label>{% endfor %}</div>
 <div class="dialog-footer"><a class="secondary-button" href="{% url 'devices' %}">Cancel</a><button class="primary-button" type="submit">Save changes</button></div>
 </form></dialog>{% endif %}
 {% if delete_device and can_add_devices %}

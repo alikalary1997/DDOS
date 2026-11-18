@@ -65,6 +65,40 @@ class AddDeviceInlineFormTests(TestCase):
     def test_model_field_is_not_offered(self):
         self.assertNotIn('name="model"', self.page())
 
+    def test_a_cisco_switch_needs_only_a_name_and_ip_address(self):
+        response = self.client.post(reverse("device_add"), {
+            "name": "SW-Tower-1", "management_ip": "10.60.0.10", "device_type": "cisco",
+            "group": "", "topology_parent": "", "description": "",
+        })
+        self.assertEqual(response.status_code, 302, "no credentials were required")
+        device = Device.objects.get(name="SW-Tower-1")
+        self.assertEqual(device.device_type, "cisco")
+        self.assertEqual(device.username, "")
+        self.assertEqual(device.encrypted_password, "")
+        self.assertEqual(device.incoming_monitoring_interface, "")
+        # Stored defaults still let the record behave normally in the fleet.
+        self.assertEqual(device.api_port, 8729)
+        device.full_clean()  # a credential-less Cisco switch is a valid record
+
+    def test_a_mikrotik_device_still_requires_credentials(self):
+        response = self.client.post(reverse("device_add"), {
+            "name": "RB-NoCred", "management_ip": "10.60.0.11", "device_type": "mikrotik",
+            "group": "", "topology_parent": "", "description": "",
+        })
+        # 400 is how the tree view redraws the form with its errors.
+        self.assertEqual(response.status_code, 400, "the form is redisplayed with errors")
+        self.assertFalse(Device.objects.filter(name="RB-NoCred").exists())
+
+    def test_cisco_fields_are_marked_so_the_ui_can_hide_them(self):
+        form = self.page().split('id="addDeviceForm"')[1]
+        # API port/SSL/user/password/interface are RouterOS-only and hidden for Cisco.
+        for field in ("api_port", "use_ssl", "username", "password", "incoming_monitoring_interface"):
+            with self.subTest(field=field):
+                marker = form.find(f'name="{field}"')
+                self.assertGreaterEqual(marker, 0)
+                self.assertIn("data-api-field", form[max(0, marker - 300):marker],
+                              f"{field} must be grouped with the API-only fields")
+
     def test_group_and_topology_pickers_list_real_options(self):
         Group.objects.create(name="Ali")
         Device.objects.create(name="RB-1", management_ip="10.9.9.1", username="u",

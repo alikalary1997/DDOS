@@ -551,6 +551,14 @@
                     host.replaceChildren(document.importNode(form, true));
                     host.hidden = false;
                     host.querySelector('form').addEventListener('submit', submitEdit);
+                    // The edit form is the server's own form: keep the API fields hidden for a
+                    // Cisco switch here too.
+                    const editForm = host.querySelector('form');
+                    const typeSelect = editForm?.querySelector('[name="device_type"]');
+                    if (typeSelect && window.NetShieldSyncApiFields) {
+                        typeSelect.addEventListener('change', () => window.NetShieldSyncApiFields(editForm));
+                        window.NetShieldSyncApiFields(editForm);
+                    }
                     host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     host.querySelector('input[name$="name"]')?.focus();
                 })

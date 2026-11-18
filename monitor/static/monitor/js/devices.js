@@ -53,6 +53,26 @@
             form.querySelector('[aria-invalid="true"]')?.focus();
         }
     }
+
+    // A Cisco switch is inventory-only: name and IP address are the whole record. The RouterOS
+    // API fields are hidden and disabled so the browser never submits them.
+    function syncApiFields(scope) {
+        const typeField = scope.querySelector('[name="device_type"]');
+        if (!typeField) return;
+        const needsApi = typeField.value === "mikrotik";
+        scope.querySelectorAll("[data-api-field]").forEach((field) => {
+            field.hidden = !needsApi;
+            field.querySelectorAll("input, select").forEach((input) => { input.disabled = !needsApi; });
+        });
+        const note = scope.querySelector("[data-api-note]");
+        if (note) note.hidden = needsApi;
+    }
+    window.NetShieldSyncApiFields = syncApiFields;
+    document.querySelectorAll("#addDeviceForm").forEach((scope) => {
+        const typeField = scope.querySelector('[name="device_type"]');
+        typeField?.addEventListener("change", () => syncApiFields(scope));
+        syncApiFields(scope);
+    });
     const search = document.getElementById("deviceSearch");
     const status = document.getElementById("statusFilter");
     const type = document.getElementById("typeFilter");

@@ -88,10 +88,12 @@ class AddDeviceForm(forms.Form):
     name = forms.CharField(label="Device Name", max_length=120, widget=forms.TextInput(attrs={"id": "deviceName", "placeholder": "Device name", "autofocus": True}))
     management_ip = forms.GenericIPAddressField(label="Management IP Address", protocol="both", unpack_ipv4=True, widget=forms.TextInput(attrs={"placeholder": "IPv4 or IPv6 address", "spellcheck": "false"}))
     device_type = forms.ChoiceField(label="Device Type", choices=Device.DeviceType.choices, initial=Device.DeviceType.MIKROTIK)
-    api_port = forms.IntegerField(label="API Port", min_value=1, max_value=65535, initial=8729)
+    api_port = forms.IntegerField(label="API Port", min_value=1, max_value=65535, initial=8729, required=False)
+    # API-SSL is only meaningful for MikroTik. It stays a required-choice field so a bad value is
+    # still rejected; an absent value (a Cisco switch posts no API fields) defaults to enabled.
     use_ssl = forms.TypedChoiceField(label="API-SSL", choices=(("true", "Enabled"), ("false", "Disabled")), coerce=lambda value: value == "true", initial="true")
-    username = forms.CharField(label="Username", max_length=150, widget=forms.TextInput(attrs={"autocomplete": "off", "placeholder": "API username", "spellcheck": "false"}))
-    password = forms.CharField(label="Password", strip=False, max_length=4096, widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "API password"}))
+    username = forms.CharField(label="Username", max_length=150, required=False, widget=forms.TextInput(attrs={"autocomplete": "off", "placeholder": "API username", "spellcheck": "false"}))
+    password = forms.CharField(label="Password", strip=False, max_length=4096, required=False, widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "API password"}))
     incoming_monitoring_interface = forms.CharField(label="Incoming monitoring interface", max_length=255, required=False, widget=forms.TextInput(attrs={"placeholder": "Exact RouterOS interface name"}))
     description = forms.CharField(label="Description", required=False, max_length=1000, widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Location, role or notes"}))
     group = GroupField()
@@ -102,11 +104,23 @@ class AddDeviceForm(forms.Form):
         # Rebuilt per form: a group or device created a moment ago is immediately selectable.
         self.fields["group"].choices = group_choices()
         self.fields["topology_parent"].set_exclude(None)
+        # A Cisco switch submits no API fields at all; treat a missing choice as the default.
+        data = self.data
+        if data and "device_type" in data and data.get("device_type") != Device.DeviceType.MIKROTIK:
+            if not data.get("use_ssl"):
+                data = data.copy()
+                data["use_ssl"] = "true"
+                self.data = data
 
     def clean_management_ip(self):
         if "%" in str(self.data.get("management_ip", "")):
             raise forms.ValidationError("Enter an unscoped IPv4 or IPv6 address.")
         return self.cleaned_data["management_ip"]
+
+    def clean_use_ssl(self):
+        # A Cisco switch submits no API fields, so an absent value falls back to the default.
+        value = self.cleaned_data.get("use_ssl")
+        return True if value is None else value
 
     def clean_incoming_monitoring_interface(self):
         value = self.cleaned_data["incoming_monitoring_interface"]
@@ -117,18 +131,41 @@ class AddDeviceForm(forms.Form):
     @sensitive_variables()
     def clean(self):
         cleaned = super().clean()
+        device_type = cleaned.get("device_type")
+        # Only MikroTik talks the RouterOS API, so only it needs connection credentials.
+        # A Cisco switch is inventory-only: name and IP address are the whole record.
+        needs_credentials = device_type == Device.DeviceType.MIKROTIK
+        self.credentials_required = needs_credentials
+        if needs_credentials:
+            for field in ("username", "password"):
+                if not cleaned.get(field):
+                    self.add_error(field, "This field is required.")
+            if not cleaned.get("api_port"):
+                self.add_error("api_port", "This field is required.")
+        else:
+            cleaned["username"] = ""
+            cleaned["password"] = ""
+            cleaned["incoming_monitoring_interface"] = ""
+            # A Cisco switch never shows these, so they get their defaults.
+            cleaned["api_port"] = cleaned.get("api_port") or 8729
+        if cleaned.get("use_ssl") is None and not self.has_error("use_ssl"):
+            cleaned["use_ssl"] = True
         if self.errors:
             return cleaned
         if Device.objects.filter(management_ip=cleaned["management_ip"], api_port=cleaned["api_port"]).exists():
             raise forms.ValidationError("A device with this management IP and API port already exists.")
         self.instance = Device(**{field: cleaned[field] for field in (
-            "name", "management_ip", "device_type", "api_port", "use_ssl", "username", "description", "incoming_monitoring_interface",
+            "name", "management_ip", "device_type", "api_port", "use_ssl", "description", "incoming_monitoring_interface",
         )})
+        self.instance.username = cleaned.get("username") or ""
         # Two independent labels: the group tag and the topology chain parent.
         self.instance.group = cleaned.get("group")
         self.instance.topology_parent = cleaned.get("topology_parent")
         try:
-            self.instance.set_password(cleaned["password"])
+            if cleaned.get("password"):
+                self.instance.set_password(cleaned["password"])
+            else:
+                self.instance.encrypted_password = ""
             self.instance.full_clean()
         except (ImproperlyConfigured, CredentialError):
             self.add_error(None, "Device credential encryption is unavailable. Contact the server administrator.")
@@ -177,7 +214,7 @@ class EditDeviceForm(AddDeviceForm):
         self.original = {field: getattr(instance, field) for field in self.EDIT_FIELDS}
         self.original["group"] = group_key(instance.group) if instance.group else ""
         self.original["topology_parent"] = f"d:{instance.topology_parent_id}" if instance.topology_parent_id else ""
-        initial = dict(self.original, use_ssl="true" if instance.use_ssl else "false", password="")
+        initial = dict(self.original, use_ssl=instance.use_ssl, password="")
         kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
         self.fields["name"].widget.attrs["id"] = "editDeviceName"
@@ -204,10 +241,21 @@ class EditDeviceForm(AddDeviceForm):
         # Do not call AddDeviceForm.clean(), which creates a new device.
         cleaned = forms.Form.clean(self)
         replacement = cleaned.pop("password", "")
+        # Only MikroTik talks the RouterOS API; a Cisco switch stores no credentials.
+        is_mikrotik = cleaned.get("device_type") == Device.DeviceType.MIKROTIK
+        if not is_mikrotik:
+            cleaned["username"] = ""
+            cleaned["api_port"] = cleaned.get("api_port") or 8729
+            cleaned["incoming_monitoring_interface"] = ""
+        elif not cleaned.get("username"):
+            self.add_error("username", "This field is required.")
         if self.errors:
             return cleaned
         if Device.objects.filter(management_ip=cleaned["management_ip"], api_port=cleaned["api_port"]).exclude(pk=self.instance.pk).exists():
             self.add_error(None, "A device with this management IP and API port already exists.")
+            return cleaned
+        if is_mikrotik and not (replacement or self.instance.encrypted_password):
+            self.add_error("password", "A MikroTik device needs an API password.")
             return cleaned
         for field in self.EDIT_FIELDS:
             setattr(self.instance, field, cleaned[field])
@@ -227,6 +275,8 @@ class EditDeviceForm(AddDeviceForm):
             if replacement:
                 self.instance.set_password(replacement)
                 self.changed_fields.append("password")
+            elif self.instance.device_type != Device.DeviceType.MIKROTIK:
+                self.instance.encrypted_password = ""
             self.instance.full_clean()
         except (ImproperlyConfigured, CredentialError):
             self.add_error(None, "Device credential encryption is unavailable. Contact the server administrator.")

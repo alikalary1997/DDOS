@@ -112,8 +112,8 @@ class Device(models.Model):
         default=8729, validators=[MinValueValidator(1), MaxValueValidator(65535)]
     )
     use_ssl = models.BooleanField(default=True, help_text="Use API-SSL with certificate verification; never fall back to API.")
-    username = models.CharField(max_length=150)
-    encrypted_password = EncryptedPasswordField()
+    username = models.CharField(max_length=150, blank=True)
+    encrypted_password = EncryptedPasswordField(blank=True)
     incoming_monitoring_interface = models.CharField(max_length=255, blank=True)
     description = models.TextField(max_length=1000, blank=True)
     enabled = models.BooleanField(default=True)
@@ -188,12 +188,17 @@ class Device(models.Model):
     def clean(self):
         super().clean()
         errors = {}
-        for field in ("name", "username"):
+        # A Cisco switch is inventory-only: no RouterOS API, so no username/password.
+        needs_credentials = self.device_type == self.DeviceType.MIKROTIK
+        required = ("name", "username") if needs_credentials else ("name",)
+        for field in required:
             value = getattr(self, field)
             if isinstance(value, str):
                 setattr(self, field, value.strip())
             if not getattr(self, field):
                 errors[field] = "This field is required."
+        if not needs_credentials:
+            self.username = (self.username or "").strip()
         try:
             # Scoped IPv6 literals are not stable management endpoints.
             if "%" in str(self.management_ip):

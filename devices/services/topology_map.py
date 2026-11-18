@@ -33,7 +33,12 @@ def _level_key(depth, device=None):
     Depth alone cannot separate the two deeper columns, because a tower hung straight off a
     Limit also sits at depth 2. The device's own PPPoE evidence decides: anything that has a
     PPPoE sensor (or a stored session count) is a PPPoE server, otherwise it is a tower.
+
+    A Cisco switch is never a PPPoE server: it is the core when nothing is above it, and a
+    tower (a switch at a site) anywhere else in the chain.
     """
+    if device is not None and device.device_type == "cisco":
+        return "core" if depth <= 0 else "tower"
     if depth <= 0:
         return "core"
     if depth == 1:
