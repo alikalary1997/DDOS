@@ -100,6 +100,30 @@ test('there is no Status column: health comes from the sensors', () => {
     assert.match(ui.rowsEl.innerHTML, /ref-noread[^>]*>Failed</);
 });
 
+test('every device row offers a Delete button beside Edit', () => {
+    const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
+    const html = ui.rowsEl.innerHTML;
+    assert.strictEqual((html.match(/data-ref-delete-device=/g) || []).length, 3, 'one per device');
+    assert.match(html, /data-ref-delete-device="1"/);
+    // Edit and Delete sit together in the actions cell.
+    const row = html.split('data-ref-row="1"')[1].split('</tr>')[0];
+    assert.match(row, /data-ref-edit-device="1"/);
+    assert.match(row, /data-ref-delete-device="1"/);
+    assert.match(row, /ref-delete/);
+});
+
+test('every device row offers a Delete button beside Edit', () => {
+    const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
+    const html = ui.rowsEl.innerHTML;
+    assert.strictEqual((html.match(/data-ref-delete-device=/g) || []).length, 3, 'one per device');
+    assert.match(html, /data-ref-delete-device="1"/);
+    // Edit and Delete sit together in the actions cell.
+    const row = html.split('data-ref-row="1"')[1].split('</tr>')[0];
+    assert.match(row, /data-ref-edit-device="1"/);
+    assert.match(row, /data-ref-delete-device="1"/);
+    assert.match(row, /ref-delete/);
+});
+
 test('sensor readings render in their columns', () => {
     const ui = build(DEVICES, SIDEBAR, GROUPS, TOPO);
     const html = ui.rowsEl.innerHTML;

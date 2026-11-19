@@ -104,6 +104,9 @@
 .ref-row-actions{white-space:nowrap}
 .ref-row-actions .btn{padding:3px 7px;font-size:10.5px;text-decoration:none;display:inline-block}
 .ref-row-actions .btn+.btn{margin-left:5px}
+/* Delete is destructive: muted red text that only fills in on hover. */
+.ref-row-actions .ref-delete{color:var(--ref-bad);border-color:rgba(239,75,75,.35)}
+.ref-row-actions .ref-delete:hover{background:var(--ref-badb);border-color:var(--ref-bad)}
 
 /* Table, matching the reference's row density. Columns are sized so the whole row fits at a
    normal desktop width; the wrapper only scrolls if the window is genuinely too small. */
@@ -121,7 +124,9 @@
 .ref-groups-page .ref-table col.c-uptime{width:8%}
 .ref-groups-page .ref-table col.c-protect{width:8.5%}
 .ref-groups-page .ref-table col.c-settings{width:7%}
-.ref-groups-page .ref-table col.c-actions{width:5%}
+/* Two buttons (Edit + Delete) need room; 5% clipped Delete to an ellipsis. */
+.ref-groups-page .ref-table col.c-actions{width:12%}
+.ref-groups-page .ref-table col.c-settings{width:8%}
 .ref-groups-page .ref-table th{text-align:left;color:var(--ref-mut);font-weight:500;font-size:11px;
     padding:7px 6px;border-bottom:1px solid var(--ref-line);white-space:normal;line-height:1.3;
     background:var(--ref-card);vertical-align:bottom}
@@ -173,6 +178,14 @@
 
 /* Inline Add Device form (`#dvf`): a wrapping flex card, labels above inputs. */
 .ref-device-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px}
+/* Delete card: a stacked block, not the wrapping field row the forms use. */
+.ref-delete-card{display:block;max-width:640px}
+.ref-delete-card h2{font-size:15px;margin:0 0 8px;color:var(--ref-tx)}
+.ref-delete-card p{margin:0 0 8px;font-size:12.5px;line-height:1.55;color:var(--ref-mut)}
+.ref-delete-card .ref-delete-note{font-size:11.5px;opacity:.85}
+.ref-delete-card form{margin:0}
+.ref-delete-card .ref-form-actions{margin-top:4px}
+.ref-delete-card .ref-form-error:empty{display:none}
 .ref-device-form[hidden]{display:none}
 .ref-field{display:flex;flex-direction:column;gap:3px;min-width:0}
 .ref-field-sm{max-width:96px}

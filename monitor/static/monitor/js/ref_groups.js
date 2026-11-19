@@ -294,7 +294,8 @@
                     <td class="ref-row-actions">
                         ${dirty ? `<button type="button" class="btn go" data-ref-save-row="${device.id}">Save</button>
                         <button type="button" class="btn" data-ref-cancel-row="${device.id}" title="Discard changes">Cancel</button>`
-                        : `<button type="button" class="btn" data-ref-edit-device="${device.id}">Edit</button>`}
+                        : `<button type="button" class="btn" data-ref-edit-device="${device.id}">Edit</button>
+                        ${CONFIG.canDelete ? `<button type="button" class="btn ref-delete" data-ref-delete-device="${device.id}" title="Delete ${esc(device.name)}">Delete</button>` : ''}`}
                     </td>
                 </tr>`;
             }).join('') || `<tr><td colspan="11" class="mut" style="padding:18px 8px">No devices here yet. Use + Add device, or change a device's Group in the table.</td></tr>`;
@@ -568,6 +569,63 @@
                 });
         }
 
+        /* ---- deleting, through the same inline card as editing ---- */
+        // Reuses the server's own delete confirmation, so the assigned-IP count and the
+        // confirmation requirement stay authoritative instead of being duplicated here.
+        function openDelete(deviceId) {
+            const host = document.getElementById('refEditDevice');
+            const device = byId(deviceId);
+            if (!host || !device) return;
+            editingId = null;
+            fetch(`/devices/${deviceId}/delete/?fragment=1`, { credentials: 'same-origin' })
+                .then(response => {
+                    if (!response.ok) throw new Error('delete dialog unavailable');
+                    return response.text();
+                })
+                .then(html => {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const card = doc.querySelector('[data-ref-delete-card]');
+                    if (!card || !card.querySelector('form[data-device-delete-form]')) throw new Error('delete card unavailable');
+                    host.replaceChildren(document.importNode(card, true));
+                    host.hidden = false;
+                    host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                })
+                .catch(() => {
+                    // Last resort only: fall back to the server-rendered confirmation.
+                    window.location.assign(`/devices/${deviceId}/delete/`);
+                });
+        }
+
+        function submitDelete(event) {
+            const host = document.getElementById('refEditDevice');
+            const form = host?.querySelector('form[data-device-delete-form]');
+            if (!form) return;
+            if (!window.confirm('Delete this device and its public IP records? Router rules are retained. This cannot be undone.')) return;
+            const button = form.querySelector('[data-ref-delete-confirm]');
+            if (button) { button.disabled = true; button.textContent = 'Deleting…'; }
+            fetch(form.action, {
+                method: 'POST', body: new FormData(form), credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            })
+                .then(response => response.json().catch(() => ({ ok: false, error: `Delete failed (${response.status}).` })))
+                .then(result => {
+                    if (!result.ok) {
+                        const box = form.querySelector('[data-management-errors]');
+                        if (box) { box.classList.add('ref-form-error'); box.textContent = result.error || 'The device could not be deleted.'; }
+                        if (button) { button.disabled = false; button.textContent = 'Delete device'; }
+                        return;
+                    }
+                    // Remove the row and refresh the counts without a reload.
+                    closeEdit();
+                    window.location.reload();
+                })
+                .catch(() => {
+                    if (button) { button.disabled = false; button.textContent = 'Delete device'; }
+                    const box = form.querySelector('[data-management-errors]');
+                    if (box) { box.classList.add('ref-form-error'); box.textContent = 'The server could not be reached. Nothing was deleted.'; }
+                });
+        }
+
         function submitEdit(event) {
             event.preventDefault();
             const form = event.currentTarget;
@@ -619,6 +677,8 @@
         rowsEl.addEventListener('click', event => {
             const edit = event.target.closest('[data-ref-edit-device]');
             if (edit) { openEdit(edit.dataset.refEditDevice); return; }
+            const remove = event.target.closest('[data-ref-delete-device]');
+            if (remove) { openDelete(remove.dataset.refDeleteDevice); return; }
             const protect = event.target.closest('[data-ref-protection]');
             if (protect) { toggleProtection(protect.dataset.refProtection, protect); return; }
             const saveRow = event.target.closest('[data-ref-save-row]');
@@ -629,6 +689,8 @@
 
         document.addEventListener('click', event => {
             if (event.target.closest('[data-ref-edit-cancel]')) { closeEdit(); return; }
+            if (event.target.closest('[data-ref-delete-confirm]')) { submitDelete(); return; }
+            if (event.target.closest('[data-ref-delete-cancel]')) { closeEdit(); return; }
             if (event.target.closest('[data-ref-save-all]')) { saveAll(); return; }
             if (event.target.closest('[data-ref-discard-all]')) {
                 pending.clear();

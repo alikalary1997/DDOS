@@ -38,6 +38,26 @@ class DeviceManagementTests(TestCase):
         for secret in (self.password, self.device.encrypted_password, self.key, *extra):
             self.assertNotIn(secret, response.content.decode())
 
+    def test_delete_fragment_offers_in_page_confirmation(self):
+        """The Devices table fetches this fragment so deleting never leaves the page."""
+        from public_ips.models import PublicIP
+        PublicIP.objects.create(address="8.8.8.8", device=self.device, incoming_monitoring_interface="ether1",
+                                provisioning_status="verified", provisioning_verified_at=timezone.now())
+        response = self.client.get(self.delete, {"fragment": 1})
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("data-ref-delete-card", html)
+        self.assertIn(f'action="{self.delete}"', html)
+        self.assertIn('name="confirm" value="yes"', html)
+        self.assertIn("1</strong> assigned public IP", html, "the real count is shown")
+        self.assertIn("Saved router", html)
+        # Nothing destructive happened by merely viewing the confirmation.
+        self.assertTrue(Device.objects.filter(pk=self.device.pk).exists())
+
+    def test_delete_fragment_requires_administrator(self):
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.get(self.delete, {"fragment": 1}).status_code, 403)
+
     def test_actions_and_prefilled_edit_form_never_display_password(self):
         page = self.client.get(reverse("device_fleet"))
         self.assertContains(page, self.edit); self.assertContains(page, self.delete)

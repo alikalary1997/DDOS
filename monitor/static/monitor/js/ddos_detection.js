@@ -8,6 +8,7 @@
     const REFRESH_MS = 5000;
     let data = JSON.parse(document.getElementById("ddInitial").textContent);
     let filter = "all", busy = false;
+    // This page is scoped to one Group server-side; the picker is a readout, not a control.
     const expanded = new Set();
 
     // Per-device limits come from the saved CPU thresholds; fall back to the legacy global values.
@@ -145,13 +146,17 @@
         set("sumIps", `${ips.filter((ip) => ip.monitored).length} / ${ips.length}`);
         document.querySelector('[data-count="all"]').textContent = String(devices.length);
     }
+
     function render() {
         summary();
         document.querySelectorAll("[data-bulk]").forEach((button) => { button.disabled = busy; });
         const shown = data.devices.filter(matches);
         grid.replaceChildren(...shown.map(card));
         empty.hidden = shown.length > 0;
-        empty.textContent = data.devices.length ? "No devices match this filter." : "No MikroTik devices have been added yet.";
+        const group = data.scope_group || "";
+        empty.textContent = !data.devices.length
+            ? (group ? `No devices are tagged ${group}.` : "No MikroTik devices have been added yet.")
+            : "No devices match this filter.";
     }
     function say(text, error) { status.textContent = text; status.dataset.tone = error ? "error" : ""; }
 

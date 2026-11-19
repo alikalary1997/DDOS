@@ -8,8 +8,9 @@
 <div class="dd-page" id="ddPage" data-data-url="{% url 'ddos_detection_data' %}" data-control-url="{% url 'ddos_detection_all_control' 'start' %}" data-can-control="{{ overview.can_control|yesno:'1,0' }}">
 {% csrf_token %}
 <section class="dd-title">
-    <div><h2>DDoS Detection</h2><p>Start or stop attack monitoring per MikroTik device</p></div>
+    <div><h2>DDoS Detection</h2><p>Attack monitoring for the <b>{{ overview.scope_group }}</b> group</p></div>
     <div class="dd-toolbar">
+        <label class="dd-group" for="ddGroup"><span>Group</span><select id="ddGroup" disabled><option value="{{ overview.scope_group }}">{{ overview.scope_group }}</option></select></label>
         <div class="dd-filters" role="group" aria-label="Filter devices">
             <button type="button" class="dd-filter is-active" data-filter="all" aria-pressed="true">All <span class="dd-count" data-count="all">0</span></button>
             <button type="button" class="dd-filter" data-filter="cpu" aria-pressed="false">High CPU</button>

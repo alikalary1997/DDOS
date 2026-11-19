@@ -380,12 +380,57 @@ class AdapterTests(SimpleTestCase):
             with self.assertRaises(StartupError): ensure_worker()
 
     def test_worker_launch_uses_hidden_process_and_checks_lock(self):
-        from sensors.runtime import ensure_worker
-        with patch('sensors.runtime.worker_running', side_effect=[False, True]), patch('sensors.runtime.subprocess.Popen') as spawn:
-            ensure_worker()
-        self.assertEqual(spawn.call_count, 1)
-        self.assertIn('poll_sensors', spawn.call_args.args[0])
-        self.assertIn('creationflags', spawn.call_args.kwargs)
+        from sensors import runtime
+        with patch.object(runtime, 'worker_running', side_effect=[False, True]), \
+             patch.object(runtime, 'subprocess') as spawn:
+            spawn.Popen.return_value.poll.return_value = None
+            runtime.ensure_worker()
+        self.assertEqual(spawn.Popen.call_count, 1)
+        self.assertIn('poll_sensors', spawn.Popen.call_args.args[0])
+        self.assertIn('creationflags', spawn.Popen.call_args.kwargs)
+
+    def test_a_current_worker_is_left_running(self):
+        from sensors import runtime
+        with patch.object(runtime, 'worker_running', return_value=True), \
+             patch.object(runtime, 'worker_is_outdated', return_value=False), \
+             patch.object(runtime, 'stop_worker') as stop, \
+             patch.object(runtime, 'subprocess') as proc:
+            runtime.ensure_worker()
+        stop.assert_not_called()
+        proc.Popen.assert_not_called()
+
+    def test_a_worker_running_old_code_is_restarted(self):
+        """A worker keeps its modules in memory, so edits only take effect in a new process."""
+        from sensors import runtime
+        with patch.object(runtime, 'worker_running', side_effect=[True, False] + [True] * 40), \
+             patch.object(runtime, 'worker_is_outdated', return_value=True), \
+             patch.object(runtime, 'stop_worker', return_value=True) as stop, \
+             patch.object(runtime, 'subprocess') as proc:
+            proc.Popen.return_value.poll.return_value = None
+            runtime.ensure_worker()
+        stop.assert_called_once()
+        proc.Popen.assert_called_once()
+
+    def test_an_outdated_worker_that_will_not_stop_is_not_doubled_up(self):
+        from sensors import runtime
+        with patch.object(runtime, 'worker_running', return_value=True), \
+             patch.object(runtime, 'worker_is_outdated', return_value=True), \
+             patch.object(runtime, 'stop_worker', return_value=False), \
+             patch.object(runtime, 'subprocess') as proc:
+            runtime.ensure_worker()
+        proc.Popen.assert_not_called()
+
+    def test_version_stamp_tracks_edits_to_the_sensor_code(self):
+        from sensors import runtime
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(runtime, '_runtime_directory', return_value=Path(tmp)):
+                self.assertFalse(runtime.worker_is_outdated(), 'no stamp means nothing to compare')
+                runtime.write_version_stamp()
+                self.assertFalse(runtime.worker_is_outdated(), 'a worker on current code is fine')
+                (Path(tmp) / 'worker.version').write_text('stale-fingerprint', encoding='utf-8')
+                self.assertTrue(runtime.worker_is_outdated())
 
     def test_counter_types_and_range(self):
         self.assertEqual(number(Counter64(2**64-1), Counter64), 2**64-1)

@@ -1,0 +1,18 @@
+{# Delete card, fetched by the Devices table so deletion stays in-page instead of jumping to a
+   standalone confirmation page. The assigned-IP count comes from the server: it is what actually
+   gets removed along with the device. #}
+<div class="card ref-device-form ref-delete-card" data-ref-delete-card>
+    <h2>Delete {{ delete_device.name }}</h2>
+    <p class="mut">Delete <strong>{{ delete_device.name }}</strong> from NetShield? This cannot be undone.</p>
+    <p class="mut"><strong data-assigned-count>{{ assigned_ip_count }}</strong> assigned public IP{{ assigned_ip_count|pluralize }} will be deleted with it.</p>
+    <p class="ref-delete-note">Router rules are retained. RAW monitoring rules may remain on the MikroTik; router cleanup will not be performed. Historical provisioning audits are retained.</p>
+    <form method="post" action="{% url 'device_delete' delete_device.id %}" data-device-delete-form>
+        {% csrf_token %}
+        <input type="hidden" name="confirm" value="yes">
+        <div data-management-errors role="alert" class="ref-form-error">{{ delete_device_error }}</div>
+        <div class="ref-form-actions">
+            <button class="btn go" type="button" data-ref-delete-confirm>Delete device</button>
+            <button class="btn" type="button" data-ref-delete-cancel>Cancel</button>
+        </div>
+    </form>
+</div>

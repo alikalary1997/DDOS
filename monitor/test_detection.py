@@ -22,7 +22,10 @@ class DetectionTests(TestCase):
         env = patch.dict(os.environ, {"NETSHIELD_DEVICE_ENCRYPTION_KEY": Fernet.generate_key().decode()})
         env.start()
         self.addCleanup(env.stop)
-        self.device = Device(name="Test router", management_ip="192.0.2.10", username="test")
+        # The DDoS Detection page lists only the INT group, so the fixture device belongs to it.
+        from devices.models import Group
+        self.device = Device(name="Test router", management_ip="192.0.2.10", username="test",
+                             group=Group.objects.create(name="INT"))
         self.device.set_password("test-only")
         self.device.save()
         self.ip = PublicIP.objects.create(address="8.8.8.8", device=self.device, incoming_monitoring_interface="ether1",
@@ -334,7 +337,7 @@ class DetectionTests(TestCase):
             self.assertContains(self.client.get(reverse("public_ips")), "Under Attack")
         history = self.client.get(reverse("ddos_detection"))
         # The page is now a device control view; incident rows are rendered from saved detection state.
-        self.assertContains(history, "Start or stop attack monitoring per MikroTik device")
+        self.assertContains(history, "Attack monitoring for the <b>INT</b> group")
         self.assertContains(history, "8.8.8.8")
         self.client.logout()
         self.assertEqual(self.client.get(reverse("ddos_detection")).status_code, 302)

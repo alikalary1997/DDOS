@@ -18,6 +18,9 @@ from .dashboard_data import dashboard_data
 
 HIGH_CPU = 80
 WARN_CPU = 65
+# This page is scoped to one Group. Only devices tagged with it are listed or controlled here;
+# every other device belongs to another page and must never appear.
+DETECTION_SCOPE_GROUP = "INT"
 
 
 def _mode(sensor):
@@ -83,8 +86,8 @@ def overview(can_control=False):
                       for device_id, cpu_warning, cpu_attack
                       in DeviceDDoSThreshold.objects.values_list("device_id", "cpu_warning", "cpu_attack")}
     devices = []
-    for device in Device.objects.filter(device_type="mikrotik").values(
-            "id", "name", "management_ip", "enabled"):
+    for device in Device.objects.filter(device_type="mikrotik", group__name=DETECTION_SCOPE_GROUP).values(
+            "id", "name", "management_ip", "enabled", "group__name"):
         metrics = _device_metrics(sensor_fleet.get(device["id"], []), now)
         ips = []
         for row in rows_by_device.get(device["id"], []):
@@ -106,6 +109,8 @@ def overview(can_control=False):
         devices.append({
             "id": device["id"], "name": device["name"], "management_ip": device["management_ip"],
             "enabled": device["enabled"], "monitored": monitored,
+            # The device's Group tag, so the page can be limited to one group.
+            "group": device["group__name"] or "",
             "attacked": any(ip["attacked"] for ip in ips),
             "warning": (not any(ip["attacked"] for ip in ips)) and any(ip["warning"] for ip in ips),
             "cpu_warning": float(cpu_warning) if cpu_warning is not None else None,
@@ -113,16 +118,23 @@ def overview(can_control=False):
             "metrics": metrics, "sensors_url": reverse("devices") + f"#inspect-{device['id']}", "ips": ips})
     return {
         "can_control": can_control, "generated_at": now,
+        "scope_group": DETECTION_SCOPE_GROUP,
         "bandwidth_scale_mbps": float(global_thresholds.bandwidth_mbps_attack) if global_thresholds else None,
         "high_cpu": HIGH_CPU, "warn_cpu": WARN_CPU, "devices": devices}
 
 
 def control(action, device_id=None):
-    """Start/stop monitoring through the existing runtime. Stopping keeps all data and incidents."""
+    """Start/stop monitoring through the existing runtime. Stopping keeps all data and incidents.
+
+    Scoped to the page's Group like the listing: a device outside it cannot be controlled from
+    here even by posting its id directly.
+    """
     from public_ips.services.monitoring_runtime import start_device, stop
     scope = PublicIP.objects.filter(device__device_type="mikrotik")
     if device_id is not None:
-        get_object_or_404(Device, pk=device_id, device_type="mikrotik")
+        device = get_object_or_404(Device, pk=device_id, device_type="mikrotik")
+        if (device.group.name if device.group else "") != DETECTION_SCOPE_GROUP:
+            raise ValidationError(f"This device is not in the {DETECTION_SCOPE_GROUP} group.")
         scope = scope.filter(device_id=device_id)
     if action == "stop":
         stop(list(scope.values_list("pk", flat=True)))

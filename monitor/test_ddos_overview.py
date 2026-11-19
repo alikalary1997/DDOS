@@ -19,7 +19,10 @@ class DDoSOverviewTests(TestCase):
         env = patch.dict(os.environ, {"NETSHIELD_DEVICE_ENCRYPTION_KEY": Fernet.generate_key().decode()})
         env.start()
         self.addCleanup(env.stop)
-        self.device = Device(name="Edge 1", management_ip="192.0.2.10", username="test")
+        # This page lists only devices tagged with its group, so the fixture belongs to it.
+        from devices.models import Group
+        self.int_group = Group.objects.create(name="INT")
+        self.device = Device(name="Edge 1", management_ip="192.0.2.10", username="test", group=self.int_group)
         self.device.set_password("test-only")
         self.device.save()
         self.ip = PublicIP.objects.create(address="8.8.8.8", device=self.device, incoming_monitoring_interface="ether1",
@@ -34,9 +37,44 @@ class DDoSOverviewTests(TestCase):
     def devices(self):
         return self.client.get("/ddos-detection/data/").json()["devices"]
 
+    def test_each_device_reports_its_group(self):
+        """The page is scoped by Group, so every device must carry its group name."""
+        other = Device(name="Core 1", management_ip="192.0.2.11", username="test")
+        other.set_password("test-only")
+        other.save()
+        by_name = {device["name"]: device for device in self.devices()}
+        self.assertEqual(by_name["Edge 1"]["group"], "INT")
+        self.assertNotIn("Core 1", by_name, "a device outside the group is never listed")
+
+    def test_only_int_group_devices_are_listed(self):
+        """This page belongs to the INT group: other devices must not appear at all."""
+        for name, ip in (("NCS", "192.0.2.20"), ("Connection Kalar-1", "192.0.2.21")):
+            other = Device(name=name, management_ip=ip, username="test")
+            other.set_password("test-only")
+            other.save()
+        names = [device["name"] for device in self.devices()]
+        self.assertEqual(names, ["Edge 1"])
+        self.assertEqual(self.client.get("/ddos-detection/data/").json()["scope_group"], "INT")
+
+    def test_the_page_names_its_group_and_offers_no_widening(self):
+        page = self.client.get("/ddos-detection/").content.decode()
+        self.assertIn('id="ddGroup"', page)
+        self.assertIn("Attack monitoring for the <b>INT</b> group", page)
+        self.assertNotIn("All groups", page, "the scope cannot be widened from this page")
+
+    def test_a_device_outside_the_group_cannot_be_controlled(self):
+        from devices.models import Group
+        from monitor.services.ddos_overview import control
+        outsider = Device(name="NCS", management_ip="192.0.2.30", username="test",
+                          group=Group.objects.create(name="Core"))
+        outsider.set_password("test-only")
+        outsider.save()
+        with self.assertRaises(Exception):
+            control("start", outsider.pk)
+
     def test_page_drops_history_and_unknown_metrics_are_not_zero(self):
         page = self.client.get("/ddos-detection/")
-        self.assertContains(page, "Start or stop attack monitoring per MikroTik device")
+        self.assertContains(page, "Attack monitoring for the <b>INT</b> group")
         for removed in ("Detection history", "PASSIVE DETECTION", "Detection thresholds and recovery settings"):
             self.assertNotContains(page, removed)
         device = self.devices()[0]

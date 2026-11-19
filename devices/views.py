@@ -512,4 +512,7 @@ def delete_device(request, device_id):
             return JsonResponse({"ok": False, "error": error, "assigned_ip_count": count}, status=status)
     context = inventory_context(request)
     context.update(delete_device={"id": device.pk, "name": device.name}, assigned_ip_count=count, delete_device_error=error)
+    # The Devices table asks for the confirmation as a fragment so deletion stays in-page.
+    if request.GET.get("fragment"):
+        return render(request, "monitor/components/device_delete_fragment.html", context, status=status)
     return render(request, "monitor/devices.html", context, status=status)
