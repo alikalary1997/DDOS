@@ -19,8 +19,9 @@ class PingError(Exception):
 
 def check_target(device):
     """Apply the management-address allowlist; returns the canonical IP string."""
-    if not device.enabled or device.device_type != 'mikrotik':
-        raise PingError("Enable a saved MikroTik device before using Ping sensors.")
+    # Ping is plain ICMP, so any device type that is SNMP-monitored can use it.
+    if not device.enabled or device.device_type not in ('mikrotik', 'cisco'):
+        raise PingError("Enable a saved MikroTik or Cisco device before using Ping sensors.")
     try:
         return validate_target(SimpleNamespace(pk=device.pk, management_ip=device.management_ip, api_port=device.api_port))
     except TargetPolicyError as error:

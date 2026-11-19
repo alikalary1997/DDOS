@@ -272,6 +272,23 @@ def topology_map(request):
 
 @never_cache
 @login_required(login_url="device_login")
+@require_GET
+def switch_ports(request, device_id):
+    """Live port states for one switch, for the topology map's switch panel.
+
+    Read-only SNMP, gated by the operator's own saved credentials and the device allowlist.
+    """
+    from .services.topology_map import switch_ports as read_ports
+    device = get_object_or_404(Device, pk=device_id)
+    payload = read_ports(device)
+    payload.update(device_id=device.pk, name=device.name, ip=str(device.management_ip))
+    response = JsonResponse(payload)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@never_cache
+@login_required(login_url="device_login")
 @require_POST
 @sensitive_post_parameters("password")
 @sensitive_variables()

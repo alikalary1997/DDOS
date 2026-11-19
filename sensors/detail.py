@@ -29,6 +29,7 @@ METRICS = {
     "uptime": ["uptime_seconds"],
     "ping": ["ping_ms", "packet_loss"],
     "pppoe": ["pppoe_users"],
+    "neighbors": ["neighbor_count"],
 }
 
 
@@ -77,6 +78,7 @@ def history_payload(sensor, key=DEFAULT_RANGE):
                 "ping_ms": sample.ping_ms if sample.valid else None,
                 "packet_loss": sample.packet_loss if sample.valid else None,
                 "pppoe_users": sample.pppoe_users if sample.valid else None,
+                "neighbor_count": sample.neighbor_count if sample.valid else None,
                 "restart_detected": sample.restart_detected,
                 "counter_reset": sample.counter_reset,
             }

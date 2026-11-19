@@ -119,7 +119,7 @@
         if (!svg) return;
         svg.replaceChildren();
         const keys = sensor.kind === 'cpu' ? ['cpu'] : sensor.kind === 'ping' ? ['ping_ms'] :
-            sensor.kind === 'pppoe' ? ['pppoe_users'] : ['in_mbps', 'out_mbps'];
+            sensor.kind === 'pppoe' ? ['pppoe_users'] : sensor.kind === 'neighbors' ? ['neighbor_count'] : ['in_mbps', 'out_mbps'];
         const sets = keys.map(key => segments(sensor.history, key, sensor.interval));
         const points = sets.flat(2);
         card.querySelector('[data-chart-note]').textContent = points.length ? 'Time along the horizontal axis; gaps indicate missing readings.' : 'No valid historical rates yet.';
@@ -153,6 +153,7 @@
         if (sensor.kind === 'traffic') note += ' In ' + rate(sensor.in_mbps) + ' / Out ' + rate(sensor.out_mbps);
         if (sensor.kind === 'ping') note += ' Latency ' + (sensor.ping_ms ?? '—') + ' ms, loss ' + (sensor.packet_loss ?? '—') + '%';
         if (sensor.kind === 'pppoe') note += ' Active users ' + (sensor.pppoe_users ?? '—');
+        if (sensor.kind === 'neighbors') note += ' Neighbours seen ' + (sensor.neighbor_count ?? '—');
         card.querySelector('[data-sample-note]').textContent = note;
         const body = card.querySelector('[data-history]'); body.replaceChildren();
         for (const sample of [...sensor.history].reverse()) {
@@ -160,6 +161,7 @@
             row.insertCell().textContent = new Date(sample.timestamp).toLocaleString();
             row.insertCell().textContent = sensor.kind === 'cpu' ? format(sample.cpu) + ' %' :
                 sensor.kind === 'pppoe' ? (sample.pppoe_users ?? '—') + ' users' :
+                sensor.kind === 'neighbors' ? (sample.neighbor_count ?? '—') + ' neighbours' :
                 sensor.kind === 'ping' ? (sample.ping_ms ?? '—') + ' ms / ' + (sample.packet_loss ?? '—') + '% loss' :
                 sensor.kind === 'uptime' ? sample.uptime ?? '—' : 'In ' + rate(sample.in_mbps) + ' / Out ' + rate(sample.out_mbps);
             row.insertCell().textContent = sample.valid ? (sample.restart_detected ? 'Uptime reset' : 'Valid') : 'Read failed';

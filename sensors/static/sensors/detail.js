@@ -34,6 +34,7 @@
         if (sensorKind === 'uptime') return duration(point.uptime_seconds);
         if (sensorKind === 'ping') return format(point.ping_ms, 1) + ' ms / ' + format(point.packet_loss, 1) + '% loss';
         if (sensorKind === 'pppoe') return (Number.isFinite(point.pppoe_users) ? point.pppoe_users : '—') + ' users';
+        if (sensorKind === 'neighbors') return (Number.isFinite(point.neighbor_count) ? point.neighbor_count : '—') + ' neighbours';
         return 'In ' + rate(point.in_mbps) + ' / Out ' + rate(point.out_mbps);
     }
     /* ---- tabs ---- */
@@ -73,12 +74,13 @@
         });
         document.querySelectorAll('[data-chart-caption]').forEach(caption => {
             caption.textContent = (kind === 'traffic' ? 'Inbound / outbound Mbps' : kind === 'ping' ? 'Latency ms'
-                : kind === 'cpu' ? 'CPU %' : kind === 'pppoe' ? 'Active PPPoE users' : 'Uptime') + ' · ' + label;
+                : kind === 'cpu' ? 'CPU %' : kind === 'pppoe' ? 'Active PPPoE users'
+                : kind === 'neighbors' ? 'Neighbours seen' : 'Uptime') + ' · ' + label;
         });
         document.querySelectorAll('[data-detail-legend]').forEach(legend => {
             legend.textContent = kind === 'traffic' ? 'Blue: inbound · Green: outbound'
                 : kind === 'ping' ? 'Blue: latency' : kind === 'cpu' ? 'Blue: CPU'
-                : kind === 'pppoe' ? 'Blue: active users' : 'Blue: uptime';
+                : kind === 'pppoe' ? 'Blue: active users' : kind === 'neighbors' ? 'Blue: neighbours' : 'Blue: uptime';
         });
     }
 
@@ -107,7 +109,7 @@
         return groups;
     }
     const METRICS = {traffic: ['in_mbps', 'out_mbps'], cpu: ['cpu'], ping: ['ping_ms'],
-                     uptime: ['uptime_seconds'], pppoe: ['pppoe_users']};
+                     uptime: ['uptime_seconds'], pppoe: ['pppoe_users'], neighbors: ['neighbor_count']};
     function drawChart() {
         const svg = document.querySelector('[data-detail-chart]');
         if (!svg || !payload) return;
@@ -143,7 +145,7 @@
                     class: index ? 'outbound' : 'inbound'}));
             }
         }
-        const label = value => kind === 'uptime' ? duration(value) : kind === 'pppoe' ? format(value, 0) : format(value, 1);
+        const label = value => kind === 'uptime' ? duration(value) : kind === 'pppoe' || kind === 'neighbors' ? format(value, 0) : format(value, 1);
         for (const [x, y, text, anchor] of [[50, 22, label(scaleMax), 'end'], [50, 199, '0', 'end'],
             [55, 220, new Date(low).toLocaleString(), 'start'], [655, 220, new Date(high).toLocaleString(), 'end']]) {
             const element = node('text', {x, y, 'text-anchor': anchor});
@@ -210,6 +212,7 @@
             else if (key === 'packet_loss') label.textContent = format(point.packet_loss, 1);
             else if (key === 'uptime_seconds') label.textContent = duration(point.uptime_seconds);
             else if (key === 'pppoe_users') label.textContent = Number.isFinite(point.pppoe_users) ? point.pppoe_users : '—';
+            else if (key === 'neighbor_count') label.textContent = Number.isFinite(point.neighbor_count) ? point.neighbor_count : '—';
             if (!plain) applyArc(gauge, arc, gaugePercent(gauge, point));
         });
     }

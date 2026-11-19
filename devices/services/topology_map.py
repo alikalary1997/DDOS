@@ -180,86 +180,56 @@ def _stats(node, subtree):
     if users is not None:
         return ("Site", users, f"PPPoE user{'s' if users != 1 else ''}", " · ".join(parts))
     if mbps is not None:
-        return ("Site", mbps, "Mbps", " · ".join(parts))
+        # Round here, not only in the note: the summary line uses `value` directly, and a raw
+        # sensor float renders as 479.97997768423136 Mbps on the card.
+        return ("Site", round(mbps, 2), "Mbps", f"{mbps:.2f} Mbps")
     return ("Site", None, "", "No data")
 
 
-# Canvas geometry: four fixed stages stacked vertically. Each stage is a full-width band of
-# cards flowing left to right, and connectors drop from the bottom edge of a parent card to the
-# top edge of its children's cards. Cards are wide-but-short so a name and its stat share a row.
-NODE_WIDTH = 260
-NODE_HEIGHT = 62
-NODE_GAP = 18              # horizontal distance between cards in the same row
-ROW_HEIGHT = 78            # vertical pitch inside a stage
-STAGE_HEADER = 26          # stage title band above its first row
-STAGE_GAP = 40             # breathing room between two stages, also where connectors run
-CANVAS_WIDTH = 900
-CANVAS_PADDING = 12
+# Canvas geometry, matching the reference topology view: four fixed columns left to right,
+# cards stacked top to bottom inside each column, and horizontal S-curve connectors running
+# from a parent's right edge to a child's left edge.
+NODE_WIDTH = 152
+NODE_HEIGHT = 40
+ROW_HEIGHT = 50              # vertical pitch inside a column
+COLUMN_X = (8, 200, 392, 584)
+HEADER_HEIGHT = 34           # column labels sit above the first card
+# The viewBox is wider than the columns need so the panel renders it close to 1:1: a narrow
+# viewBox stretched across a wide panel is what makes 12px card text look oversized.
+CANVAS_WIDTH = 760
 
 
-def _assign_columns(ordered, children_of):
-    """Column index per device inside its stage, with each parent centred on its children.
+def _row_layout(ordered, children_of):
+    """Row index per device, with each parent centred on its children.
 
-    Leaves are numbered first, left to right, so a stage stays compact. Parents are then
-    placed at the midpoint of their children's columns, which keeps every fan-out symmetrical
-    regardless of how many devices a stage holds. Same rule as the horizontal version's rows,
-    just applied along the other axis.
+    This is the reference map's `lay()`: leaves are numbered top to bottom, then every parent
+    takes the midpoint of its children's rows. Leaves first keeps a column compact; the
+    midpoint keeps each fan-out symmetrical however deep or lopsided a branch is.
     """
-    columns = {}
-    cursor = 0
+    rows = {}
+    cursor = [0]
 
-    # Pass 1: leaves take successive columns in document order.
-    for node in ordered:
-        kids = [child for child in children_of.get(node.device.pk, []) if child.device.pk != node.device.pk]
-        if not kids:
-            columns[node.device.pk] = cursor
-            cursor += 1
-
-    # Pass 2: resolve parents deepest-first so a child's column is always known.
     def resolve(node, seen):
-        if node.device.pk in columns:
-            return columns[node.device.pk]
+        if node.device.pk in rows:
+            return rows[node.device.pk]
         kids = [child for child in children_of.get(node.device.pk, [])
                 if child.device.pk not in seen and child.device.pk != node.device.pk]
         if not kids:
-            columns[node.device.pk] = cursor
-            return columns[node.device.pk]
+            rows[node.device.pk] = cursor[0]
+            cursor[0] += 1
+            return rows[node.device.pk]
         placed = [resolve(child, seen | {child.device.pk}) for child in kids]
-        columns[node.device.pk] = (min(placed) + max(placed)) / 2
-        return columns[node.device.pk]
+        rows[node.device.pk] = (min(placed) + max(placed)) / 2
+        return rows[node.device.pk]
 
     for node in ordered:
         resolve(node, frozenset({node.device.pk}))
-    return columns
+    return rows
 
 
-def _stage_layout(ordered, columns, children_of):
-    """Vertical band per stage: top y, its row count, and each card's rank inside the band.
-
-    Cards fill a stage left to right and wrap onto a new row only when they no longer fit across
-    the canvas, so a branch with a dozen towers grows the TOWERS band instead of shrinking every
-    card. An empty stage keeps its header and a little breathing room.
-    """
-    layout = {}
-    y = CANVAS_PADDING
-    for key, _label in LEVELS:
-        members = [node for node in ordered if node.level == key]
-        per_row = max(1, (CANVAS_WIDTH - CANVAS_PADDING * 2 + NODE_GAP) // (NODE_WIDTH + NODE_GAP))
-        rows_needed = max(1, -(-len(members) // per_row)) if members else 0
-        layout[key] = {
-            "top": y, "per_row": per_row,
-            "height": STAGE_HEADER + rows_needed * ROW_HEIGHT,
-            "rows": rows_needed,
-            "count": len(members),
-            # Rank each card left to right inside its stage; that rank is what decides its
-            # column, so two cards can never be rounded onto the same slot.
-            "rank": {
-                node.device.pk: rank
-                for rank, node in enumerate(sorted(members, key=lambda n: columns[n.device.pk]))
-            },
-        }
-        y += STAGE_HEADER + rows_needed * ROW_HEIGHT + STAGE_GAP
-    return layout, y - STAGE_GAP + CANVAS_PADDING
+def _column_layout(ordered):
+    """How many cards each of the four stage columns holds."""
+    return {key: sum(1 for node in ordered if node.level == key) for key, _label in LEVELS}
 
 
 def _device_state(device):
@@ -292,30 +262,23 @@ def build_map():
             collect(node, frozenset({node.device.pk}))
 
     children_of = {node.device.pk: list(node.children) for node in ordered}
-    columns = _assign_columns(ordered, children_of)
-    stage, canvas_height = _stage_layout(ordered, columns, children_of)
+    rows = _row_layout(ordered, children_of)
+    deepest = max(rows.values(), default=0)
+    canvas_height = HEADER_HEIGHT + (int(deepest) + 1) * ROW_HEIGHT + 12
 
     nodes = []
     for node in ordered:
         subtree = descendants[node.device.pk]
         label, value, unit, note = _stats(node, subtree)
         site_group = 1 + sum(1 for n in subtree if n.level == "tower")
-        band = stage[node.level]
-        rank = band["rank"][node.device.pk]
-        # Centre the whole stage when it fits on a single row.
-        padding = 0
-        if band["rows"] == 1:
-            room = CANVAS_WIDTH - CANVAS_PADDING * 2
-            used_width = band["count"] * NODE_WIDTH + (band["count"] - 1) * NODE_GAP
-            padding = max(0, (room - used_width) // 2)
-        col = rank % band["per_row"]
-        row = rank // band["per_row"]
         nodes.append({
             "key": node.device.pk, "name": node.device.name,
             "ip": str(node.device.management_ip), "state": _device_state(node.device),
+            "device_type": node.device.device_type,
             "level": node.level, "label": label, "value": value, "unit": unit, "note": note,
-            "x": CANVAS_PADDING + padding + col * (NODE_WIDTH + NODE_GAP),
-            "y": round(band["top"] + STAGE_HEADER + row * ROW_HEIGHT),
+            # Fixed column per stage, row from the centred layout - the reference's grid.
+            "x": COLUMN_X[LEVELS_INDEX[node.level]],
+            "y": round(HEADER_HEIGHT + rows[node.device.pk] * ROW_HEIGHT),
             "w": NODE_WIDTH, "h": NODE_HEIGHT,
             "summary": _summary(node, value, unit),
             "site_count": site_group if node.level == "tower" and site_group > 1 else 0,
@@ -331,22 +294,23 @@ def build_map():
             parent_node, child_node = by_key.get(node.device.pk), by_key.get(child.device.pk)
             if not parent_node or not child_node:
                 continue
-            # Downward flow: out of the parent's bottom edge, into the child's top edge.
+            # Horizontal flow: out of the parent's right edge, into the child's left edge. `mid`
+            # is the control-point x both bezier handles share, which is what makes the S-curve.
             links.append({
                 "id": f"{node.device.pk}-{child.device.pk}",
                 "from": node.device.pk, "to": child.device.pk,
-                "x1": parent_node["x"] + NODE_WIDTH / 2, "y1": parent_node["y"] + NODE_HEIGHT,
-                "x2": child_node["x"] + NODE_WIDTH / 2, "y2": child_node["y"],
+                "x1": parent_node["x"] + NODE_WIDTH, "y1": parent_node["y"] + NODE_HEIGHT / 2,
+                "x2": child_node["x"], "y2": child_node["y"] + NODE_HEIGHT / 2,
+                "mid": round((parent_node["x"] + NODE_WIDTH + child_node["x"]) / 2),
             })
 
     return {
         "nodes": nodes, "links": links, "height": canvas_height,
         "width": CANVAS_WIDTH, "node_width": NODE_WIDTH, "node_height": NODE_HEIGHT,
         "columns": [
-            {"key": key, "label": label,
-             "x": CANVAS_PADDING, "y": stage[key]["top"] + 15,
-             "count": stage[key]["count"]}
-            for key, label in LEVELS
+            {"key": key, "label": label, "x": COLUMN_X[index], "y": 14,
+             "count": sum(1 for node in nodes if node["level"] == key)}
+            for index, (key, label) in enumerate(LEVELS)
         ],
         "total": len(ordered), "core_count": sum(1 for node in nodes if node["level"] == "core"),
     }
@@ -357,3 +321,31 @@ def _summary(node, value, unit):
     if value is None:
         return "No data"
     return f"{value} {unit}".strip()
+
+
+def switch_ports(device):
+    """Live SNMP port states for one switch, for the map's switch panel.
+
+    Reads the device's saved SNMP credentials and returns a plain payload. Nothing is invented:
+    when SNMP is unavailable the caller gets an `error` and no port list, so the panel can say
+    so instead of drawing a made-up green/red grid.
+    """
+    from sensors import snmp
+    from sensors.models import SNMPProfile
+    from devices.services.credentials import CredentialError, decrypt_password
+
+    profile = SNMPProfile.objects.filter(device=device).first()
+    if not profile or profile.validated_ip != device.management_ip:
+        return {"ok": False, "error": "Test and save SNMP credentials for this device first."}
+    try:
+        ports = snmp.read(device, decrypt_password(profile.community), profile.port, "ports")
+    except snmp.SNMPError as error:
+        return {"ok": False, "error": str(error)}
+    except CredentialError:
+        return {"ok": False, "error": "Stored SNMP credentials could not be decrypted."}
+    # Only physical-looking ports are drawn in the grid: VLAN and loopback pseudo-interfaces
+    # are not ports a cable plugs into, and would read as permanently "up".
+    physical = [p for p in ports if not p["name"].lower().startswith(("vlan", "loopback", "null", "tunnel"))]
+    return {"ok": True, "ports": physical, "total": len(physical),
+            "connected": sum(1 for p in physical if p["oper"] == "up"),
+            "disabled": sum(1 for p in physical if p["admin"] == "down")}

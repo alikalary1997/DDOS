@@ -14,6 +14,12 @@ from pysnmp.proto.rfc1905 import NoSuchObject, NoSuchInstance, EndOfMibView
 UPTIME = "1.3.6.1.2.1.1.3.0"
 DESCR = "1.3.6.1.2.1.2.2.1.2"
 STATUS = "1.3.6.1.2.1.2.2.1.8"
+# IF-MIB administrative state: 1 = up (not disabled), 2 = down (shut by an operator).
+ADMIN_STATUS = "1.3.6.1.2.1.2.2.1.7"
+# ifHighSpeed is Mbps; ifSpeed is bits/s and saturates at 4.29 G on old agents.
+HIGH_SPEED = "1.3.6.1.2.1.31.1.1.1.15"
+SPEED = "1.3.6.1.2.1.2.2.1.5"
+IF_ALIAS = "1.3.6.1.2.1.31.1.1.1.18"
 IN = "1.3.6.1.2.1.31.1.1.1.6"
 OUT = "1.3.6.1.2.1.31.1.1.1.10"
 CPU = "1.3.6.1.2.1.25.3.3.1.2"
@@ -42,6 +48,18 @@ PPP_REQUEST_RETRIES = 2
 # so the ifTable walk needs bulk reads and a far higher ceiling than the old 600-row guard.
 INTERFACE_BULK_REPETITIONS = 25
 INTERFACE_WALK_LIMIT = 20000
+# Neighbour discovery, for switches. Both tables describe one remote device per row. Walking a
+# table ROOT returns every column for every row (387 bindings for 43 neighbours on a real
+# switch), so only a single column is walked - the one that has exactly one entry per row:
+#   LLDP  lldpRemTable   .1.0.8802.1.1.2.1.4.1.1.<column>.<timeMark>.<localPort>.<index>
+#         column 4 = lldpRemChassisIdSubtype, present on every row
+#   CDP   cdpCacheTable  .1.3.6.1.9.9.23.1.2.1.1.<column>.<ifIndex>.<deviceIndex>
+#         column 1 = cdpCacheAddressType, present on every row
+LLDP_NEIGHBOR_COLUMN = "1.0.8802.1.1.2.1.4.1.1.4"
+CDP_NEIGHBOR_COLUMN = "1.3.6.1.9.9.23.1.2.1.1.1"
+NEIGHBOR_WALK_LIMIT = 5000
+# Device types this adapter accepts: both speak SNMPv2c for the counters it reads.
+SNMP_DEVICE_TYPES = ("mikrotik", "cisco")
 
 
 class SNMPError(Exception):
@@ -147,6 +165,38 @@ class Client:
             result.append({"index": index, "name": label, "status": {1: "Up", 2: "Down"}.get(int(state) if isinstance(state, Integer32) else 0, "Unknown")})
         return result
 
+    async def ports(self):
+        """Every interface with its operational and administrative state, for a switch panel.
+
+        A port row is: index, name, oper status, admin status, speed, alias. `oper` is the
+        link state (1 up / 2 down); `admin` distinguishes a shut port from a disconnected
+        cable, which is the difference between "disabled" and "not connected".
+        """
+        names = {row[-1]: value for row, value in await self.bulk_walk(DESCR)}
+        oper = {row[-1]: value for row, value in await self.bulk_walk(STATUS)}
+        admin = {row[-1]: value for row, value in await self.bulk_walk(ADMIN_STATUS)}
+        speed = {row[-1]: value for row, value in await self.bulk_walk(SPEED)}
+        result = []
+        for index, name in sorted(names.items()):
+            if not isinstance(name, OctetString):
+                continue
+            label = name.asOctets().decode('utf-8', errors='replace')
+            if not label or len(label) > 255:
+                continue
+            oper_state = number(oper[index], Integer32) if isinstance(oper.get(index), Integer32) else 0
+            admin_state = number(admin[index], Integer32) if isinstance(admin.get(index), Integer32) else 0
+            mbps = 0
+            if isinstance(speed.get(index), Integer32):
+                mbps = int(speed[index]) // 1_000_000
+            result.append({
+                "index": index, "name": label,
+                "oper": {1: "up", 2: "down"}.get(oper_state, "unknown"),
+                "admin": {1: "up", 2: "down"}.get(admin_state, "unknown"),
+                "speed_mbps": mbps,
+                "alias": "",
+            })
+        return result
+
     async def pppoe_users(self):
         """Count active PPP/PPPoE sessions in the MikroTik PPP table.
 
@@ -204,6 +254,19 @@ class Client:
 
             
 
+    async def neighbors(self):
+        """How many neighbours this switch currently sees through LLDP, else CDP.
+
+        Cisco switches may expose both tables, in which case LLDP is used and CDP ignored: the
+        two would describe the same links twice. An empty but readable table is a real 0.
+        """
+        for column in (LLDP_NEIGHBOR_COLUMN, CDP_NEIGHBOR_COLUMN):
+            root = tuple(map(int, column.split('.')))
+            rows = {row[len(root):] for row, _value in await self.bulk_walk(column, limit=NEIGHBOR_WALK_LIMIT)}
+            if rows:
+                return len(rows)
+        return 0
+
     async def sample(self, sensor):
         uptime = await self.uptime()
         result = {"uptime_seconds": uptime}
@@ -215,6 +278,9 @@ class Client:
         elif sensor.kind == "pppoe":
             # A count of zero is a valid reading; None is never produced here.
             result['pppoe_users'] = await self.pppoe_users()
+        elif sensor.kind == "neighbors":
+            # Same rule as PPPoE: a real empty table is 0, a failed read raises.
+            result['neighbor_count'] = await self.neighbors()
         elif sensor.kind == "traffic":
             suffix = '.' + str(sensor.interface_index)
             name, status, incoming, outgoing, discontinuity = await self.get(*(oid + suffix for oid in (DESCR, STATUS, IN, OUT, DISCONTINUITY)))
@@ -229,8 +295,8 @@ class Client:
 
 @sensitive_variables()
 def read(device, community, port, operation, sensor=None):
-    if not device.enabled or device.device_type != 'mikrotik':
-        raise SNMPError("Enable a saved MikroTik device before using SNMP sensors.")
+    if not device.enabled or device.device_type not in SNMP_DEVICE_TYPES:
+        raise SNMPError("Enable a saved MikroTik or Cisco device before using SNMP sensors.")
     try:
         validate_target(SimpleNamespace(pk=device.pk, management_ip=device.management_ip, api_port=port))
     except TargetPolicyError as error:
@@ -246,6 +312,8 @@ def read(device, community, port, operation, sensor=None):
                               retries=PPP_REQUEST_RETRIES if is_pppoe else 0)
             if operation == 'interfaces':
                 return await client.interfaces()
+            if operation == 'ports':
+                return await client.ports()
             if operation == 'test':
                 return await client.uptime()
             return await client.sample(sensor)

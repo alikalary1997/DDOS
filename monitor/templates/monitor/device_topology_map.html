@@ -16,16 +16,16 @@
                 {% for column in topology_map.columns %}
                 <text class="tmap-col" x="{{ column.x }}" y="{{ column.y }}">{{ column.label }}<tspan class="tmap-col-count"> {{ column.count }}</tspan></text>
                 {% endfor %}
-                {# Vertical flow: a soft S-curve from the parent's bottom edge to the child's top edge. #}
-                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.x1 }},{{ link.y1|add:30 }} {{ link.x2 }},{{ link.y2|add:-30 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
+                {# Horizontal flow: a soft S-curve from the parent's right edge to the child's left edge. #}
+                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.mid }},{{ link.y1 }} {{ link.mid }},{{ link.y2 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
                 <g class="tmap-nodes">
                     {% for node in topology_map.nodes %}
-                    <g class="tmap-node" data-node="{{ node.key }}" data-level="{{ node.level }}" data-state="{{ node.state }}" transform="translate({{ node.x }},{{ node.y }})" tabindex="0" role="button" aria-label="{{ node.name }}, {{ node.summary }}">
-                        <rect class="tmap-box" width="{{ node.w }}" height="{{ node.h }}" rx="8"/>
-                        <circle class="tmap-dot" data-state="{{ node.state }}" cx="16" cy="21" r="4"/>
-                        <text class="tmap-name" x="28" y="25">{{ node.name }}</text>
-                        <text class="tmap-sum" x="16" y="46">{{ node.summary }}</text>
-                        {% if node.site_count %}<g class="tmap-badge" transform="translate({{ node.w|add:-44 }},6)"><rect width="38" height="14" rx="7"/><text x="19" y="10.5" text-anchor="middle">{{ node.site_count }}</text></g>{% endif %}
+                    <g class="tmap-node" data-node="{{ node.key }}" data-level="{{ node.level }}" data-device-type="{{ node.device_type }}" data-state="{{ node.state }}" transform="translate({{ node.x }},{{ node.y }})" tabindex="0" role="button" aria-label="{{ node.name }}, {{ node.summary }}">
+                        <rect class="tmap-box" width="{{ node.w }}" height="{{ node.h }}" rx="6"/>
+                        <circle class="tmap-dot" data-state="{{ node.state }}" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">{{ node.name }}</text>
+                        <text class="tmap-sum" x="12" y="32">{{ node.summary }}</text>
+                        {% if node.site_count %}<g class="tmap-badge" transform="translate({{ node.w|add:-40 }},6)"><rect width="34" height="14" rx="7"/><text x="17" y="10.5" text-anchor="middle">{{ node.site_count }}</text></g>{% endif %}
                     </g>
                     {% endfor %}
                 </g>
@@ -45,6 +45,8 @@
     </aside>
 </div>
 
+<div class="tmap-switch" id="tmapSwitch" data-ports-url-template="{% url 'device_switch_ports' 0 %}" hidden></div>
+
 <p class="topo-legend">
     <span class="topo-legend-item"><i class="topo-dot" data-state="online"></i>Online</span>
     <span class="topo-legend-item"><i class="topo-dot" data-state="offline"></i>Offline / disabled</span>
@@ -52,5 +54,5 @@
     <span class="topo-legend-note">Node figures come from stored sensor readings. "No data" means no fresh reading exists — nothing is estimated.</span>
 </p>
 {{ topology_map.nodes|json_script:"topo-nodes-data" }}
-<script src="{% static 'monitor/js/topology_map.js' %}?v=20261117-svg" defer></script>
+<script src="{% static 'monitor/js/topology_map.js' %}?v=20261119-switch" defer></script>
 {% endblock %}

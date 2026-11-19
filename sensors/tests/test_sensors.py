@@ -369,10 +369,15 @@ class SensorTests(TestCase):
 
 class AdapterTests(SimpleTestCase):
     def test_running_worker_is_reused_without_spawning(self):
-        from sensors.runtime import ensure_worker
-        with patch('sensors.runtime.worker_running', return_value=True), patch('sensors.runtime.subprocess.Popen') as spawn:
-            ensure_worker()
-        spawn.assert_not_called()
+        from sensors import runtime
+        # A worker on current code is reused as-is; only a stale one is replaced.
+        with patch.object(runtime, 'worker_running', return_value=True), \
+             patch.object(runtime, 'worker_is_outdated', return_value=False), \
+             patch.object(runtime, 'stop_worker') as stop, \
+             patch.object(runtime, 'subprocess') as spawn:
+            runtime.ensure_worker()
+        spawn.Popen.assert_not_called()
+        stop.assert_not_called()
 
     def test_worker_spawn_failure_is_reported(self):
         from sensors.runtime import ensure_worker, StartupError
@@ -411,13 +416,17 @@ class AdapterTests(SimpleTestCase):
         stop.assert_called_once()
         proc.Popen.assert_called_once()
 
-    def test_an_outdated_worker_that_will_not_stop_is_not_doubled_up(self):
+    def test_an_outdated_worker_that_will_not_stop_is_reported_not_ignored(self):
+        # Silently keeping a stale worker would leave sensors reading with old logic, so this
+        # must surface as an error the operator can act on.
         from sensors import runtime
+        from sensors.runtime import StartupError
         with patch.object(runtime, 'worker_running', return_value=True), \
              patch.object(runtime, 'worker_is_outdated', return_value=True), \
              patch.object(runtime, 'stop_worker', return_value=False), \
              patch.object(runtime, 'subprocess') as proc:
-            runtime.ensure_worker()
+            with self.assertRaises(StartupError):
+                runtime.ensure_worker()
         proc.Popen.assert_not_called()
 
     def test_version_stamp_tracks_edits_to_the_sensor_code(self):

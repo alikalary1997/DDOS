@@ -34,7 +34,13 @@ def administrator(fn):
 
 
 def device_for(pk):
-    return get_object_or_404(Device.objects.defer('username', 'encrypted_password'), pk=pk, device_type='mikrotik')
+    """Any device that can host SNMP sensors.
+
+    Cisco switches are monitored over SNMP only: there is no RouterOS API, so they share the
+    sensor page but never the device-wide RouterOS settings below it.
+    """
+    return get_object_or_404(Device.objects.defer('username', 'encrypted_password'), pk=pk,
+                             device_type__in=('mikrotik', 'cisco'))
 
 
 @login_required
@@ -80,8 +86,12 @@ def context(device, user_can_edit=False):
 def inventory(request, device_id):
     device = device_for(device_id)
     ctx = context(device, request.user.is_staff or request.user.is_superuser)
-    # One page, two views: the sensor list and the device-wide settings panels.
-    ctx['active_view'] = 'settings' if request.GET.get('view') == 'settings' else 'sensors'
+    # One page, two views: the sensor list and the device-wide settings panels. Those panels
+    # (DDoS thresholds, SOS Public / Null IP protection) are RouterOS-only, so Cisco devices
+    # get the sensor list alone.
+    has_device_settings = device.device_type == Device.DeviceType.MIKROTIK
+    ctx['has_device_settings'] = has_device_settings
+    ctx['active_view'] = 'settings' if has_device_settings and request.GET.get('view') == 'settings' else 'sensors'
     return render(request, 'sensors/inventory.html', ctx)
 
 
@@ -259,8 +269,8 @@ def detect(request, device_id):
     device = device_for(device_id)
     ctx = context(device)
     kind = request.POST.get('kind')
-    if kind not in ('cpu', 'uptime', 'ping', 'pppoe'):
-        return JsonResponse({'error': 'Choose CPU, Uptime, Ping or PPPoE.'}, status=400)
+    if kind not in ('cpu', 'uptime', 'ping', 'pppoe', 'neighbors'):
+        return JsonResponse({'error': 'Choose CPU, Uptime, Ping, PPPoE or Neighbours.'}, status=400)
     ctx['sensor_form'] = AddSensorForm(initial={'kind': kind, 'interval': 10})
     if kind == 'ping':
         # A one-off ICMP probe: needs no SNMP credentials and creates no sensor.
@@ -278,6 +288,7 @@ def detect(request, device_id):
         reading = snmp.read(device, decrypt_password(profile.community), profile.port, 'sample', SimpleNamespace(kind=kind))
         value = (f"{reading['cpu']:.1f}%" if kind == 'cpu'
                  else f"{reading['pppoe_users']} active PPPoE user(s)" if kind == 'pppoe'
+                 else f"{reading['neighbor_count']} neighbour(s)" if kind == 'neighbors'
                  else format_uptime(reading['uptime_seconds']))
         ctx['sensor_success'] = f"{dict(Sensor.KINDS)[kind]} detected: {value}. You can now add this sensor."
     except snmp.SNMPError as error:
@@ -407,6 +418,7 @@ def detail_context(sensor, device, selected_range=None):
             'uptime_seconds': last.uptime_seconds, 'in_mbps': last.in_mbps, 'out_mbps': last.out_mbps,
             'ping_ms': last.ping_ms, 'packet_loss': last.packet_loss,
             'pppoe_users': last.pppoe_users,
+            'neighbor_count': last.neighbor_count,
             'restart_detected': last.restart_detected, 'counter_reset': last.counter_reset,
         }
     if sensor.kind == 'traffic':
@@ -431,6 +443,10 @@ def detail_context(sensor, device, selected_range=None):
         # No arbitrary scale: the count is shown plainly rather than forced onto a gauge.
         gauges = [{'key': 'pppoe_users', 'label': 'Active PPPoE users', 'unit': 'users',
                    'value': current['pppoe_users'] if current else None, 'tone': 'normal', 'plain': True}]
+    elif sensor.kind == 'neighbors':
+        # Same rule: a neighbour count has no natural maximum, so it is shown plainly.
+        gauges = [{'key': 'neighbor_count', 'label': 'Neighbours seen', 'unit': 'neighbours',
+                   'value': current['neighbor_count'] if current else None, 'tone': 'normal', 'plain': True}]
     else:
         gauges = [{'key': 'uptime_seconds', 'label': 'Device uptime', 'unit': '',
                    'value': format_uptime(current['uptime_seconds']) if current else None, 'tone': 'normal'}]
@@ -528,18 +544,20 @@ def data(request, device_id):
         row = {'id': sensor.pk, 'status': status, 'last_success': sensor.last_success,
                'error': sensor.error, 'kind': sensor.kind, 'interval': sensor.interval,
                'cpu': None, 'uptime': None, 'in_mbps': None, 'out_mbps': None,
-               'ping_ms': None, 'packet_loss': None, 'pppoe_users': None,
+               'ping_ms': None, 'packet_loss': None, 'pppoe_users': None, 'neighbor_count': None,
                'interface_status': None, 'restart_detected': False, 'counter_reset': False,
                'history': [{'timestamp': s.timestamp, 'cpu': s.cpu, 'in_mbps': s.in_mbps, 'out_mbps': s.out_mbps,
                             'uptime': format_uptime(s.uptime_seconds), 'restart_detected': s.restart_detected,
                             'ping_ms': s.ping_ms if s.valid else None,
                             'packet_loss': s.packet_loss if s.valid else None,
                             'pppoe_users': s.pppoe_users if s.valid else None,
+                            'neighbor_count': s.neighbor_count if s.valid else None,
                             'valid': s.valid} for s in samples]}
         if last and last.valid:
             row.update(cpu=last.cpu, uptime=format_uptime(last.uptime_seconds), in_mbps=last.in_mbps,
                        out_mbps=last.out_mbps, interface_status=last.interface_status,
                        ping_ms=last.ping_ms, packet_loss=last.packet_loss, pppoe_users=last.pppoe_users,
+                       neighbor_count=last.neighbor_count,
                        restart_detected=last.restart_detected, counter_reset=last.counter_reset)
         row['restart_count'] = sensor.samples.filter(restart_detected=True).count()
         rows.append(row)

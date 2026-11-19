@@ -68,8 +68,9 @@ def stop_worker():
     """
     pid_path = _runtime_directory() / 'worker.pid'
     try:
-        pid = int(pid_path.read_text(encoding='utf-8').strip())
-    except (OSError, ValueError):
+        raw = pid_path.read_text(encoding='utf-8').strip()
+        pid = int(raw) if raw.isdigit() and int(raw) > 1 else None
+    except OSError:
         pid = None
     if pid:
         if os.name == 'nt':
@@ -91,6 +92,12 @@ def stop_worker():
 
 
 def ensure_worker(restart_outdated=True):
+    """Start the worker, replacing a running one that predates the code now on disk.
+
+    Returns nothing on success. Raises StartupError when an outdated worker could not be
+    replaced: it must never be silently left running on stale code, because a worker keeps its
+    modules in memory and would keep reading with logic that no longer matches the server.
+    """
     try:
         with worker_lock('startup'):
             if worker_running():
@@ -99,7 +106,9 @@ def ensure_worker(restart_outdated=True):
                 # A worker from older code is running; replace it rather than leave sensors
                 # reading with logic that no longer matches the server.
                 if not stop_worker():
-                    return
+                    raise StartupError(
+                        'An SNMP worker running older code could not be stopped. '
+                        'Restart NetShield, then press Start again.')
             _spawn()
     except WorkerBusy:
         # Another Add/Start request owns startup. Its worker must become ready.
@@ -120,8 +129,10 @@ def _spawn():
             cwd=settings.BASE_DIR, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0), start_new_session=os.name != 'nt')
     try:
-        (_runtime_directory() / 'worker.pid').write_text(str(process.pid), encoding='utf-8')
-    except OSError:
+        # Never write a non-integer pid: a mocked or failed spawn must not leave a file that a
+        # later stop_worker() would mistake for a real process id.
+        (_runtime_directory() / 'worker.pid').write_text(str(int(process.pid)), encoding='utf-8')
+    except (OSError, TypeError, ValueError):
         pass
     for _ in range(30):
         if worker_running():

@@ -87,11 +87,18 @@ class PingAdapterTests(SimpleTestCase):
             popen.assert_not_called()
 
     @ALLOW
-    def test_disabled_or_wrong_type_device_rejected(self):
-        for extra in (dict(enabled=False), dict(device_type='cisco')):
+    def test_disabled_or_unsupported_device_rejected(self):
+        # A Cisco switch is ping-monitored too; only a disabled device or an unsupported type
+        # is refused. Anything refused must never reach subprocess.
+        for extra in (dict(enabled=False), dict(device_type='other')):
             with patch('sensors.ping.subprocess.Popen') as popen, self.assertRaises(ping.PingError):
                 ping.probe(SimpleNamespace(**{**vars(self.device), **extra}))
             popen.assert_not_called()
+
+    @ALLOW
+    def test_a_cisco_switch_is_allowed_to_be_pinged(self):
+        cisco = SimpleNamespace(**{**vars(self.device), 'device_type': 'cisco'})
+        self.assertEqual(ping.check_target(cisco), str(self.device.management_ip))
 
 
 class PingSensorTests(TestCase):

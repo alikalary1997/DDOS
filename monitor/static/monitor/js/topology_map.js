@@ -62,6 +62,8 @@
             if (title) title.textContent = 'Network overview';
             if (hint) hint.hidden = false;
             if (detail) { detail.hidden = true; detail.replaceChildren(); }
+            const switchPanel = document.getElementById('tmapSwitch');
+            if (switchPanel) { switchPanel.hidden = true; switchPanel.replaceChildren(); }
         }
 
         function row(label, value) {
@@ -92,6 +94,12 @@
             if (detail) {
                 detail.hidden = false;
                 detail.replaceChildren(...renderDetail(node, key));
+            }
+            // A switch opens its live port panel; every other device just shows its details.
+            const switchPanel = document.getElementById('tmapSwitch');
+            if (switchPanel) {
+                if ((node.device_type || '') === 'cisco') openSwitch(switchPanel, node);
+                else { switchPanel.hidden = true; switchPanel.replaceChildren(); }
             }
             if (panel && window.matchMedia('(max-width: 1100px)').matches) {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -143,6 +151,93 @@
             ].join('');
 
             return [grid, facts];
+        }
+
+        /* ---- switch port panel (Cisco) ---- */
+        // Ports come from the server's own SNMP read. Nothing here is estimated: if SNMP fails
+        // the panel says why rather than drawing a made-up green/red grid.
+        function portState(port) {
+            if (port.admin === 'down') return 'disabled';
+            return port.oper === 'up' ? 'up' : 'down';
+        }
+
+        function openSwitch(host, node) {
+            const template = host.dataset.portsUrlTemplate || '';
+            const url = template.replace(/0\/ports\/$/, `${node.key}/ports/`) || `/devices/topology/map/switch/${node.key}/ports/`;
+            host.hidden = false;
+            host.dataset.deviceId = String(node.key);
+            host.innerHTML = `<div class="tmap-sw-head"><div><p class="eyebrow">SWITCH</p><h2>${esc(node.name)}</h2>` +
+                `<span class="tmap-sw-ip">${esc(node.ip || '')}</span></div>` +
+                `<span class="tmap-sw-state" data-state="loading">Reading ports…</span></div>` +
+                '<div class="tmap-sw-body"><p class="tmap-hint">Reading live port state from SNMP…</p></div>';
+            fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(response => response.json().catch(() => ({ ok: false, error: 'The port list could not be read.' })))
+                .then(data => {
+                    // A slower request for another switch must not overwrite this one.
+                    if (host.dataset.deviceId !== String(node.key)) return;
+                    renderSwitch(host, node, data);
+                })
+                .catch(() => {
+                    if (host.dataset.deviceId !== String(node.key)) return;
+                    renderSwitch(host, node, { ok: false, error: 'The server could not be reached.' });
+                });
+        }
+
+        function renderSwitch(host, node, data) {
+            const head = host.querySelector('.tmap-sw-head');
+            const state = host.querySelector('.tmap-sw-state');
+            const body = host.querySelector('.tmap-sw-body');
+            if (!data.ok) {
+                if (state) { state.dataset.state = 'error'; state.textContent = 'SNMP unavailable'; }
+                if (body) body.innerHTML = `<p class="tmap-hint">Live port state is unavailable. ${esc(data.error || '')}</p>`;
+                return;
+            }
+            const ports = data.ports || [];
+            if (state) {
+                state.dataset.state = 'online';
+                state.textContent = `${data.connected} connected · ${data.total - data.connected} not connected`;
+            }
+            const grid = ports.map(port => {
+                // The port number alone fits the square: Gi0/1 -> 0/1, Gi1/0/24 -> 1/0/24.
+                const text = port.name.replace(/[^0-9/]/g, '') || port.name;
+                return `<button type="button" class="tmap-port" data-port="${port.index}" data-state="${portState(port)}" ` +
+                    `title="${esc(port.name)} — ${portState(port)}">${esc(text)}</button>`;
+            }).join('');
+            if (body) {
+                body.innerHTML = `<div class="tmap-port-grid">${grid || '<p class="tmap-hint">This switch reported no physical ports.</p>'}</div>` +
+                    '<div class="tmap-sw-foot">' +
+                    '<span class="tmap-key"><i data-state="up"></i>Connected</span>' +
+                    '<span class="tmap-key"><i data-state="down"></i>Not connected</span>' +
+                    '<span class="tmap-key"><i data-state="disabled"></i>Disabled</span>' +
+                    '<span class="tmap-hint">Click a port for its details.</span></div>' +
+                    '<div class="tmap-port-detail" data-port-detail hidden></div>';
+                body.querySelectorAll('.tmap-port').forEach(button => {
+                    button.addEventListener('click', () => showPort(host, ports, Number(button.dataset.port)));
+                });
+            }
+            if (head) head.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showPort(host, ports, index) {
+            const port = ports.find(item => item.index === index);
+            const detail = host.querySelector('[data-port-detail]');
+            if (!port || !detail) return;
+            host.querySelectorAll('.tmap-port').forEach(button => {
+                button.classList.toggle('is-selected', Number(button.dataset.port) === index);
+            });
+            const state = portState(port);
+            const label = { up: 'CONNECTED', down: 'NOT CONNECTED', disabled: 'DISABLED' }[state];
+            const tone = state === 'up' ? 'online' : state === 'disabled' ? 'warn' : 'error';
+            const speed = port.speed_mbps ? `${port.speed_mbps} Mbps` : '—';
+            detail.hidden = false;
+            detail.innerHTML = `<div class="tmap-sw-head"><div><p class="eyebrow">PORT</p><h2>${esc(port.name)}</h2></div>` +
+                `<span class="tmap-sw-state" data-state="${tone}">${label}</span></div>` +
+                '<dl class="tmap-detail">' +
+                `<dt>Admin / oper</dt><dd>${esc(port.admin)} / ${esc(port.oper)}</dd>` +
+                `<dt>Speed</dt><dd>${esc(speed)}</dd>` +
+                `<dt>SNMP ifIndex</dt><dd>${esc(port.index)}</dd>` +
+                (port.alias ? `<dt>Alias</dt><dd>${esc(port.alias)}</dd>` : '') +
+                '</dl>';
         }
 
         nodeEls.forEach(el => {

@@ -81,12 +81,12 @@ class MapTests(TestCase):
         columns = self.columns(data)
         self.assertEqual(columns["pppoe"], [], "no placeholder node is inserted for the gap")
         self.assertEqual(columns["tower"], ["Tower-B"])
-        # The link still spans from the limit straight down to the tower, skipping the empty stage.
+        # The link still spans from the limit across to the tower, skipping the empty column.
         link = [item for item in data["links"] if item["from"] == limit.pk][0]
         limit_node = self.card("Limit-6", data)
         tower_node = self.card("Tower-B", data)
         self.assertEqual(link["to"], tower_node["key"])
-        self.assertLess(limit_node["y"], tower_node["y"], "the tower sits in a lower stage")
+        self.assertLess(limit_node["x"], tower_node["x"], "the tower sits in a later column")
 
     def test_any_number_of_devices_per_level(self):
         core = self.device("Core")
@@ -104,15 +104,18 @@ class MapTests(TestCase):
             slots = [(self.card(name, data)["x"], self.card(name, data)["y"]) for name in names]
             self.assertEqual(len(slots), len(set(slots)), f"overlapping nodes in {column}")
 
-    def test_a_parent_is_centred_over_its_children_within_one_row(self):
+    def test_a_parent_is_vertically_centred_on_its_children(self):
+        # The reference layout centres each parent on its children's rows inside its column.
         core = self.device("Core")
         for n in range(1, 4):
             self.device(f"Limit-{n}", core)
         data = build_map()
         core_node = self.card("Core", data)
-        child_xs = [self.card(f"Limit-{n}", data)["x"] for n in range(1, 4)]
-        centre = (min(child_xs) + max(child_xs)) / 2
-        self.assertAlmostEqual(core_node["x"], centre, delta=1, msg="the core sits over its limits")
+        child_ys = [self.card(f"Limit-{n}", data)["y"] for n in range(1, 4)]
+        centre = (min(child_ys) + max(child_ys)) / 2
+        self.assertAlmostEqual(core_node["y"], centre, delta=1, msg="the core sits level with its limits")
+        # Every stage owns one fixed column, so the core is never to the right of its limits.
+        self.assertLess(core_node["x"], self.card("Limit-1", data)["x"])
 
     def test_status_colour_reflects_the_device_state(self):
         self.device("Online-Dev", tested=True)
@@ -173,8 +176,8 @@ class MapTests(TestCase):
         self.assertEqual(self.card("Limit-1")["value"], 1, "one PPPoE server below the limit")
         self.assertEqual(self.card("Kalar")["value"], 2, "two towers below the PPPoE server")
 
-    def test_stages_are_stacked_vertically_in_chain_order(self):
-        """The map flows top to bottom, so each stage sits below the one before it."""
+    def test_stages_run_left_to_right_in_chain_order(self):
+        """The map flows left to right, as in the reference: CORE, LIMIT, PPPoE, TOWERS."""
         core = self.device("NCS")
         limit = self.device("Limit-1", core)
         server = self.device("Kalar", limit)
@@ -183,16 +186,22 @@ class MapTests(TestCase):
         data = build_map()
         order = [column["key"] for column in data["columns"]]
         self.assertEqual(order, ["core", "limit", "pppoe", "tower"])
-        tops = [column["y"] for column in data["columns"]]
-        self.assertEqual(tops, sorted(tops), "stage headers run downwards")
-        self.assertEqual(len({column["x"] for column in data["columns"]}), 1,
-                         "all stages start at the same left edge")
-        # Each device sits below its parent and its connector runs downwards.
-        self.assertLess(self.card("NCS", data)["y"], self.card("Limit-1", data)["y"])
-        self.assertLess(self.card("Limit-1", data)["y"], self.card("Kalar", data)["y"])
-        self.assertLess(self.card("Kalar", data)["y"], self.card("Tower-A", data)["y"])
+        column_xs = [column["x"] for column in data["columns"]]
+        self.assertEqual(column_xs, sorted(column_xs), "stage columns run left to right")
+        self.assertEqual(len({column["y"] for column in data["columns"]}), 1,
+                         "all stage labels sit on the same header line")
+        # Each device sits one stage to the right of its parent.
+        self.assertLess(self.card("NCS", data)["x"], self.card("Limit-1", data)["x"])
+        self.assertLess(self.card("Limit-1", data)["x"], self.card("Kalar", data)["x"])
+        self.assertLess(self.card("Kalar", data)["x"], self.card("Tower-A", data)["x"])
+        # Connectors leave a parent's right edge and land on the child's left edge.
+        width = data["node_width"]
         for link in data["links"]:
-            self.assertLess(link["y1"], link["y2"], "connectors leave the bottom edge")
+            self.assertLess(link["x1"], link["x2"], "connectors run rightwards")
+            parent = next(n for n in data["nodes"] if n["key"] == link["from"])
+            child = next(n for n in data["nodes"] if n["key"] == link["to"])
+            self.assertEqual(link["x1"], parent["x"] + width)
+            self.assertEqual(link["x2"], child["x"])
 
     def test_cards_never_overlap_even_in_a_wide_stage(self):
         core = self.device("Core")
