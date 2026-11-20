@@ -96,6 +96,7 @@ def _readings(device):
     uptime = _latest(device, "uptime")
     ping = _latest(device, "ping")
     pppoe = _latest(device, "pppoe")
+    neighbours = _latest(device, "neighbors")
     return {
         "cpu": cpu.cpu if cpu else None,
         "bandwidth_in": traffic.in_mbps if traffic else None,
@@ -104,6 +105,7 @@ def _readings(device):
         "uptime": format_uptime(uptime.uptime_seconds) if uptime else None,
         "uptime_seconds": uptime.uptime_seconds if uptime else None,
         "users": pppoe.pppoe_users if pppoe else None,
+        "neighbors": neighbours.neighbor_count if neighbours else None,
         "ping_ms": ping.ping_ms if ping else None,
         "packet_loss": ping.packet_loss if ping else None,
     }
@@ -324,11 +326,12 @@ def _summary(node, value, unit):
 
 
 def switch_ports(device):
-    """Live SNMP port states for one switch, for the map's switch panel.
+    """Live SNMP port states for one switch, plus its sensor readings and per-port neighbours.
 
     Reads the device's saved SNMP credentials and returns a plain payload. Nothing is invented:
     when SNMP is unavailable the caller gets an `error` and no port list, so the panel can say
-    so instead of drawing a made-up green/red grid.
+    so instead of drawing a made-up green/red grid. Neighbours are attached to the port they
+    were learned on; a failure there removes only the neighbours, never the port grid.
     """
     from sensors import snmp
     from sensors.models import SNMPProfile
@@ -338,14 +341,33 @@ def switch_ports(device):
     if not profile or profile.validated_ip != device.management_ip:
         return {"ok": False, "error": "Test and save SNMP credentials for this device first."}
     try:
-        ports = snmp.read(device, decrypt_password(profile.community), profile.port, "ports")
+        community = decrypt_password(profile.community)
+        ports = snmp.read(device, community, profile.port, "ports")
     except snmp.SNMPError as error:
         return {"ok": False, "error": str(error)}
     except CredentialError:
         return {"ok": False, "error": "Stored SNMP credentials could not be decrypted."}
+    try:
+        by_port = snmp.read(device, community, profile.port, "neighbors")
+    except snmp.SNMPError:
+        # A switch that answers the port table but not LLDP still shows its ports.
+        by_port = {}
     # Only physical-looking ports are drawn in the grid: VLAN and loopback pseudo-interfaces
     # are not ports a cable plugs into, and would read as permanently "up".
     physical = [p for p in ports if not p["name"].lower().startswith(("vlan", "loopback", "null", "tunnel"))]
+    # LLDP reports its local ports with abbreviated names (Gi0/1) while ifDescr says
+    # GigabitEthernet0/1, so neighbours are matched on the trailing "<slot>/<port>" instead.
+    def port_suffix(name):
+        digits = "".join(ch for ch in name if ch.isdigit() or ch == "/")
+        return digits.strip("/") or name.lower()
+
+    neighbours_by_suffix = {}
+    for interface, entries in by_port.items():
+        neighbours_by_suffix.setdefault(port_suffix(interface), []).extend(entries)
+    for port in physical:
+        port["neighbors"] = neighbours_by_suffix.get(port_suffix(port["name"]), [])
     return {"ok": True, "ports": physical, "total": len(physical),
             "connected": sum(1 for p in physical if p["oper"] == "up"),
-            "disabled": sum(1 for p in physical if p["admin"] == "down")}
+            "disabled": sum(1 for p in physical if p["admin"] == "down"),
+            "neighbor_count": sum(len(p["neighbors"]) for p in physical),
+            "readings": _readings(device)}

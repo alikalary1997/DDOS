@@ -40,8 +40,22 @@ class SwitchPortTests(TestCase):
                                    validated_ip=self.device.management_ip, tested_at=timezone.now())
         self.url = reverse("device_switch_ports", args=[self.device.pk])
 
+    def reads(self, ports=None, neighbours=None, error=None):
+        """Patch snmp.read with per-operation results (ports and neighbours are separate reads)."""
+        def fake(device, community, port, operation, sensor=None):
+            if error and operation == "ports":
+                raise error
+            if operation == "ports":
+                return PORTS if ports is None else ports
+            if operation == "neighbors":
+                if isinstance(neighbours, Exception):
+                    raise neighbours
+                return neighbours or {}
+            return {}
+        return patch("sensors.snmp.read", side_effect=fake)
+
     def test_port_states_come_from_snmp(self):
-        with patch("sensors.snmp.read", return_value=PORTS):
+        with self.reads():
             response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -53,13 +67,45 @@ class SwitchPortTests(TestCase):
         self.assertEqual(states["GigabitEthernet0/3"]["admin"], "down")
 
     def test_counts_match_the_port_list(self):
-        with patch("sensors.snmp.read", return_value=PORTS):
+        with self.reads():
             data = self.client.get(self.url).json()
         # Vlan1 is a pseudo-interface, not a port a cable plugs into.
         self.assertNotIn("Vlan1", [port["name"] for port in data["ports"]])
         self.assertEqual(data["total"], 3)
         self.assertEqual(data["connected"], 1)
         self.assertEqual(data["disabled"], 1)
+
+    def test_neighbours_are_attached_to_the_port_they_were_learned_on(self):
+        # LLDP abbreviates local port names (Gi0/1) while ifDescr spells them out.
+        neighbours = {"Gi0/1": [{"name": "RB-tower", "port": "ether1", "platform": "RouterOS 7"}],
+                      "Gi0/2": [{"name": "RB-two", "port": "wlan1", "platform": "RouterOS 6"},
+                                {"name": "RB-three", "port": "wlan1", "platform": "RouterOS 6"}]}
+        with self.reads(neighbours=neighbours):
+            data = self.client.get(self.url).json()
+        ports = {port["name"]: port for port in data["ports"]}
+        self.assertEqual([n["name"] for n in ports["GigabitEthernet0/1"]["neighbors"]], ["RB-tower"])
+        self.assertEqual(len(ports["GigabitEthernet0/2"]["neighbors"]), 2)
+        self.assertEqual(ports["GigabitEthernet0/3"]["neighbors"], [])
+        self.assertEqual(data["neighbor_count"], 3)
+
+    def test_a_neighbour_failure_still_returns_the_port_grid(self):
+        with self.reads(neighbours=snmp.SNMPError("LLDP unavailable")):
+            data = self.client.get(self.url).json()
+        self.assertTrue(data["ok"], "the ports are still usable")
+        self.assertEqual(data["total"], 3)
+        self.assertEqual(data["neighbor_count"], 0)
+
+    def test_sensor_readings_accompany_the_switch_payload(self):
+        from sensors.models import Sensor, SensorSample
+        traffic = Sensor.objects.create(device=self.device, kind="traffic", name="traffic", enabled=True, interval=10)
+        SensorSample.objects.create(sensor=traffic, timestamp=timezone.now(), valid=True,
+                                    in_mbps=12.5, out_mbps=3.5, interface_status="Up")
+        with self.reads():
+            readings = self.client.get(self.url).json()["readings"]
+        self.assertAlmostEqual(readings["bandwidth_in"], 12.5)
+        self.assertAlmostEqual(readings["bandwidth_out"], 3.5)
+        # No ping sensor exists, so the figure stays None rather than becoming 0.
+        self.assertIsNone(readings["ping_ms"])
 
     def test_missing_snmp_credentials_are_reported_not_guessed(self):
         SNMPProfile.objects.filter(device=self.device).delete()

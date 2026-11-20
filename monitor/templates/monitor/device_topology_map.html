@@ -2,11 +2,13 @@
 {% block title %}Topology Map | NetShield{% endblock %}
 {% block body_class %}devices-page fleet-page topology-map-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261117-svg">{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261119-switchview">{% endblock %}
 {% block footer_note %}Topology map{% endblock %}
 {% block content %}
 <div class="tmap-tree-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div>
 
+{# The map view. Selecting a switch hides this and shows the switch's own view instead. #}
+<div data-topo-view>
 <div class="tmap-layout">
     <section class="panel tmap-panel" aria-label="Network topology map" data-topo-map>
         <div class="panel-heading"><div><p class="eyebrow">NETWORK</p><h2>Topology</h2></div>
@@ -45,14 +47,16 @@
     </aside>
 </div>
 
-<div class="tmap-switch" id="tmapSwitch" data-ports-url-template="{% url 'device_switch_ports' 0 %}" hidden></div>
-
 <p class="topo-legend">
     <span class="topo-legend-item"><i class="topo-dot" data-state="online"></i>Online</span>
     <span class="topo-legend-item"><i class="topo-dot" data-state="offline"></i>Offline / disabled</span>
     <span class="topo-legend-item"><i class="topo-dot" data-state="not-tested"></i>Not tested</span>
     <span class="topo-legend-note">Node figures come from stored sensor readings. "No data" means no fresh reading exists — nothing is estimated.</span>
 </p>
+</div>
+
+{# The switch view: on its own page, with a way back to the map. #}
+<section class="tmap-switch-view" id="tmapSwitch" data-ports-url-template="{% url 'device_switch_ports' 0 %}" hidden></section>
 {{ topology_map.nodes|json_script:"topo-nodes-data" }}
-<script src="{% static 'monitor/js/topology_map.js' %}?v=20261119-switch" defer></script>
+<script src="{% static 'monitor/js/topology_map.js' %}?v=20261119-switchview" defer></script>
 {% endblock %}

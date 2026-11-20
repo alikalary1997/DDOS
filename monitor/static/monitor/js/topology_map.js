@@ -57,13 +57,8 @@
         }
 
         function clear() {
-            nodeEls.forEach(el => el.classList.remove('is-selected', 'is-dim'));
-            linkEls.forEach(el => el.classList.remove('is-active', 'is-dim'));
-            if (title) title.textContent = 'Network overview';
-            if (hint) hint.hidden = false;
-            if (detail) { detail.hidden = true; detail.replaceChildren(); }
-            const switchPanel = document.getElementById('tmapSwitch');
-            if (switchPanel) { switchPanel.hidden = true; switchPanel.replaceChildren(); }
+            clearSelection();
+            closeSwitchView();
         }
 
         function row(label, value) {
@@ -95,11 +90,16 @@
                 detail.hidden = false;
                 detail.replaceChildren(...renderDetail(node, key));
             }
-            // A switch opens its live port panel; every other device just shows its details.
+            // A switch opens its own view; every other device just shows its details.
             const switchPanel = document.getElementById('tmapSwitch');
+            const mapView = document.querySelector('[data-topo-view]');
             if (switchPanel) {
-                if ((node.device_type || '') === 'cisco') openSwitch(switchPanel, node);
-                else { switchPanel.hidden = true; switchPanel.replaceChildren(); }
+                if ((node.device_type || '') === 'cisco') {
+                    if (mapView) mapView.hidden = true;
+                    openSwitch(switchPanel, node);
+                } else {
+                    closeSwitchView();
+                }
             }
             if (panel && window.matchMedia('(max-width: 1100px)').matches) {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -153,9 +153,27 @@
             return [grid, facts];
         }
 
-        /* ---- switch port panel (Cisco) ---- */
-        // Ports come from the server's own SNMP read. Nothing here is estimated: if SNMP fails
-        // the panel says why rather than drawing a made-up green/red grid.
+        /* ---- switch view (Cisco) ---- */
+        // A switch takes over the page: the map is hidden and its port table is shown instead,
+        // with a Back button returning to the map. Ports come from the server's own SNMP read;
+        // if that fails the view says why rather than drawing a made-up green/red grid.
+        function closeSwitchView() {
+            const switchPanel = document.getElementById('tmapSwitch');
+            const mapView = document.querySelector('[data-topo-view]');
+            if (switchPanel) { switchPanel.hidden = true; switchPanel.replaceChildren(); }
+            if (mapView) mapView.hidden = false;
+            clearSelection();
+        }
+
+        // Reset the map's highlight without re-entering the switch view.
+        function clearSelection() {
+            nodeEls.forEach(el => el.classList.remove('is-selected', 'is-dim'));
+            linkEls.forEach(el => el.classList.remove('is-active', 'is-dim'));
+            if (title) title.textContent = 'Network overview';
+            if (hint) hint.hidden = false;
+            if (detail) { detail.hidden = true; detail.replaceChildren(); }
+        }
+
         function portState(port) {
             if (port.admin === 'down') return 'disabled';
             return port.oper === 'up' ? 'up' : 'down';
@@ -166,10 +184,8 @@
             const url = template.replace(/0\/ports\/$/, `${node.key}/ports/`) || `/devices/topology/map/switch/${node.key}/ports/`;
             host.hidden = false;
             host.dataset.deviceId = String(node.key);
-            host.innerHTML = `<div class="tmap-sw-head"><div><p class="eyebrow">SWITCH</p><h2>${esc(node.name)}</h2>` +
-                `<span class="tmap-sw-ip">${esc(node.ip || '')}</span></div>` +
-                `<span class="tmap-sw-state" data-state="loading">Reading ports…</span></div>` +
-                '<div class="tmap-sw-body"><p class="tmap-hint">Reading live port state from SNMP…</p></div>';
+            host.innerHTML = shell(node, '<p class="tmap-hint">Reading live port state from SNMP…</p>');
+            bindBack(host);
             fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
                 .then(response => response.json().catch(() => ({ ok: false, error: 'The port list could not be read.' })))
                 .then(data => {
@@ -183,9 +199,22 @@
                 });
         }
 
+        function shell(node, bodyHtml, stateHtml) {
+            return `<div class="tmap-sw-bar">` +
+                `<button type="button" class="tmap-back" data-switch-back>← Back to topology</button>` +
+                `<span class="tmap-sw-state" data-sw-state>${stateHtml || ''}</span></div>` +
+                `<div class="panel tmap-sw-card">` +
+                `<div class="tmap-sw-title"><div><p class="eyebrow">SWITCH</p><h2>${esc(node.name)}</h2>` +
+                `<span class="tmap-sw-ip">${esc(node.ip || '')}</span></div></div>` +
+                `<div class="tmap-sw-body">${bodyHtml}</div></div>`;
+        }
+
+        function bindBack(host) {
+            host.querySelector('[data-switch-back]')?.addEventListener('click', closeSwitchView);
+        }
+
         function renderSwitch(host, node, data) {
-            const head = host.querySelector('.tmap-sw-head');
-            const state = host.querySelector('.tmap-sw-state');
+            const state = host.querySelector('[data-sw-state]');
             const body = host.querySelector('.tmap-sw-body');
             if (!data.ok) {
                 if (state) { state.dataset.state = 'error'; state.textContent = 'SNMP unavailable'; }
@@ -200,22 +229,45 @@
             const grid = ports.map(port => {
                 // The port number alone fits the square: Gi0/1 -> 0/1, Gi1/0/24 -> 1/0/24.
                 const text = port.name.replace(/[^0-9/]/g, '') || port.name;
+                const linked = (port.neighbors || []).length;
                 return `<button type="button" class="tmap-port" data-port="${port.index}" data-state="${portState(port)}" ` +
-                    `title="${esc(port.name)} — ${portState(port)}">${esc(text)}</button>`;
+                    `title="${esc(port.name)} — ${portState(port)}${linked ? ` · ${linked} neighbour${linked === 1 ? '' : 's'}` : ''}">` +
+                    `${esc(text)}${linked ? '<i class="tmap-port-dot"></i>' : ''}</button>`;
             }).join('');
             if (body) {
-                body.innerHTML = `<div class="tmap-port-grid">${grid || '<p class="tmap-hint">This switch reported no physical ports.</p>'}</div>` +
+                body.innerHTML = sensorSummary(data.readings) +
+                    `<div class="tmap-port-grid">${grid || '<p class="tmap-hint">This switch reported no physical ports.</p>'}</div>` +
                     '<div class="tmap-sw-foot">' +
                     '<span class="tmap-key"><i data-state="up"></i>Connected</span>' +
                     '<span class="tmap-key"><i data-state="down"></i>Not connected</span>' +
                     '<span class="tmap-key"><i data-state="disabled"></i>Disabled</span>' +
-                    '<span class="tmap-hint">Click a port for its details.</span></div>' +
+                    '<span class="tmap-hint">Click a port to see its neighbours.</span></div>' +
                     '<div class="tmap-port-detail" data-port-detail hidden></div>';
                 body.querySelectorAll('.tmap-port').forEach(button => {
                     button.addEventListener('click', () => showPort(host, ports, Number(button.dataset.port)));
                 });
             }
-            if (head) head.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // The switch's own sensor readings: ping, bandwidth, uptime, neighbours.
+        // A missing reading renders as a dash, never as a fabricated zero.
+        function sensorSummary(r) {
+            if (!r) return '';
+            const num = (value, digits) => (value === null || value === undefined) ? '—' : Number(value).toFixed(digits);
+            const bw = (r.bandwidth_in === null || r.bandwidth_in === undefined) ? '—'
+                : `${num(r.bandwidth_in, 1)} / ${num(r.bandwidth_out, 1)}`;
+            const tile = (label, value, unit, tone) =>
+                `<div class="tmap-rd"${tone ? ` data-tone="${tone}"` : ''}><span>${esc(label)}</span>` +
+                `<b>${esc(value)}${unit && value !== '—' ? `<em>${esc(unit)}</em>` : ''}</b></div>`;
+            const ping = r.ping_ms === null || r.ping_ms === undefined ? '—' : `${num(r.ping_ms, 1)}`;
+            // The payload spells this the same way the sensor kind does: "neighbors".
+            const neighbours = r.neighbors === null || r.neighbors === undefined ? '—' : String(r.neighbors);
+            return '<div class="tmap-rd-grid">' +
+                tile('Ping', ping, 'ms', r.ping_ms === null || r.ping_ms === undefined ? '' : 'ok') +
+                tile('Bandwidth', bw, 'Mbps in / out') +
+                tile('Uptime', r.uptime || '—', '') +
+                tile('Neighbours', neighbours, 'seen') +
+                '</div>';
         }
 
         function showPort(host, ports, index) {
@@ -229,15 +281,30 @@
             const label = { up: 'CONNECTED', down: 'NOT CONNECTED', disabled: 'DISABLED' }[state];
             const tone = state === 'up' ? 'online' : state === 'disabled' ? 'warn' : 'error';
             const speed = port.speed_mbps ? `${port.speed_mbps} Mbps` : '—';
+            const neighbours = port.neighbors || [];
+            // Neighbours learned on THIS port only, as the reference shows them.
+            const neighbourBlock = neighbours.length
+                ? `<div class="tmap-nb-title">Neighbours on this port (${neighbours.length})</div>` +
+                  '<div class="tmap-nb-list">' + neighbours.map(n =>
+                    '<div class="tmap-nb">' +
+                    `<div class="tmap-nb-head"><b>${esc(n.name || 'Unknown device')}</b>` +
+                    (n.port ? `<span class="tmap-nb-port">${esc(n.port)}</span>` : '') +
+                    (n.protocol ? `<span class="tmap-nb-port">${esc(n.protocol)}</span>` : '') + '</div>' +
+                    (n.platform ? `<small>${esc(n.platform)}</small>` : '') +
+                    '</div>').join('') + '</div>'
+                : `<div class="tmap-nb-title">Neighbours on this port</div>` +
+                  `<div class="tmap-nb-empty">${port.admin === 'down'
+                    ? 'Port is administratively disabled, so no neighbour is advertised.'
+                    : 'No neighbour advertised on this port.'}</div>`;
             detail.hidden = false;
-            detail.innerHTML = `<div class="tmap-sw-head"><div><p class="eyebrow">PORT</p><h2>${esc(port.name)}</h2></div>` +
+            detail.innerHTML = `<div class="tmap-sw-title"><div><p class="eyebrow">PORT</p><h2>${esc(port.name)}</h2></div>` +
                 `<span class="tmap-sw-state" data-state="${tone}">${label}</span></div>` +
                 '<dl class="tmap-detail">' +
                 `<dt>Admin / oper</dt><dd>${esc(port.admin)} / ${esc(port.oper)}</dd>` +
                 `<dt>Speed</dt><dd>${esc(speed)}</dd>` +
                 `<dt>SNMP ifIndex</dt><dd>${esc(port.index)}</dd>` +
                 (port.alias ? `<dt>Alias</dt><dd>${esc(port.alias)}</dd>` : '') +
-                '</dl>';
+                '</dl>' + neighbourBlock;
         }
 
         nodeEls.forEach(el => {

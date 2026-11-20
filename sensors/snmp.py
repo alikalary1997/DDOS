@@ -56,7 +56,15 @@ INTERFACE_WALK_LIMIT = 20000
 #   CDP   cdpCacheTable  .1.3.6.1.9.9.23.1.2.1.1.<column>.<ifIndex>.<deviceIndex>
 #         column 1 = cdpCacheAddressType, present on every row
 LLDP_NEIGHBOR_COLUMN = "1.0.8802.1.1.2.1.4.1.1.4"
+# lldpLocPortTable: maps an LLDP local port number to the local interface's own name.
+# The remote table's `localPort` number is NOT the interface ifIndex (a real switch had 1..43
+# against ifIndexes of 10101+), so this table is what joins the two.
+LLDP_LOCAL_PORT_ID = "1.0.8802.1.1.2.1.3.7.1.3"
 CDP_NEIGHBOR_COLUMN = "1.3.6.1.9.9.23.1.2.1.1.1"
+# cdpCacheTable's own root. CDP_NEIGHBOR_COLUMN above points at column 1 (used for counting),
+# so per-port reads append the column to this instead of chopping the last arc off that OID -
+# doing the latter produced <table>.1.<column>, an OID the switch does not have.
+CDP_TABLE_ROOT = "1.3.6.1.9.9.23.1.2.1.1"
 NEIGHBOR_WALK_LIMIT = 5000
 # Device types this adapter accepts: both speak SNMPv2c for the counters it reads.
 SNMP_DEVICE_TYPES = ("mikrotik", "cisco")
@@ -124,28 +132,67 @@ class Client:
         returned 1,704 rows, which took 45 s row-by-row and tripped the 600-row guard. Bulk
         requests fetch many rows at once, so the same table is read well within the request
         timeout. `maxCalls` lets the walker make as many round-trips as the table needs.
+
+        Some agents (a real Cisco switch does this intermittently) reject a bulk read with a
+        GETBULK status error while a single GETNEXT from the same OID answers fine, so a
+        refused bulk walk falls back to GETNEXT instead of reporting an empty table. An empty
+        result therefore means "the agent says this column has no rows", not "we gave up".
         """
         root = tuple(map(int, prefix.split('.')))
         result = []
         calls = max(1, limit // max(1, repetitions) + 2)
-        async for error, status, _index, values in bulk_walk_cmd(
-                self.engine, self.auth, self.transport, ContextData(), 0, repetitions,
-                ObjectType(ObjectIdentity(prefix)), lookupMib=False, lexicographicMode=True,
-                maxCalls=calls, ignoreNonIncreasingOid=True):
-            if status or error:
-                raise SNMPError("The device rejected the SNMP read request.")
-            if not values:
-                break
-            for oid, value in values:
-                row = tuple(oid)
-                if row[:len(root)] != root:
-                    return result                # left the subtree: the walk is complete
-                if isinstance(value, (NoSuchObject, NoSuchInstance, EndOfMibView)):
-                    return result
-                result.append((row, value))
-                if len(result) >= limit:
-                    return result[:limit]
-        return result[:limit]
+        try:
+            async for error, status, _index, values in bulk_walk_cmd(
+                    self.engine, self.auth, self.transport, ContextData(), 0, repetitions,
+                    ObjectType(ObjectIdentity(prefix)), lookupMib=False, lexicographicMode=True,
+                    maxCalls=calls, ignoreNonIncreasingOid=True):
+                if status:
+                    # The device answered and refused the read: not an empty table, and not a
+                    # stall that a row-by-row retry could rescue. Surface it as a failure.
+                    raise SNMPError("The device rejected the SNMP read request.")
+                if error:
+                    # A timeout part-way through is NOT an empty table. Returning what was
+                    # collected so far would report a truncated (often empty) column as the
+                    # truth, which is how every CDP neighbour silently disappeared.
+                    raise SNMPError("The device stopped responding part-way through the SNMP walk.")
+                if not values:
+                    break                           # the agent says the column is exhausted
+                for oid, value in values:
+                    row = tuple(oid)
+                    if row[:len(root)] != root:
+                        return result            # left the subtree: the walk is complete
+                    if isinstance(value, (NoSuchObject, NoSuchInstance, EndOfMibView)):
+                        return result
+                    result.append((row, value))
+                    if len(result) >= limit:
+                        return result[:limit]
+            return result[:limit]
+        except SNMPError as error:
+            if str(error).startswith("The device rejected"):
+                raise
+            # The agent stopped answering mid-table. Returning what was collected so far
+            # reports a truncated (often empty) column as the truth - that is how every CDP
+            # neighbour silently disappeared - so the walk is resumed row by row instead.
+            return await self._getnext_walk(root, result, limit)
+
+    async def _getnext_walk(self, root, collected, limit):
+        """Continue a walk row-by-row after a bulk walk failed, resuming from `collected`.
+
+        Single GETNEXT requests are cheap and never batched, so a loaded agent that chokes on
+        a 25-row GETBULK still answers them. This is the fallback that keeps neighbours (and
+        interface tables) readable on a busy switch.
+        """
+        result = list(collected)
+        current = result[-1][0] if result else root
+        while len(result) < limit:
+            oid, value = (await self.query(['.'.join(map(str, current))], walk=True))[0]
+            if isinstance(value, (NoSuchObject, NoSuchInstance, EndOfMibView)) or oid[:len(root)] != root:
+                return result
+            if oid <= current:
+                raise SNMPError("Invalid SNMP table ordering.")
+            result.append((oid, value))
+            current = oid
+        return result
 
     async def uptime(self):
         return number((await self.get(UPTIME))[0], TimeTicks) / 100
@@ -267,6 +314,203 @@ class Client:
                 return len(rows)
         return 0
 
+    @staticmethod
+    def _looks_like_text(values):
+        """True when most values read as ordinary text rather than binary.
+
+        A raw MAC address decodes to a few printable bytes plus escape characters, so the
+        test demands that most characters be letters, digits or common punctuation. A
+        minority of odd values is tolerated: platform strings on real devices carry
+        non-ASCII bytes that a strict per-value check would reject outright.
+        """
+        sampled = [value for value in values if value]
+        if len(sampled) < max(1, len(values) // 2):
+            return False
+        good = 0
+        for value in sampled:
+            chars = len(value)
+            alnum = sum(1 for ch in value if ch.isalnum() or ch in '-_.@/: ()')
+            if chars and alnum / chars > 0.85:
+                good += 1
+        return good / len(values) > 0.7
+
+    async def neighbors_by_port(self):
+        """Neighbours seen per local port, for the switch panel.
+
+        Returns {local port name: [{name, port, platform, protocol}, ...]}, where the port name is
+        the switch's own interface name (GigabitEthernet0/21). Both protocols are read: a port can
+        have a neighbour that only speaks CDP (a LiteBeam radio, for instance), and reading
+        LLDP alone left those ports looking empty in the app.
+
+        The two tables index ports very differently, so each is joined to a port name first:
+          LLDP  index <timeMark>.<localPort>.<index>, where localPort is LLDP's own 1..N
+                numbering - translated to a name through lldpLocPortTable's port descr.
+          CDP   index <ifIndex>.<deviceIndex>, where ifIndex IS the interface index - which is
+                the same key ifDescr (the port name table) is indexed by.
+        Column numbers vary between agent builds (on a real Cisco switch the LLDP neighbour
+        name sat in column 9, the remote port in 7, while CDP used 6 and 7), so columns are
+        identified by what they contain, not by their position.
+        """
+        by_port = {}
+        # LLDP first: for ports where it holds a real device name it is the richer source.
+        # CDP is merged after, so a port whose LLDP entry is blank (a LiteBeam radio that only
+        # fills in the chassis/port columns, showing up as an unnamed "eth0") gets its real
+        # identity from CDP instead of staying "Unknown device".
+        for name, neighbour in await self._lldp_neighbors_by_port():
+            by_port.setdefault(name, []).append(neighbour)
+        for name, neighbour in await self._cdp_neighbors_by_port():
+            entries = by_port.setdefault(name, [])
+            blank = next((e for e in entries if e["protocol"] == "LLDP" and not e["name"]), None)
+            if blank is not None:
+                entries.remove(blank)
+            entries.append(neighbour)
+        for entries in by_port.values():
+            entries.sort(key=lambda item: (item["name"].lower(), item["port"].lower()))
+        return by_port
+
+    async def _walk_with_retry(self, prefix, attempts=3):
+        """bulk_walk, retrying an empty or refused column with progressively gentler batching.
+
+        A busy switch drops a 25-row GETBULK batch part-way through a table walk (a real
+        Cisco switch times out mid-CDP-table while its sensors are being polled), yet answers
+        the same walk in 5-row batches. Each retry halves the batch size, and the final one
+        drops to single GETNEXT requests, so a loaded agent still yields its table.
+        """
+        for attempt in range(attempts):
+            repetitions = max(1, INTERFACE_BULK_REPETITIONS >> attempt)
+            try:
+                rows = await self.bulk_walk(prefix, repetitions=repetitions, limit=NEIGHBOR_WALK_LIMIT)
+            except SNMPError:
+                rows = []
+            if rows:
+                return rows
+        return []
+
+    async def _port_names_by_index(self):
+        """ifIndex -> interface name, the join CDP needs (its index is the ifIndex)."""
+        names = {}
+        try:
+            for oid, value in await self.bulk_walk(DESCR, limit=NEIGHBOR_WALK_LIMIT):
+                if isinstance(value, OctetString):
+                    names[tuple(oid)[-1]] = value.asOctets().decode('utf-8', 'replace').strip()
+        except SNMPError:
+            return {}
+        return names
+
+    async def _lldp_neighbors_by_port(self):
+        """[(port name, neighbour)] from the LLDP remote table."""
+        base = LLDP_NEIGHBOR_COLUMN.rsplit('.', 1)[0]
+        root = tuple(map(int, base.split('.')))
+
+        def text(value):
+            return value.asOctets().decode('utf-8', 'replace').strip() if isinstance(value, OctetString) else ''
+
+        # localPort number -> port name, so neighbours can be attached to a real port.
+        local_root = tuple(map(int, LLDP_LOCAL_PORT_ID.split('.')))
+        local_ports = {}
+        try:
+            for oid, value in await self.bulk_walk(LLDP_LOCAL_PORT_ID, limit=NEIGHBOR_WALK_LIMIT):
+                # This column's OID already ends in .3, so the trailing number IS the local port.
+                index = tuple(oid)[len(local_root):]
+                if len(index) == 1 and isinstance(value, OctetString):
+                    local_ports[index[0]] = text(value)
+        except SNMPError:
+            local_ports = {}
+        if not local_ports:
+            return []
+
+        table = {}
+        for column in range(5, 13):
+            try:
+                rows = await self.bulk_walk(f"{base}.{column}", limit=NEIGHBOR_WALK_LIMIT)
+            except SNMPError:
+                continue                      # some builds refuse particular columns
+            for oid, value in rows:
+                # Index is <column>.<timeMark>.<localPort>.<entry>: the leading column number is
+                # part of the reported index on this agent, so it is dropped explicitly.
+                index = tuple(oid)[len(root) + 1:]
+                if len(index) == 3:
+                    table.setdefault(index, {})[column] = text(value)
+        if not table:
+            return []
+
+        columns = {col: [row.get(col, '') for row in table.values()] for col in range(5, 13)}
+        name_col = next((col for col in (9, 5, 6, 8) if self._looks_like_text(columns.get(col, []))), None)
+        port_col = next((col for col in (7, 8, 6) if col != name_col and self._looks_like_text(columns.get(col, []))), None)
+        platform_col = next((col for col in (10, 11, 12) if self._looks_like_text(columns.get(col, []))), None)
+
+        result = []
+        for index, row in table.items():
+            _time_mark, local_port, _entry = index
+            interface = local_ports.get(local_port)
+            if not interface:
+                continue                      # cannot attribute it to a real port
+            neighbour = {
+                "name": row.get(name_col, "") if name_col else "",
+                "port": row.get(port_col, "") if port_col else "",
+                "platform": row.get(platform_col, "") if platform_col else "",
+                "protocol": "LLDP",
+            }
+            if any(neighbour.values()):
+                result.append((interface, neighbour))
+        return result
+
+    async def _cdp_neighbors_by_port(self):
+        """[(port name, neighbour)] from the Cisco CDP cache table.
+
+        The cache is indexed by the local interface's ifIndex, which is not the port's LLDP
+        number, so names come from ifDescr keyed by the same ifIndex. One row per neighbour;
+        the device index inside the index may be a plain number or "<address>.<n>", which is
+        why only the first element is used.
+        """
+        base = CDP_TABLE_ROOT
+        root = tuple(map(int, base.split('.')))
+
+        def text(value):
+            return value.asOctets().decode('utf-8', 'replace').strip() if isinstance(value, OctetString) else ''
+
+        names = await self._port_names_by_index()
+        if not names:
+            return []
+
+        # cdpCacheDeviceId / cdpCacheDevicePort / cdpCachePlatform are 6 / 7 / 8 in the MIB, but
+        # this agent intermittently refuses a whole column (a real switch returned 0 rows for 1
+        # and 2, then answered 6-8 a moment later), so each column is retried once before it is
+        # treated as genuinely empty.
+        table = {}
+        for column in (6, 7, 8):
+            rows = await self._walk_with_retry(f"{base}.{column}")
+            for oid, value in rows:
+                # Index is <ifIndex>.<deviceIndex> straight after the table root, since the
+                # column is already part of the walked OID.
+                index = tuple(oid)[len(root):]
+                if index:
+                    table.setdefault(index[0], {})[column] = text(value)
+        if not table:
+            return []
+
+        columns = {col: [row.get(col, '') for row in table.values()] for col in (6, 7, 8)}
+        name_col = next((col for col in (6, 7, 8) if self._looks_like_text(columns.get(col, []))), None)
+        port_col = next((col for col in (7, 8, 6) if col != name_col and self._looks_like_text(columns.get(col, []))), None)
+        platform_col = next((col for col in (8, 7, 6) if col not in (name_col, port_col) and self._looks_like_text(columns.get(col, []))), None)
+
+        result = []
+        for if_index, row in table.items():
+            interface = names.get(if_index)
+            if not interface:
+                continue
+            neighbour = {
+                "name": row.get(name_col, "") if name_col else "",
+                "port": row.get(port_col, "") if port_col else "",
+                "platform": row.get(platform_col, "") if platform_col else "",
+                "protocol": "CDP",
+            }
+            # Some agents (RouterOS does this) publish a placeholder row whose every column is
+            # empty. It describes no neighbour, so it is dropped rather than listed nameless.
+            if neighbour["name"] or neighbour["port"] or neighbour["platform"]:
+                result.append((interface, neighbour))
+        return result
+
     async def sample(self, sensor):
         uptime = await self.uptime()
         result = {"uptime_seconds": uptime}
@@ -314,6 +558,8 @@ def read(device, community, port, operation, sensor=None):
                 return await client.interfaces()
             if operation == 'ports':
                 return await client.ports()
+            if operation == 'neighbors':
+                return await client.neighbors_by_port()
             if operation == 'test':
                 return await client.uptime()
             return await client.sample(sensor)

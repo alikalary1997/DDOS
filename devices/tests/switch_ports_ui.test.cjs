@@ -56,7 +56,11 @@ function buildPanel() {
     host.hidden = true;
     // The script looks these up after writing the shell HTML; a real DOM would have parsed it,
     // so the stub returns stand-in children that record their own renders.
-    host._shell = { '.tmap-sw-head': el('div', {}), '.tmap-sw-state': el('span', {}), '.tmap-sw-body': el('div', {}) };
+    // The Back button records the handler the script binds to it.
+    const backButton = { _handler: null, addEventListener(type, fn) { if (type === 'click') this._handler = fn; } };
+    host._shell = { '.tmap-sw-head': el('div', {}), '.tmap-sw-state': el('span', {}),
+        '[data-sw-state]': el('span', {}), '.tmap-sw-body': el('div', {}),
+        '[data-switch-back]': backButton };
     const base = host.querySelector.bind(host);
     host.querySelector = (sel) => host._shell[sel] || base(sel);
     return host;
@@ -78,7 +82,9 @@ function run(payload) {
     const panelHost = buildPanel();
     const detail = el('div', { inspectDetail: '' });
     const title = el('h2', { inspectTitle: '' });
-    const bySelector = { '[data-topo-svg]': svg, '[data-topo-map]': el('section', {}),
+    const mapView = el('div', { topoView: '', 'topo-view': '' });
+    mapView.hidden = false;
+    const bySelector = { '[data-topo-view]': mapView, '[data-topo-svg]': svg, '[data-topo-map]': el('section', {}),
         '[data-topo-inspect]': el('aside', {}, [title]),
         '[data-inspect-title]': title, '[data-inspect-hint]': el('p', {}), '[data-inspect-detail]': detail };
     const document = {
@@ -96,7 +102,7 @@ function run(payload) {
         return Promise.resolve({ json: () => Promise.resolve(payload) });
     };
     new Function('document', 'window', 'fetch', source)(document, window, fetchImpl);
-    return { click: () => handlers.click(), panelHost, fetchCalls };
+    return { click: () => handlers.click(), panelHost, fetchCalls, mapView };
 }
 
 const PAYLOAD = {
@@ -143,7 +149,7 @@ test('the header reports connected and not-connected counts', async () => {
     const ui = run(PAYLOAD);
     ui.click();
     await new Promise(r => setTimeout(r, 0));
-    assert.strictEqual(ui.panelHost._shell['.tmap-sw-state'].textContent, '1 connected · 2 not connected');
+    assert.strictEqual(ui.panelHost._shell['[data-sw-state]'].textContent, '1 connected · 2 not connected');
 });
 
 test('an SNMP failure says so instead of drawing a made-up grid', async () => {
@@ -163,4 +169,82 @@ test('a switch with no physical ports says so', async () => {
     ui.click();
     await new Promise(r => setTimeout(r, 0));
     assert.match(lastWrite(), /no physical ports/i);
+});
+
+test('selecting a switch hides the topology table and shows the switch view', () => {
+    writes.length = 0;
+    const ui = run(PAYLOAD);
+    ui.click();
+    assert.strictEqual(ui.mapView.hidden, true, 'the topology table is hidden');
+    assert.strictEqual(ui.panelHost.hidden, false, 'the switch view is shown');
+    assert.match(lastWrite(), /SWITCH/, 'the switch header is rendered');
+});
+
+test('the switch view carries a button back to the topology', () => {
+    writes.length = 0;
+    const ui = run(PAYLOAD);
+    ui.click();
+    const shell = writes[0] || '';
+    assert.match(shell, /data-switch-back/, 'the Back button is part of the switch view');
+    assert.match(shell, /Back to topology/);
+    assert.match(shell, />Sarchl</, 'the switch name is the view heading');
+});
+
+test('going back restores the topology table and closes the switch view', async () => {
+    writes.length = 0;
+    const ui = run(PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    assert.strictEqual(ui.mapView.hidden, true, 'the map is hidden while the switch is open');
+    // Invoke the bound Back handler, as a click would.
+    ui.panelHost._shell['[data-switch-back]']._handler();
+    assert.strictEqual(ui.mapView.hidden, false, 'the topology table is shown again');
+    assert.strictEqual(ui.panelHost.hidden, true, 'the switch view is closed');
+});
+
+const WITH_NEIGHBOURS = {
+    ok: true, name: 'Sarchl', ip: '10.10.10.15', total: 2, connected: 2, disabled: 0, neighbor_count: 3,
+    readings: { ping_ms: 11.5, packet_loss: 0, bandwidth_in: 400.2, bandwidth_out: 120.5,
+                uptime: '1d 03h 10m', neighbors: 3, cpu: null, users: null },
+    ports: [
+        { index: 10101, name: 'GigabitEthernet0/1', oper: 'up', admin: 'up', speed_mbps: 1000,
+          alias: '', neighbors: [{ name: 'RB-tower', port: 'ether1', platform: 'RouterOS 7' }] },
+        { index: 10102, name: 'GigabitEthernet0/2', oper: 'up', admin: 'up', speed_mbps: 1000,
+          alias: '', neighbors: [] },
+    ],
+};
+
+test('the switch view shows the sensor readings as tiles', async () => {
+    writes.length = 0;
+    const ui = run(WITH_NEIGHBOURS);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    const html = lastWrite();
+    assert.match(html, /<span>Ping<\/span>/);
+    assert.match(html, /11\.5/, 'ping value is shown');
+    assert.match(html, /<span>Bandwidth<\/span>/);
+    assert.match(html, /400\.2/, 'inbound bandwidth is shown');
+    assert.match(html, /<span>Uptime<\/span>/);
+    assert.match(html, /1d 03h 10m/);
+    assert.match(html, /<span>Neighbours<\/span>/);
+});
+
+test('a missing reading is a dash, never a fabricated zero', async () => {
+    writes.length = 0;
+    const data = { ...WITH_NEIGHBOURS, readings: { ...WITH_NEIGHBOURS.readings, ping_ms: null } };
+    const ui = run(data);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    // The Ping tile falls back to an em dash rather than 0.0 ms.
+    assert.match(lastWrite(), /<span>Ping<\/span><b>—/);
+});
+
+test('a port with a neighbour is marked so it can be found at a glance', async () => {
+    writes.length = 0;
+    const ui = run(WITH_NEIGHBOURS);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    const html = lastWrite();
+    assert.match(html, /tmap-port-dot/, 'the linked port carries a marker');
+    assert.match(html, /1 neighbour/);
 });

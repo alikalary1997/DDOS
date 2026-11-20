@@ -67,22 +67,28 @@
 .topo-dot[data-state=offline]{background:var(--red)}
 .topo-dot[data-state=not-tested]{background:var(--muted)}
 
-/* ---- switch port panel (Cisco) ----------------------------------------------
-   Opens under the map when a switch node is selected. The grid is the reference's port
-   square: green = link up, red = not connected, hatched = shut by an operator. */
-.tmap-switch{margin:0 0 14px;padding:16px 18px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
-.tmap-switch[hidden]{display:none}
-.tmap-sw-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
-.tmap-sw-head .eyebrow{margin:0 0 2px}
-.tmap-sw-head h2{margin:0;font:600 15px "Space Grotesk","Segoe UI",sans-serif
-}
-.tmap-sw-ip{display:block;margin-top:2px;font:11px ui-monospace,Consolas,monospace;color:var(--muted)}
-.tmap-sw-state{margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--muted);background:var(--surface-2);white-space:nowrap}
+/* ---- switch view (Cisco) -----------------------------------------------------
+   A switch replaces the map rather than sitting under it: the topology table is hidden and
+   this view takes the page, with a Back button returning to the map. The grid is the
+   reference's port square: green = link up, red = not connected, hatched = shut by an operator. */
+.tmap-switch-view[hidden]{display:none}
+.tmap-sw-bar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+.tmap-back{display:inline-flex;align-items:center;gap:7px;font:600 11.5px "Segoe UI",Arial,sans-serif;
+    color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:7px;
+    padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+.tmap-back:hover{border-color:var(--blue);background:var(--surface-2)}
+.tmap-back:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tmap-sw-card{padding:18px 20px}
+.tmap-sw-title{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.tmap-sw-title .eyebrow{margin:0 0 3px}
+.tmap-sw-title h2{margin:0;font:600 19px "Space Grotesk","Segoe UI",sans-serif;letter-spacing:-.2px}
+.tmap-sw-ip{display:block;margin-top:3px;font:11.5px ui-monospace,Consolas,monospace;color:var(--muted)}
+.tmap-sw-state{margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--muted);background:var(--surface-2);white-space:nowrap}
 .tmap-sw-state[data-state=online]{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent);background:color-mix(in srgb,var(--green) 12%,transparent)}
 .tmap-sw-state[data-state=warn]{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent);background:color-mix(in srgb,var(--amber) 12%,transparent)}
 .tmap-sw-state[data-state=error]{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent);background:color-mix(in srgb,var(--red) 12%,transparent)}
-.tmap-port-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;max-width:760px}
-.tmap-port{font:600 10.5px ui-monospace,Consolas,monospace;padding:9px 4px;border-radius:4px;cursor:pointer;
+.tmap-port-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:7px;max-width:900px}
+.tmap-port{font:600 11px ui-monospace,Consolas,monospace;padding:11px 4px;border-radius:5px;cursor:pointer;
     border:1px solid transparent;transition:border-color .12s,filter .12s;text-align:center}
 .tmap-port[data-state=up]{background:color-mix(in srgb,var(--green) 82%,#0b1118);border-color:#1d7a46;color:#07130d}
 .tmap-port[data-state=down]{background:color-mix(in srgb,var(--red) 82%,#0b1118);border-color:#9a2a2a;color:#160809}
@@ -90,14 +96,38 @@
 .tmap-port:hover{filter:brightness(1.12);border-color:#fff}
 .tmap-port:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .tmap-port.is-selected{outline:2px solid #8cc0f5;outline-offset:1px}
-.tmap-sw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:12px 0 0;font-size:11px;color:var(--muted)}
+.tmap-sw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin:16px 0 0;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
 .tmap-key{display:inline-flex;align-items:center;gap:6px}
-.tmap-key i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.tmap-key i{width:11px;height:11px;border-radius:3px;display:inline-block}
 .tmap-key i[data-state=up]{background:color-mix(in srgb,var(--green) 82%,#0b1118)}
 .tmap-key i[data-state=down]{background:color-mix(in srgb,var(--red) 82%,#0b1118)}
 .tmap-key i[data-state=disabled]{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 3px,#1c2633 3px,#1c2633 6px);border:1px solid var(--border)}
-.tmap-port-detail{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);max-width:420px}
+.tmap-port-detail{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);max-width:560px}
 .tmap-port-detail[hidden]{display:none}
-.tmap-port-detail .tmap-detail{margin:0}
+.tmap-port-detail .tmap-detail{margin:0 0 4px}
+
+/* Switch reading tiles: ping / bandwidth / uptime / neighbours, above the port grid. */
+.tmap-rd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 18px;max-width:900px}
+.tmap-rd{border:1px solid var(--border);border-radius:8px;padding:11px 14px;background:var(--surface-2);min-width:0}
+.tmap-rd span{display:block;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.tmap-rd b{display:block;margin-top:4px;font:650 18px/1.3 "Space Grotesk","Segoe UI",sans-serif;color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tmap-rd b em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--muted);margin-left:4px}
+.tmap-rd[data-tone=ok] b{color:var(--green)}
+.tmap-rd[data-tone=wn] b{color:var(--amber)}
+.tmap-rd[data-tone=bad] b{color:var(--red)}
+
+/* A small dot marks a port that has a neighbour learned on it. */
+.tmap-port{position:relative}
+.tmap-port-dot{position:absolute;top:5px;right:5px;width:5px;height:5px;border-radius:50%;background:#0b1118;opacity:.55}
+
+/* Neighbours of the selected port only. */
+.tmap-nb-title{margin:16px 0 8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tmap-nb-list{display:grid;gap:8px}
+.tmap-nb{border:1px solid var(--border);border-radius:7px;padding:9px 12px;background:var(--surface-2)}
+.tmap-nb-head{display:flex;align-items:center;gap:10px}
+.tmap-nb-head b{font-size:12.5px;color:var(--text)}
+.tmap-nb-port{margin-left:auto;font:11px ui-monospace,Consolas,monospace;color:var(--blue);background:color-mix(in srgb,var(--blue) 13%,transparent);border-radius:4px;padding:1px 7px}
+.tmap-nb small{display:block;margin-top:3px;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.tmap-nb-empty{font-size:11.5px;color:var(--muted);border:1px dashed var(--border);border-radius:7px;padding:12px}
 
 @media(max-width:1100px){.tmap-layout{grid-template-columns:1fr}.tmap-inspect{position:static}}

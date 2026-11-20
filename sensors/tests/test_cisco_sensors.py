@@ -94,6 +94,122 @@ class NeighborCountTests(TestCase):
         self.assertEqual(total, 0)
 
 
+class SwitchPortNeighborTests(TestCase):
+    """The switch panel's per-port neighbours: LLDP and CDP both have to reach the port.
+
+    A real switch advertised the neighbour on GigabitEthernet0/21 (a LiteBeam radio) only over
+    CDP, while LLDP described the same port with an empty chassis name and the port "eth0" -
+    so the panel showed "Unknown device / eth0". These tests pin the two things that fixes:
+    CDP's ifIndex-based index being joined to a port name, and CDP replacing a blank LLDP row.
+    """
+    LLDP_BASE = LLDP_NEIGHBOR_COLUMN.rsplit(".", 1)[0]
+    CDP_BASE = snmp.CDP_TABLE_ROOT
+
+    def neighbours(self, batches):
+        """Run neighbors_by_port against a fixed set of walks.
+
+        `batches` maps a walked OID prefix to [(oid tuple, value), ...]; anything not listed is
+        an empty table, so a test states only the columns it cares about.
+        """
+        import asyncio
+
+        async def fake_walk(self_, prefix, **kwargs):
+            return list(batches.get(prefix, []))
+
+        async def go():
+            client = Client("127.0.0.1", "community", 161)
+            await client.open()
+            try:
+                return await client.neighbors_by_port()
+            finally:
+                if client.engine:
+                    client.engine.close_dispatcher()
+        with patch.object(Client, "bulk_walk", new=fake_walk):
+            return asyncio.run(go())
+
+    @staticmethod
+    def octets(text):
+        return snmp.OctetString(text.encode())
+
+    def test_a_cdp_only_neighbour_reaches_its_port(self):
+        # ifDescr gives the port name keyed by ifIndex; the CDP cache is indexed by the same
+        # ifIndex, so port 10121 is GigabitEthernet0/21 without any LLDP data at all.
+        descr = tuple(map(int, snmp.DESCR.split(".")))
+        cdp = tuple(map(int, self.CDP_BASE.split(".")))
+        batches = {
+            snmp.DESCR: [(descr + (10121,), self.octets("GigabitEthernet0/21"))],
+            f"{self.CDP_BASE}.6": [(cdp + (10121, 55), self.octets("OnlineCompany-SL24"))],
+            f"{self.CDP_BASE}.7": [(cdp + (10121, 55), self.octets("br0"))],
+            f"{self.CDP_BASE}.8": [(cdp + (10121, 55), self.octets("LiteBeam 5AC"))],
+        }
+        result = self.neighbours(batches)
+        entries = result.get("GigabitEthernet0/21", [])
+        self.assertEqual(len(entries), 1, result)
+        self.assertEqual(entries[0]["name"], "OnlineCompany-SL24")
+        self.assertEqual(entries[0]["port"], "br0")
+        self.assertEqual(entries[0]["platform"], "LiteBeam 5AC")
+        self.assertEqual(entries[0]["protocol"], "CDP")
+
+    def test_cdp_replaces_a_blank_lldp_entry_for_the_same_port(self):
+        # LLDP knew the port but not who is on it; CDP is what names the device.
+        local = tuple(map(int, snmp.LLDP_LOCAL_PORT_ID.split(".")))
+        lldp = tuple(map(int, self.LLDP_BASE.split(".")))
+        descr = tuple(map(int, snmp.DESCR.split(".")))
+        cdp = tuple(map(int, self.CDP_BASE.split(".")))
+        batches = {
+            snmp.LLDP_LOCAL_PORT_ID: [(local + (21,), self.octets("Gi0/21"))],
+            f"{self.LLDP_BASE}.9": [(lldp + (0, 21, 4), self.octets(""))],
+            f"{self.LLDP_BASE}.7": [(lldp + (0, 21, 4), self.octets("eth0"))],
+            snmp.DESCR: [(descr + (10121,), self.octets("GigabitEthernet0/21"))],
+            f"{self.CDP_BASE}.6": [(cdp + (10121, 55), self.octets("OnlineCompany-SL24"))],
+            f"{self.CDP_BASE}.7": [(cdp + (10121, 55), self.octets("br0"))],
+            f"{self.CDP_BASE}.8": [(cdp + (10121, 55), self.octets("LiteBeam 5AC"))],
+        }
+        entries = self.neighbours(batches).get("GigabitEthernet0/21", [])
+        self.assertEqual(len(entries), 1, entries)
+        self.assertEqual(entries[0]["name"], "OnlineCompany-SL24", "CDP replaced the blank LLDP row")
+
+    def test_a_walk_that_dies_part_way_falls_back_instead_of_reporting_empty(self):
+        """A bulk walk that stops mid-table must not be reported as an empty table.
+
+        This is what made every CDP neighbour disappear: the switch dropped the GETBULK part-way
+        through, and the code returned the (empty) partial result as though nothing were there.
+        The GETNEXT fallback is what keeps the table readable on a loaded switch.
+        """
+        import asyncio
+
+        root = tuple(map(int, (self.CDP_BASE + ".6").split(".")))
+        answers = [(root + (10121, 55), snmp.OctetString(b"OnlineCompany-SL24"))]
+        requested = []
+
+        async def fake_query(self_, oids, walk=False):
+            requested.append(oids[0])
+            if answers:
+                return [answers.pop(0)]
+            return [(root, snmp.EndOfMibView(b""))]
+
+        async def stop_responding(*args, **kwargs):
+            # An error (not a status) is how PySNMP reports a stall: the device stopped
+            # answering, it did not refuse the read.
+            yield ("No SNMP response received before timeout", snmp.Integer32(0), snmp.Integer32(0), ())
+
+        async def go():
+            client = Client("127.0.0.1", "community", 161)
+            await client.open()
+            try:
+                with patch.object(Client, "query", new=fake_query), \
+                        patch.object(snmp, "bulk_walk_cmd", new=stop_responding):
+                    return await client.bulk_walk(self.CDP_BASE + ".6", limit=100)
+            finally:
+                if client.engine:
+                    client.engine.close_dispatcher()
+
+        out = asyncio.run(go())
+        self.assertTrue(requested, "the fallback asked the device row by row")
+        self.assertEqual(len(out), 1, out)
+        self.assertEqual(out[0][1].prettyPrint(), "OnlineCompany-SL24")
+
+
 class CiscoSensorTests(TestCase):
     def setUp(self):
         env = patch.dict(os.environ, {"NETSHIELD_DEVICE_ENCRYPTION_KEY": Fernet.generate_key().decode()})
