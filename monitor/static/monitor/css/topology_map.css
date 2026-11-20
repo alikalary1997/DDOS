@@ -130,4 +130,23 @@
 .tmap-nb small{display:block;margin-top:3px;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 .tmap-nb-empty{font-size:11.5px;color:var(--muted);border:1px dashed var(--border);border-radius:7px;padding:12px}
 
+/* A fiber port carries an optical transceiver: marked so it stands out from the copper rows. */
+.tmap-port.is-fiber{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 55%,transparent)}
+.tmap-key i.tmap-key-fiber{background:transparent;border:1px solid color-mix(in srgb,var(--blue) 70%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 35%,transparent)}
+
+/* Optical transmit/receive levels for the selected fiber port. */
+.tmap-optical{margin-top:4px}
+.tmap-optical-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tmap-optical-grid>div{border:1px solid var(--border);border-radius:7px;padding:9px 12px;background:var(--surface-2)}
+.tmap-optical-grid span{display:block;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tmap-optical-grid b{display:block;margin-top:3px;font:600 15px ui-monospace,Consolas,monospace;color:var(--text)}
+.tmap-optical-grid b[data-tone=online]{color:var(--green)}
+.tmap-optical-grid b[data-tone=warn]{color:var(--amber)}
+.tmap-optical-grid b[data-tone=error]{color:var(--red)}
+.tmap-optical-note{margin-top:7px;font-size:11px;color:var(--muted)}
+
+/* VLAN membership, laid out like the optical block so the two read as one panel. */
+.tmap-vlan{margin-top:4px}
+.tmap-vlan .tmap-optical-grid b{font-size:13px;font-weight:600;color:var(--blue)}
+
 @media(max-width:1100px){.tmap-layout{grid-template-columns:1fr}.tmap-inspect{position:static}}

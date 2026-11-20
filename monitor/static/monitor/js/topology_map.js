@@ -230,8 +230,10 @@
                 // The port number alone fits the square: Gi0/1 -> 0/1, Gi1/0/24 -> 1/0/24.
                 const text = port.name.replace(/[^0-9/]/g, '') || port.name;
                 const linked = (port.neighbors || []).length;
-                return `<button type="button" class="tmap-port" data-port="${port.index}" data-state="${portState(port)}" ` +
-                    `title="${esc(port.name)} — ${portState(port)}${linked ? ` · ${linked} neighbour${linked === 1 ? '' : 's'}` : ''}">` +
+                // A port with an optical transceiver is marked, so fiber links stand out.
+                const fiber = port.fiber ? ' · fiber' : '';
+                return `<button type="button" class="tmap-port${port.fiber ? ' is-fiber' : ''}" data-port="${port.index}" data-state="${portState(port)}" ` +
+                    `title="${esc(port.name)} — ${portState(port)}${fiber}${linked ? ` · ${linked} neighbour${linked === 1 ? '' : 's'}` : ''}">` +
                     `${esc(text)}${linked ? '<i class="tmap-port-dot"></i>' : ''}</button>`;
             }).join('');
             if (body) {
@@ -241,6 +243,7 @@
                     '<span class="tmap-key"><i data-state="up"></i>Connected</span>' +
                     '<span class="tmap-key"><i data-state="down"></i>Not connected</span>' +
                     '<span class="tmap-key"><i data-state="disabled"></i>Disabled</span>' +
+                    '<span class="tmap-key"><i class="tmap-key-fiber"></i>Fiber</span>' +
                     '<span class="tmap-hint">Click a port to see its neighbours.</span></div>' +
                     '<div class="tmap-port-detail" data-port-detail hidden></div>';
                 body.querySelectorAll('.tmap-port').forEach(button => {
@@ -301,10 +304,49 @@
                 `<span class="tmap-sw-state" data-state="${tone}">${label}</span></div>` +
                 '<dl class="tmap-detail">' +
                 `<dt>Admin / oper</dt><dd>${esc(port.admin)} / ${esc(port.oper)}</dd>` +
+                `<dt>Media</dt><dd>${port.fiber ? 'Fiber (optical transceiver)' : 'Copper'}</dd>` +
                 `<dt>Speed</dt><dd>${esc(speed)}</dd>` +
                 `<dt>SNMP ifIndex</dt><dd>${esc(port.index)}</dd>` +
                 (port.alias ? `<dt>Alias</dt><dd>${esc(port.alias)}</dd>` : '') +
-                '</dl>' + neighbourBlock;
+                '</dl>' + vlanBlock(port) + opticalBlock(port) + neighbourBlock;
+        }
+
+        // Optical transmit/receive levels for a fiber port. A copper port has no transceiver, and
+        // a transceiver without DOM reports nothing, so each missing value is a dash - never 0.
+        function opticalBlock(port) {
+            if (!port.fiber) return '';
+            const o = port.optical || {};
+            const dbm = v => (v === null || v === undefined) ? '—' : `${Number(v).toFixed(1)} dBm`;
+            const tone = { good: 'online', ok: 'online', low: 'warn', none: 'error' }[o.state] || '';
+            const note = {
+                good: 'Receive level is healthy.',
+                ok: 'Receive level is marginal but usable.',
+                low: 'Receive level is low — check connectors and patch cords.',
+                none: 'Almost no light received — fiber disconnected, broken, or far end dark.',
+            }[o.state] || 'No optical reading from this transceiver.';
+            return '<div class="tmap-optical">' +
+                `<div class="tmap-nb-title">Optical</div>` +
+                '<div class="tmap-optical-grid">' +
+                `<div><span>Transmit</span><b>${esc(dbm(o.tx))}</b></div>` +
+                `<div><span>Receive</span><b${tone ? ` data-tone="${tone}"` : ''}>${esc(dbm(o.rx))}</b></div>` +
+                '</div>' +
+                `<div class="tmap-optical-note">${esc(note)}</div></div>`;
+        }
+
+        // Which VLAN a port is in. An access port has exactly one; a trunk reports the native
+        // VLAN it carries untagged. A port with no membership (an uplink or a routed port) is
+        // reported as such rather than guessed.
+        function vlanBlock(port) {
+            if (!port.vlan_mode) return '';
+            const isTrunk = port.vlan_mode === 'trunk';
+            const label = isTrunk ? 'Native VLAN' : 'VLAN';
+            const value = port.vlan_name || (port.vlan ? `VLAN ${port.vlan}` : '—');
+            return '<div class="tmap-vlan">' +
+                '<div class="tmap-nb-title">VLAN</div>' +
+                '<div class="tmap-optical-grid">' +
+                `<div><span>Mode</span><b>${esc(isTrunk ? 'Trunk' : 'Access')}</b></div>` +
+                `<div><span>${label}</span><b>${esc(value)}</b></div>` +
+                '</div></div>';
         }
 
         nodeEls.forEach(el => {

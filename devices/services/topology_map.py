@@ -366,8 +366,24 @@ def switch_ports(device):
         neighbours_by_suffix.setdefault(port_suffix(interface), []).extend(entries)
     for port in physical:
         port["neighbors"] = neighbours_by_suffix.get(port_suffix(port["name"]), [])
+    # Optical readings come from ports() itself, so a copper port simply has none: that absence
+    # is what marks a port as fiber, and it is reported explicitly rather than left implicit.
+    for port in physical:
+        optical = port.get("optical")
+        port["fiber"] = bool(port.get("fiber"))
+        port["optical"] = optical if isinstance(optical, dict) else None
+    # VLAN membership is reported per port: an access port names the VLAN it is in, a trunk the
+    # native VLAN it carries untagged. A port with no membership (uplink, routed port) sends
+    # nothing, which the panel shows as no VLAN row rather than inventing one.
+    for port in physical:
+        port.setdefault("vlan", None)
+        port.setdefault("vlan_name", None)
+        port.setdefault("vlan_mode", None)
+        port.setdefault("vlan_native", None)
     return {"ok": True, "ports": physical, "total": len(physical),
             "connected": sum(1 for p in physical if p["oper"] == "up"),
             "disabled": sum(1 for p in physical if p["admin"] == "down"),
+            "fiber_count": sum(1 for p in physical if p["fiber"]),
+            "trunk_count": sum(1 for p in physical if p["vlan_mode"] == "trunk"),
             "neighbor_count": sum(len(p["neighbors"]) for p in physical),
             "readings": _readings(device)}

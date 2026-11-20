@@ -28,8 +28,17 @@ function el(tag, dataset = {}) {
             html = value;
             writes.push(value);
             // Port squares, so a test can read each one's rendered state.
-            node.children = [...value.matchAll(/class="tmap-port"[^>]*data-port="(\d+)"[^>]*data-state="([a-z]+)"/g)]
-                .map(m => el('button', { port: m[1], state: m[2] }));
+            node._ports = [...value.matchAll(/class="tmap-port[^"]*"[^>]*data-port="(\d+)"[^>]*data-state="([a-z]+)"/g)]
+                .map(m => {
+                    const button = el('button', { port: m[1], state: m[2] });
+                    // The panel binds a click handler per port square; keep it so a test can
+                    // open a port the way a user does.
+                    button.addEventListener = (type, fn) => { if (type === 'click') button._handler = fn; };
+                    return button;
+                });
+            node.children = node._ports;
+            // The panel binds click handlers through querySelectorAll('.tmap-port').
+            node.querySelectorAll = (sel) => (sel === '.tmap-port' ? node._ports : []);
         },
     });
     return node;
@@ -60,7 +69,7 @@ function buildPanel() {
     const backButton = { _handler: null, addEventListener(type, fn) { if (type === 'click') this._handler = fn; } };
     host._shell = { '.tmap-sw-head': el('div', {}), '.tmap-sw-state': el('span', {}),
         '[data-sw-state]': el('span', {}), '.tmap-sw-body': el('div', {}),
-        '[data-switch-back]': backButton };
+        '[data-switch-back]': backButton, '[data-port-detail]': el('div', { portDetail: '' }) };
     const base = host.querySelector.bind(host);
     host.querySelector = (sel) => host._shell[sel] || base(sel);
     return host;
@@ -247,4 +256,117 @@ test('a port with a neighbour is marked so it can be found at a glance', async (
     const html = lastWrite();
     assert.match(html, /tmap-port-dot/, 'the linked port carries a marker');
     assert.match(html, /1 neighbour/);
+});
+
+// --- Fiber ports and optical power -------------------------------------------------------
+// A port with an optical transceiver is marked in the grid, and its transmit/receive levels are
+// shown when opened. A copper port has no transceiver, so it must never claim optical data; a
+// missing reading is a dash, never 0 dBm.
+const FIBER_PAYLOAD = {
+    ok: true, name: 'Sarchl', ip: '10.10.10.15', total: 2, connected: 2, fiber_count: 1,
+    ports: [
+        { index: 10401, name: 'TenGigabitEthernet1/1', oper: 'up', admin: 'up', speed_mbps: 10000, alias: '',
+          fiber: true, optical: { tx: -3.4, rx: -7.3, state: 'good' }, neighbors: [] },
+        { index: 10101, name: 'GigabitEthernet0/1', oper: 'up', admin: 'up', speed_mbps: 1000, alias: '',
+          fiber: false, optical: null, neighbors: [] },
+    ],
+};
+
+test('a fiber port is marked in the port grid, a copper port is not', async () => {
+    writes.length = 0;
+    const ui = run(FIBER_PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    const html = lastWrite();
+    assert.match(html, /class="tmap-port is-fiber"[^>]*data-port="10401"/, 'fiber port carries the marker');
+    assert.strictEqual((html.match(/is-fiber/g) || []).length, 1, 'only the fiber port is marked');
+});
+
+test('opening a fiber port shows its optical transmit and receive levels', async () => {
+    writes.length = 0;
+    const ui = run(FIBER_PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    const button = portButton(ui, '10401');
+    assert.ok(button, 'the fiber port square exists');
+    button();
+    const html = writes[writes.length - 1];
+    assert.match(html, /Optical/, 'the optical block is rendered');
+    assert.match(html, /-3\.4 dBm/, 'transmit power');
+    assert.match(html, /-7\.3 dBm/, 'receive power');
+    assert.match(html, /Fiber \(optical transceiver\)/, 'media is reported');
+});
+
+test('a copper port shows no optical block', async () => {
+    writes.length = 0;
+    const ui = run(FIBER_PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    const button = portButton(ui, '10101');
+    assert.ok(button, 'the copper port square exists');
+    button();
+    const html = writes[writes.length - 1];
+    assert.doesNotMatch(html, /Optical/, 'no optical section for copper');
+    assert.match(html, /Copper/, 'media is reported as copper');
+});
+// The panel binds one click handler per port square; grab the one for a given port so a test
+// opens a port the way a user does.
+function portButton(ui, index) {
+    const body = ui.panelHost._shell['.tmap-sw-body'];
+    const square = (body._ports || []).find(el => el.dataset.port === index);
+    return square && square._handler ? square._handler : null;
+}
+
+// --- VLAN membership --------------------------------------------------------------------
+// An access port names its VLAN; a trunk reports the native VLAN it carries untagged. The
+// reference switch had Gi0/1 as an access port in VLAN 51 while SNMP's VTP tables claimed every
+// port was a trunk, so these pin the membership table's values.
+const VLAN_PAYLOAD = {
+    ok: true, name: 'Sarchl', ip: '10.10.10.15', total: 2, connected: 2,
+    ports: [
+        { index: 10101, name: 'GigabitEthernet0/1', oper: 'up', admin: 'up', speed_mbps: 1000, alias: '',
+          fiber: false, optical: null, neighbors: [],
+          vlan: 51, vlan_name: 'VLAN0051', vlan_mode: 'access', vlan_native: 51 },
+        { index: 10303, name: 'GigabitEthernet1/3', oper: 'up', admin: 'up', speed_mbps: 1000, alias: '',
+          fiber: false, optical: null, neighbors: [],
+          vlan: 4, vlan_name: 'VLAN0004', vlan_mode: 'trunk', vlan_native: 4 },
+    ],
+};
+
+test('an access port shows the VLAN it belongs to', async () => {
+    writes.length = 0;
+    const ui = run(VLAN_PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    portButton(ui, '10101')();
+    const html = writes[writes.length - 1];
+    assert.match(html, /VLAN/, 'the VLAN block is rendered');
+    assert.match(html, />Access</, 'mode is access');
+    assert.match(html, /VLAN0051/, 'the VLAN name from the switch');
+    assert.doesNotMatch(html, />Trunk</, 'an access port is never labelled trunk');
+});
+
+test('a trunk shows the native VLAN it carries untagged', async () => {
+    writes.length = 0;
+    const ui = run(VLAN_PAYLOAD);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    portButton(ui, '10303')();
+    const html = writes[writes.length - 1];
+    assert.match(html, />Trunk</, 'mode is trunk');
+    assert.match(html, /Native VLAN/);
+    assert.match(html, /VLAN0004/);
+});
+
+test('a port with no VLAN membership shows no VLAN block', async () => {
+    const payload = JSON.parse(JSON.stringify(VLAN_PAYLOAD));
+    payload.ports[0].vlan_mode = null;
+    payload.ports[0].vlan = null;
+    payload.ports[0].vlan_name = null;
+    writes.length = 0;
+    const ui = run(payload);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    portButton(ui, '10101')();
+    assert.doesNotMatch(writes[writes.length - 1], /Native VLAN|>Access</);
 });

@@ -169,6 +169,62 @@ class SwitchPortNeighborTests(TestCase):
         self.assertEqual(len(entries), 1, entries)
         self.assertEqual(entries[0]["name"], "OnlineCompany-SL24", "CDP replaced the blank LLDP row")
 
+    def test_cdp_names_the_link_and_lldp_does_not_duplicate_it(self):
+        """The reference switch named its neighbour only over CDP.
+
+        `show cdp neighbors Gi0/21` listed a LiteBeam while LLDP on the same port was idle, and
+        the app showed "Unknown device / eth0". CDP must therefore win, and the nameless LLDP
+        row must not be listed beside it. The two tables also key the port differently
+        (Gi0/21 vs GigabitEthernet0/21), which is what made the old merge miss entirely.
+        """
+        local = tuple(map(int, snmp.LLDP_LOCAL_PORT_ID.split(".")))
+        lldp = tuple(map(int, self.LLDP_BASE.split(".")))
+        descr = tuple(map(int, snmp.DESCR.split(".")))
+        cdp = tuple(map(int, self.CDP_BASE.split(".")))
+        batches = {
+            snmp.LLDP_LOCAL_PORT_ID: [(local + (21,), self.octets("Gi0/21"))],
+            f"{self.LLDP_BASE}.9": [(lldp + (0, 21, 4), self.octets(""))],
+            f"{self.LLDP_BASE}.7": [(lldp + (0, 21, 4), self.octets("eth0"))],
+            snmp.DESCR: [(descr + (10121,), self.octets("GigabitEthernet0/21"))],
+            f"{self.CDP_BASE}.6": [(cdp + (6, 10121, 55), self.octets("OnlineCompany-SL24"))],
+            f"{self.CDP_BASE}.7": [(cdp + (7, 10121, 55), self.octets("br0"))],
+            f"{self.CDP_BASE}.8": [(cdp + (8, 10121, 55), self.octets("LiteBeam 5AC"))],
+        }
+        entries = self.neighbours(batches).get("GigabitEthernet0/21", [])
+        self.assertEqual(len(entries), 1, entries)
+        self.assertEqual(entries[0]["name"], "OnlineCompany-SL24")
+        self.assertEqual(entries[0]["protocol"], "CDP")
+
+    def test_several_neighbours_on_one_port_are_all_kept(self):
+        """A port can hold more than one CDP neighbour; keying by ifIndex alone loses them.
+
+        ifIndex 10121 carried three (device indexes 55, 89, 90); keeping one row per interface
+        dropped the LiteBeam on .55 - the neighbour the user was looking for.
+        """
+        descr = tuple(map(int, snmp.DESCR.split(".")))
+        cdp = tuple(map(int, self.CDP_BASE.split(".")))
+        batches = {
+            snmp.DESCR: [(descr + (10121,), self.octets("GigabitEthernet0/21"))],
+            f"{self.CDP_BASE}.6": [(cdp + (6, 10121, 55), self.octets("LiteBeam-A")),
+                                   (cdp + (6, 10121, 89), self.octets("Nexus-B"))],
+            f"{self.CDP_BASE}.7": [(cdp + (7, 10121, 55), self.octets("br0")),
+                                   (cdp + (7, 10121, 89), self.octets("Eth1/30"))],
+            f"{self.CDP_BASE}.8": [(cdp + (8, 10121, 55), self.octets("LiteBeam 5AC")),
+                                   (cdp + (8, 10121, 89), self.octets("N3K"))],
+        }
+        entries = self.neighbours(batches).get("GigabitEthernet0/21", [])
+        self.assertEqual({e["name"] for e in entries}, {"LiteBeam-A", "Nexus-B"})
+
+    def test_cdp_is_read_under_the_cisco_enterprise_oid(self):
+        """This switch serves the CDP cache only under .1.3.6.1.4.1.9.9.23, not .1.3.6.1.9.9.23.
+
+        Walking the textbook form returns "no more variables left in this MIB view" for every
+        column while `show cdp neighbors` lists the neighbours, so the wrong base silently
+        reported an empty table.
+        """
+        self.assertTrue(CDP_NEIGHBOR_COLUMN.startswith("1.3.6.1.4.1.9.9.23"), CDP_NEIGHBOR_COLUMN)
+        self.assertEqual(snmp.CDP_TABLE_ROOT, "1.3.6.1.4.1.9.9.23.1.2.1.1")
+
     def test_a_walk_that_dies_part_way_falls_back_instead_of_reporting_empty(self):
         """A bulk walk that stops mid-table must not be reported as an empty table.
 
@@ -208,6 +264,88 @@ class SwitchPortNeighborTests(TestCase):
         self.assertTrue(requested, "the fallback asked the device row by row")
         self.assertEqual(len(out), 1, out)
         self.assertEqual(out[0][1].prettyPrint(), "OnlineCompany-SL24")
+
+
+class VlanTests(TestCase):
+    """Per-port VLAN membership, read from CISCO-VLAN-MEMBERSHIP-MIB.
+
+    The reference switch was the reason these exist: `show vlan` listed Gi0/1 as an access port
+    in VLAN 51, while the VTP tables (CISCO-VTP-MIB) reported every port as a trunk allowing all
+    VLANs. Membership only comes from the membership table, indexed by ifIndex.
+    """
+    PORTS = [{"index": 10101, "name": "GigabitEthernet0/1"},
+             {"index": 10303, "name": "GigabitEthernet1/3"}]
+
+    def vlans(self, batches):
+        import asyncio
+
+        async def fake_walk(self_, prefix, **kwargs):
+            return list(batches.get(prefix, []))
+
+        async def go():
+            client = Client("127.0.0.1", "community", 161)
+            await client.open()
+            try:
+                return await client.vlans_by_port(self.PORTS)
+            finally:
+                if client.engine:
+                    client.engine.close_dispatcher()
+        with patch.object(Client, "bulk_walk", new=fake_walk):
+            return asyncio.run(go())
+
+    @staticmethod
+    def vs(prefix, index, value):
+        root = tuple(map(int, prefix.split(".")))
+        return (root + (index,), value)
+
+    def test_an_access_port_reports_the_vlan_the_switch_shows(self):
+        # Gi0/1 is an access port in VLAN 51 on the real switch.
+        batches = {
+            snmp.VLAN_MEMBERSHIP_VLAN: [self.vs(snmp.VLAN_MEMBERSHIP_VLAN, 10101, snmp.Integer32(51))],
+            snmp.VLAN_MEMBERSHIP_STATUS: [self.vs(snmp.VLAN_MEMBERSHIP_STATUS, 10101, snmp.Integer32(2))],
+            snmp.VTP_VLAN_NAME: [self.vs(snmp.VTP_VLAN_NAME, 51, snmp.OctetString(b"VLAN0051"))],
+        }
+        entry = self.vlans(batches)["GigabitEthernet0/1"]
+        self.assertEqual(entry["mode"], "access")
+        self.assertEqual(entry["access"], 51)
+        self.assertEqual(entry["access_name"], "VLAN0051")
+
+    def test_membership_is_indexed_by_ifindex_not_port_number(self):
+        # Membership lives at ifIndex 10101; the port number 1 belongs to a different table.
+        # Reading the wrong index is what made every port look like VLAN 1.
+        batches = {
+            snmp.VLAN_MEMBERSHIP_VLAN: [self.vs(snmp.VLAN_MEMBERSHIP_VLAN, 10101, snmp.Integer32(51))],
+            snmp.VLAN_MEMBERSHIP_STATUS: [self.vs(snmp.VLAN_MEMBERSHIP_STATUS, 10101, snmp.Integer32(2))],
+        }
+        self.assertEqual(self.vlans(batches)["GigabitEthernet0/1"]["access"], 51)
+
+    def test_a_trunk_is_reported_as_a_trunk(self):
+        batches = {
+            snmp.VLAN_MEMBERSHIP_VLAN: [self.vs(snmp.VLAN_MEMBERSHIP_VLAN, 10303, snmp.Integer32(4))],
+            snmp.VLAN_MEMBERSHIP_STATUS: [self.vs(snmp.VLAN_MEMBERSHIP_STATUS, 10303, snmp.Integer32(1))],
+        }
+        entry = self.vlans(batches)["GigabitEthernet1/3"]
+        self.assertEqual(entry["mode"], "trunk")
+        self.assertEqual(entry["native"], 4)
+
+    def test_a_vlan_the_switch_never_defined_is_flagged(self):
+        batches = {
+            snmp.VLAN_MEMBERSHIP_VLAN: [self.vs(snmp.VLAN_MEMBERSHIP_VLAN, 10101, snmp.Integer32(4))],
+            snmp.VLAN_MEMBERSHIP_STATUS: [self.vs(snmp.VLAN_MEMBERSHIP_STATUS, 10101, snmp.Integer32(2))],
+            snmp.VTP_VLAN_NAME: [self.vs(snmp.VTP_VLAN_NAME, 51, snmp.OctetString(b"VLAN0051"))],
+        }
+        self.assertIn("undefined", self.vlans(batches)["GigabitEthernet0/1"]["access_name"])
+
+    def test_a_port_absent_from_the_table_has_no_membership(self):
+        # An uplink or routed port is simply not in the table; it must not be guessed.
+        batches = {
+            snmp.VLAN_MEMBERSHIP_VLAN: [self.vs(snmp.VLAN_MEMBERSHIP_VLAN, 10101, snmp.Integer32(51))],
+            snmp.VLAN_MEMBERSHIP_STATUS: [self.vs(snmp.VLAN_MEMBERSHIP_STATUS, 10101, snmp.Integer32(2))],
+        }
+        self.assertNotIn("GigabitEthernet1/3", self.vlans(batches))
+
+    def test_a_switch_without_vlan_support_reports_nothing(self):
+        self.assertEqual(self.vlans({}), {})
 
 
 class CiscoSensorTests(TestCase):
@@ -311,3 +449,102 @@ class CiscoSensorTests(TestCase):
         # MikroTik-only readings are not offered for a switch.
         cpu = html.split('value="cpu"')[1][:200]
         self.assertIn("disabled", cpu, "CPU readings need the MikroTik HOST-RESOURCES MIB")
+
+
+class OpticalPowerTests(TestCase):
+    """Optical levels for fiber ports, read from CISCO-ENTITY-SENSOR-MIB.
+
+    Verified against a real Catalyst 3560X: the transceivers publish sensors named after their
+    port ("Te1/1 Receive Power Sensor"), entSensorValue is a scaled signed integer, and a copper
+    port publishes no optical sensors at all - which is how a port is recognised as fiber.
+    """
+    PORTS = [{"index": 10401, "name": "TenGigabitEthernet1/1"},
+             {"index": 10303, "name": "GigabitEthernet1/3"},
+             {"index": 10121, "name": "GigabitEthernet0/21"}]
+
+    def optical(self, batches):
+        import asyncio
+
+        async def fake_walk(self_, prefix, **kwargs):
+            return list(batches.get(prefix, []))
+
+        async def go():
+            client = Client("127.0.0.1", "community", 161)
+            await client.open()
+            try:
+                return await client.optical_by_port(self.PORTS)
+            finally:
+                if client.engine:
+                    client.engine.close_dispatcher()
+        with patch.object(Client, "bulk_walk", new=fake_walk):
+            return asyncio.run(go())
+
+    @staticmethod
+    def name(index, text):
+        root = tuple(map(int, snmp.ENTITY_PHYSICAL_NAME.split(".")))
+        return (root + (index,), snmp.OctetString(text.encode()))
+
+    @staticmethod
+    def sensor(prefix, index, value):
+        root = tuple(map(int, prefix.split(".")))
+        return (root + (index,), snmp.Integer32(value))
+
+    def test_only_ports_with_a_transceiver_are_fiber(self):
+        batches = {
+            snmp.ENTITY_PHYSICAL_NAME: [self.name(1071, "Te1/1 Transmit Power Sensor"),
+                                        self.name(1072, "Te1/1 Receive Power Sensor"),
+                                        self.name(1068, "Te1/1 Module Temperature Sensor")],
+            snmp.ENTITY_SENSOR_VALUE: [self.sensor(snmp.ENTITY_SENSOR_VALUE, 1072, -73)],
+            snmp.ENTITY_SENSOR_SCALE: [self.sensor(snmp.ENTITY_SENSOR_SCALE, 1072, 9)],
+            snmp.ENTITY_SENSOR_PRECISION: [self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1072, 1)],
+        }
+        result = self.optical(batches)
+        self.assertEqual(set(result), {"TenGigabitEthernet1/1"}, "copper ports have no transceiver")
+        self.assertNotIn("GigabitEthernet0/21", result)
+
+    def test_the_value_is_scaled_to_dbm(self):
+        # -73 at entSensorScale 9 (nano) with precision 1 is -7.3 dBm, exactly what the switch
+        # reports for this port; get the scaling wrong and it shows -73 or -0.000000073.
+        batches = {
+            snmp.ENTITY_PHYSICAL_NAME: [self.name(1072, "Te1/1 Receive Power Sensor"),
+                                        self.name(1071, "Te1/1 Transmit Power Sensor")],
+            snmp.ENTITY_SENSOR_VALUE: [self.sensor(snmp.ENTITY_SENSOR_VALUE, 1072, -73),
+                                       self.sensor(snmp.ENTITY_SENSOR_VALUE, 1071, -34)],
+            snmp.ENTITY_SENSOR_SCALE: [self.sensor(snmp.ENTITY_SENSOR_SCALE, 1072, 9),
+                                       self.sensor(snmp.ENTITY_SENSOR_SCALE, 1071, 9)],
+            snmp.ENTITY_SENSOR_PRECISION: [self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1072, 1),
+                                           self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1071, 1)],
+        }
+        entry = self.optical(batches)["TenGigabitEthernet1/1"]
+        self.assertEqual(entry["rx"], -7.3)
+        self.assertEqual(entry["tx"], -3.4)
+
+    def test_a_receive_level_sets_the_link_judgement(self):
+        for rx, expected in ((-7.3, "good"), (-15.0, "ok"), (-25.0, "low"), (-40.0, "none")):
+            batches = {
+                snmp.ENTITY_PHYSICAL_NAME: [self.name(1072, "Te1/1 Receive Power Sensor")],
+                snmp.ENTITY_SENSOR_VALUE: [self.sensor(snmp.ENTITY_SENSOR_VALUE, 1072, int(rx * 10))],
+                snmp.ENTITY_SENSOR_SCALE: [self.sensor(snmp.ENTITY_SENSOR_SCALE, 1072, 9)],
+                snmp.ENTITY_SENSOR_PRECISION: [self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1072, 1)],
+            }
+            self.assertEqual(self.optical(batches)["TenGigabitEthernet1/1"]["state"], expected, rx)
+
+    def test_an_impossible_positive_transmit_is_dropped_not_shown(self):
+        # This IOS build reported -34 dBm as +34; a laser cannot transmit a positive dBm, so the
+        # bogus value is withheld rather than presented as a real reading.
+        batches = {
+            snmp.ENTITY_PHYSICAL_NAME: [self.name(1071, "Te1/1 Transmit Power Sensor"),
+                                        self.name(1072, "Te1/1 Receive Power Sensor")],
+            snmp.ENTITY_SENSOR_VALUE: [self.sensor(snmp.ENTITY_SENSOR_VALUE, 1071, 34),
+                                       self.sensor(snmp.ENTITY_SENSOR_VALUE, 1072, -73)],
+            snmp.ENTITY_SENSOR_SCALE: [self.sensor(snmp.ENTITY_SENSOR_SCALE, 1071, 9),
+                                       self.sensor(snmp.ENTITY_SENSOR_SCALE, 1072, 9)],
+            snmp.ENTITY_SENSOR_PRECISION: [self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1071, 1),
+                                           self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1072, 1)],
+        }
+        entry = self.optical(batches)["TenGigabitEthernet1/1"]
+        self.assertIsNone(entry["tx"])
+        self.assertEqual(entry["rx"], -7.3)
+
+    def test_an_all_copper_switch_reports_no_optics(self):
+        self.assertEqual(self.optical({}), {})

@@ -53,21 +53,60 @@ INTERFACE_WALK_LIMIT = 20000
 # switch), so only a single column is walked - the one that has exactly one entry per row:
 #   LLDP  lldpRemTable   .1.0.8802.1.1.2.1.4.1.1.<column>.<timeMark>.<localPort>.<index>
 #         column 4 = lldpRemChassisIdSubtype, present on every row
-#   CDP   cdpCacheTable  .1.3.6.1.9.9.23.1.2.1.1.<column>.<ifIndex>.<deviceIndex>
+#   CDP   cdpCacheTable  .1.3.6.1.4.1.9.9.23.1.2.1.1.<column>.<ifIndex>.<deviceIndex>
 #         column 1 = cdpCacheAddressType, present on every row
+# Note the enterprise prefix: CISCO-CDP-MIB is registered under cisco (.1.3.6.1.4.1.9), and
+# this switch serves the cache ONLY there. Walking the textbook .1.3.6.1.9.9.23 form returns
+# "no more variables left in this MIB view" on every column, so CDP neighbours were invisible
+# while `show cdp neighbors` on the switch listed them.
 LLDP_NEIGHBOR_COLUMN = "1.0.8802.1.1.2.1.4.1.1.4"
 # lldpLocPortTable: maps an LLDP local port number to the local interface's own name.
 # The remote table's `localPort` number is NOT the interface ifIndex (a real switch had 1..43
 # against ifIndexes of 10101+), so this table is what joins the two.
 LLDP_LOCAL_PORT_ID = "1.0.8802.1.1.2.1.3.7.1.3"
-CDP_NEIGHBOR_COLUMN = "1.3.6.1.9.9.23.1.2.1.1.1"
+CDP_NEIGHBOR_COLUMN = "1.3.6.1.4.1.9.9.23.1.2.1.1.1"
 # cdpCacheTable's own root. CDP_NEIGHBOR_COLUMN above points at column 1 (used for counting),
 # so per-port reads append the column to this instead of chopping the last arc off that OID -
 # doing the latter produced <table>.1.<column>, an OID the switch does not have.
-CDP_TABLE_ROOT = "1.3.6.1.9.9.23.1.2.1.1"
+CDP_TABLE_ROOT = "1.3.6.1.4.1.9.9.23.1.2.1.1"
 NEIGHBOR_WALK_LIMIT = 5000
 # Device types this adapter accepts: both speak SNMPv2c for the counters it reads.
 SNMP_DEVICE_TYPES = ("mikrotik", "cisco")
+
+# --- Optical power, for SFP/fiber ports -----------------------------------------------------
+# CISCO-ENTITY-SENSOR-MIB. Each optical transceiver publishes a set of sensors (temperature,
+# voltage, bias current, transmit power, receive power) named after its port; verified on a real
+# Catalyst 3560X, which reported "Te1/1 Transmit Power Sensor" / "Te1/1 Receive Power Sensor".
+# entSensorValue is a signed integer that has to be scaled: value * 10^-(scale) with `precision`
+# decimal places, so -34 at scale 9 / precision 1 is -3.4 dBm.
+ENTITY_SENSOR_VALUE = "1.3.6.1.4.1.9.9.91.1.1.1.1.4"
+ENTITY_SENSOR_TYPE = "1.3.6.1.4.1.9.9.91.1.1.1.1.1"
+ENTITY_SENSOR_SCALE = "1.3.6.1.4.1.9.9.91.1.1.1.1.2"
+ENTITY_SENSOR_PRECISION = "1.3.6.1.4.1.9.9.91.1.1.1.1.3"
+# entPhysicalName: the sensor's own label, which carries the port name it belongs to.
+ENTITY_PHYSICAL_NAME = "1.3.6.1.2.1.47.1.1.1.1.7"
+# entSensorType 14 = dBm (optical power). Other sensor types on a transceiver are ignored.
+ENTITY_SENSOR_TYPE_DBM = 14
+# Sensor-name suffixes. A port with a receive-power sensor has an optical transceiver fitted;
+# a copper port has none, which is what lets the panel mark a port as fiber.
+OPTICAL_TX_SUFFIX = "transmit power sensor"
+OPTICAL_RX_SUFFIX = "receive power sensor"
+OPTICAL_WALK_LIMIT = 5000
+
+# --- VLAN membership, for switch ports ------------------------------------------------------
+# CISCO-VLAN-MEMBERSHIP-MIB, NOT the VTP/VLAN database (CISCO-VTP-MIB .1.3.6.1.4.1.9.9.46).
+# The VTP tables describe which VLANs exist and which ports are *trunking*; they do not say
+# which VLAN an access port is in - a real switch reported access VLAN 51 for Gi0/1 in the CLI
+# while the VTP tables claimed every port was a trunk carrying everything.
+#   vmMembershipTable.<column>.<ifIndex>
+#     column 1 = vmVlanIndex, 2 = vmVlan (the VLAN the port is in)
+#     column 3 = vmPortStatus (1 = trunking, 2 = static/access, 3 = dynamic/access)
+VLAN_MEMBERSHIP = "1.3.6.1.4.1.9.9.68.1.2.2.1"
+VLAN_MEMBERSHIP_VLAN = VLAN_MEMBERSHIP + ".2"
+VLAN_MEMBERSHIP_STATUS = VLAN_MEMBERSHIP + ".3"
+# vtpVlanName, indexed <domain>.<vlanId>: the last arc is the VLAN's own id.
+VTP_VLAN_NAME = "1.3.6.1.4.1.9.9.46.1.3.1.1.4"
+VLAN_WALK_LIMIT = 4000
 
 
 class SNMPError(Exception):
@@ -242,7 +281,182 @@ class Client:
                 "speed_mbps": mbps,
                 "alias": "",
             })
+        optical = await self.optical_by_port(result)
+        for port in result:
+            port["optical"] = optical.get(port["name"], None)
+            port["fiber"] = port["name"] in optical
+        vlan = await self.vlans_by_port(result)
+        for port in result:
+            entry = vlan.get(port["name"]) or {}
+            port["vlan"] = entry.get("access")
+            port["vlan_name"] = entry.get("access_name")
+            port["vlan_mode"] = entry.get("mode")
+            port["vlan_native"] = entry.get("native")
         return result
+
+    async def vlans_by_port(self, ports):
+        """Which VLAN each switch port belongs to, keyed by port name.
+
+        Reads CISCO-VLAN-MEMBERSHIP-MIB, indexed by ifIndex, which is the table `show vlan`
+        reports from. The VTP tables are deliberately not used for membership: on a real switch
+        they described every port as a trunk carrying all VLANs while the CLI showed Gi0/1 as
+        an access port in VLAN 51.
+
+        vmPortStatus says the mode: 1 = trunking, 2 = static access, 3 = dynamic access. A port
+        absent from the table (an uplink, or a routed port) has no VLAN membership and is left
+        unset rather than guessed.
+        """
+        def text(value):
+            return value.asOctets().decode('utf-8', 'replace').strip() if isinstance(value, OctetString) else ''
+
+        vlan_ids = {}
+        statuses = {}
+        try:
+            for row, value in await self._walk_with_retry(VLAN_MEMBERSHIP_VLAN):
+                vlan_ids[row[-1]] = value
+        except SNMPError:
+            return {}
+        if not vlan_ids:
+            return {}                      # not a switch, or no VLAN support at all
+        try:
+            for row, value in await self._walk_with_retry(VLAN_MEMBERSHIP_STATUS):
+                statuses[row[-1]] = value
+        except SNMPError:
+            statuses = {}
+
+        try:
+            vlan_names = {row[-1]: text(value) for row, value in await self._walk_with_retry(VTP_VLAN_NAME)}
+        except SNMPError:
+            vlan_names = {}
+
+        def describe(vlan_id):
+            """A VLAN as the switch names it (VLAN0051), falling back to the bare id.
+
+            A switch can hold a port in a VLAN its own VLAN database does not define; that is
+            shown as "undefined" rather than given an invented name.
+            """
+            if vlan_id is None:
+                return None
+            if vlan_id in vlan_names:
+                return vlan_names[vlan_id]
+            return f"VLAN {vlan_id} (undefined)"
+
+        by_port = {}
+        for port in ports:
+            index = port["index"]
+            value = vlan_ids.get(index)
+            if not isinstance(value, Integer32):
+                continue                   # no VLAN membership on this port
+            vlan_id = int(value)
+            code = int(statuses[index]) if isinstance(statuses.get(index), Integer32) else 0
+            by_port[port["name"]] = {
+                "access": vlan_id,
+                "access_name": describe(vlan_id),
+                "mode": "trunk" if code == 1 else "access",
+                "native": vlan_id,
+            }
+        return by_port
+
+    async def optical_by_port(self, ports):
+        """Per-port optical transceiver readings, keyed by port name.
+
+        Only ports with a DOM-capable SFP appear. A copper port publishes no optical sensors at
+        all, so absence is meaningful: it is what marks a port as fiber in the panel.
+
+        Every sensor is named after its port on the switch ("Te1/1 Receive Power Sensor"), so
+        the port is recovered from the name rather than guessed from the entity index. A sensor
+        whose port cannot be matched is dropped rather than attached to the wrong port.
+        """
+        def text(value):
+            return value.asOctets().decode('utf-8', 'replace').strip() if isinstance(value, OctetString) else ''
+
+        try:
+            names = {row[-1]: text(value) for row, value in await self._walk_with_retry(ENTITY_PHYSICAL_NAME)}
+        except SNMPError:
+            return {}
+        if not names:
+            return {}                       # no ENTITY-MIB: this agent exposes no optics
+
+        wanted = {}
+        for index, name in names.items():
+            lowered = name.lower()
+            if lowered.endswith(OPTICAL_TX_SUFFIX):
+                wanted[index] = (name[:len(name) - len(OPTICAL_TX_SUFFIX)].strip(), "tx")
+            elif lowered.endswith(OPTICAL_RX_SUFFIX):
+                wanted[index] = (name[:len(name) - len(OPTICAL_RX_SUFFIX)].strip(), "rx")
+        if not wanted:
+            return {}                       # all-copper switch: nothing to read
+
+        try:
+            values = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_VALUE)}
+            scales = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_SCALE)}
+            precisions = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_PRECISION)}
+            types = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_TYPE)}
+        except SNMPError:
+            return {}
+
+        # The switch names ports in ENTITY-MIB as "Te1/1" but ifDescr calls the same port
+        # "TenGigabitEthernet1/1"; match on the trailing <slot>/<port> number instead.
+        def slot_port(name):
+            return ''.join(ch for ch in name if ch.isdigit() or ch == '/')
+
+        known = {slot_port(port["name"]): port["name"] for port in ports}
+        by_port = {}
+        for index, (sensor_port, direction) in wanted.items():
+            if types and int(types.get(index, ENTITY_SENSOR_TYPE_DBM)) != ENTITY_SENSOR_TYPE_DBM:
+                continue                   # not an optical reading (temperature, volts, mA)
+            raw = values.get(index)
+            if raw is None:
+                continue
+            try:
+                magnitude = int(raw)
+            except (TypeError, ValueError):
+                continue
+            # entSensorScale is an exponent in MIB convention shared with entSensorValue: an enum
+            # where 9 means -9 (nano). On a real Catalyst an optical sensor reports scale 9 and
+            # value -73 with precision 1, which is -7.3 dBm.
+            raw_scale = int(scales[index]) if isinstance(scales.get(index), Integer32) else 0
+            exponent = {1: -24, 2: -21, 3: -18, 4: -15, 5: -12, 6: -9, 7: -6, 8: -3, 9: 0,
+                        10: 3, 11: 6, 12: 9, 13: 12, 14: 15, 15: 18, 16: 21, 17: 24}.get(
+                            raw_scale, 0 if raw_scale == 9 else raw_scale)
+            precision = int(precisions[index]) if isinstance(precisions.get(index), Integer32) else 0
+            # `precision` says how many of the value's digits are fractional: -73 at exponent 0
+            # and precision 1 is -7.3 dBm.
+            dbm = round(magnitude * 10 ** exponent, 0) / (10 ** precision) if precision else magnitude * 10 ** exponent
+            dbm = round(dbm, precision)
+            port_name = known.get(slot_port(sensor_port), sensor_port)
+            entry = by_port.setdefault(port_name, {})
+            entry[direction] = dbm
+
+        for port_name, entry in by_port.items():
+            entry.setdefault("tx", None)
+            entry.setdefault("rx", None)
+            # Some IOS builds report transmit power unsigned, so a real -3.4 dBm comes back as
+            # +3.4. A laser cannot transmit a positive dBm, so such a value is discarded rather
+            # than shown as fact: receive power is the reading that matters for a link anyway.
+            if entry["tx"] is not None and entry["tx"] > 3:
+                entry["tx"] = None
+            entry["state"] = self._optical_state(entry["rx"])
+        return by_port
+
+    @staticmethod
+    def _optical_state(rx_dbm):
+        """A coarse link budget judgement for a receive level.
+
+        These bands are for ordinary 1000BASE/10GBASE optics: above -10 dBm is a healthy
+        receiver, -10 to -20 dBm still works, and below -20 dBm is close to or past the
+        sensitivity limit. A link that is down with light present usually means the far end is
+        transmitting but not passing traffic.
+        """
+        if rx_dbm is None:
+            return "unknown"
+        if rx_dbm < -30:
+            return "none"                    # effectively no light received
+        if rx_dbm < -20:
+            return "low"
+        if rx_dbm < -10:
+            return "ok"
+        return "good"
 
     async def pppoe_users(self):
         """Count active PPP/PPPoE sessions in the MikroTik PPP table.
@@ -352,18 +566,47 @@ class Client:
         identified by what they contain, not by their position.
         """
         by_port = {}
-        # LLDP first: for ports where it holds a real device name it is the richer source.
-        # CDP is merged after, so a port whose LLDP entry is blank (a LiteBeam radio that only
-        # fills in the chassis/port columns, showing up as an unnamed "eth0") gets its real
-        # identity from CDP instead of staying "Unknown device".
-        for name, neighbour in await self._lldp_neighbors_by_port():
-            by_port.setdefault(name, []).append(neighbour)
+        # CDP is the primary source: it identifies the neighbour's device name and the port it
+        # is plugged into, and on the reference switch LLDP reported the same port as an
+        # unnamed "eth0" (LLDP Tx idle) while CDP named the LiteBeam. LLDP is then merged in
+        # only where it adds a neighbour CDP did not already describe, so a link known to both
+        # protocols is listed once, by its CDP name.
+        #
+        # The two tables also key a port differently - LLDP says "Gi0/21" where CDP says
+        # "GigabitEthernet0/21" - so both are folded onto the interface's own name, which is
+        # what the panel looks ports up by.
+        def interface_key(name):
+            digits = ''.join(ch for ch in name if ch.isdigit() or ch == '/')
+            return digits.strip('/') or name.lower()
+
         for name, neighbour in await self._cdp_neighbors_by_port():
-            entries = by_port.setdefault(name, [])
-            blank = next((e for e in entries if e["protocol"] == "LLDP" and not e["name"]), None)
-            if blank is not None:
-                entries.remove(blank)
-            entries.append(neighbour)
+            by_port.setdefault(name, []).append(neighbour)
+
+        def same_link(entries, candidate):
+            """True when `candidate` describes a link this port already lists.
+
+            The two protocols describe the same cable twice. Names are compared loosely because
+            the protocols spell them different on the same device - CDP reports
+            "N3K-KALAR-NEW(FOC1815R0KA)" where LLDP reports "N3K-KALAR-NEW". A nameless row is
+            redundant once CDP has named the link.
+            """
+            def base(name):
+                return name.split('(')[0].strip().lower()
+
+            for entry in entries:
+                if candidate["name"] and entry["name"] and base(candidate["name"]) == base(entry["name"]):
+                    return True
+                if not candidate["name"] and entry["protocol"] == "CDP":
+                    return True
+            return False
+
+        # Existing keys, so an LLDP short name can be matched to the CDP long name.
+        known = {interface_key(name): name for name in by_port}
+        for name, neighbour in await self._lldp_neighbors_by_port():
+            key = known.get(interface_key(name), name)
+            entries = by_port.setdefault(key, [])
+            if not same_link(entries, neighbour):
+                entries.append(neighbour)
         for entries in by_port.values():
             entries.sort(key=lambda item: (item["name"].lower(), item["port"].lower()))
         return by_port
@@ -477,15 +720,23 @@ class Client:
         # this agent intermittently refuses a whole column (a real switch returned 0 rows for 1
         # and 2, then answered 6-8 a moment later), so each column is retried once before it is
         # treated as genuinely empty.
+        # Every CDP row is keyed by BOTH index arcs (<ifIndex>.<deviceIndex>). Keying on the
+        # ifIndex alone collapses several neighbours on one port into a single row: a real port
+        # had three (a Nexus on .89, a switch on .90 and the LiteBeam on .55), and keeping one
+        # per port threw the others away.
         table = {}
         for column in (6, 7, 8):
             rows = await self._walk_with_retry(f"{base}.{column}")
             for oid, value in rows:
-                # Index is <ifIndex>.<deviceIndex> straight after the table root, since the
-                # column is already part of the walked OID.
+                # The agent reports the column number inside the index on this build:
+                # <table>.<column>.<ifIndex>.<deviceIndex> comes back as index
+                # (column, ifIndex, deviceIndex), so the leading arc is dropped and the row is
+                # keyed by the real <ifIndex>.<deviceIndex> pair.
                 index = tuple(oid)[len(root):]
-                if index:
-                    table.setdefault(index[0], {})[column] = text(value)
+                if len(index) > 2 and index[0] == column:
+                    index = index[1:]
+                if len(index) >= 2:
+                    table.setdefault(index, {})[column] = text(value)
         if not table:
             return []
 
@@ -493,16 +744,21 @@ class Client:
         name_col = next((col for col in (6, 7, 8) if self._looks_like_text(columns.get(col, []))), None)
         port_col = next((col for col in (7, 8, 6) if col != name_col and self._looks_like_text(columns.get(col, []))), None)
         platform_col = next((col for col in (8, 7, 6) if col not in (name_col, port_col) and self._looks_like_text(columns.get(col, []))), None)
+        # Each index contributes one value per column, so when a column cannot be identified by
+        # content the MIB's own order (name 6, port 7, platform 8) is the fallback.
+        name_col = name_col or 6
+        port_col = port_col or 7
+        platform_col = platform_col or 8
 
         result = []
-        for if_index, row in table.items():
-            interface = names.get(if_index)
+        for index, row in table.items():
+            interface = names.get(index[0])
             if not interface:
                 continue
             neighbour = {
-                "name": row.get(name_col, "") if name_col else "",
-                "port": row.get(port_col, "") if port_col else "",
-                "platform": row.get(platform_col, "") if platform_col else "",
+                "name": row.get(name_col, ""),
+                "port": row.get(port_col, ""),
+                "platform": row.get(platform_col, ""),
                 "protocol": "CDP",
             }
             # Some agents (RouterOS does this) publish a placeholder row whose every column is
