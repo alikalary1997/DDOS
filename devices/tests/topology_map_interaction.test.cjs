@@ -107,6 +107,17 @@ test('selecting a node highlights its branch and dims the rest', () => {
     assert.ok(ui.nodeEls[2].classList.contains('is-dim'), 'Limit-6 is unrelated');
 });
 
+test('only the cables touching the selected device glow', () => {
+    // Lighting the whole branch made two limits look identical, so the cable actually belonging
+    // to the device you clicked was impossible to pick out.
+    const ui = build(NODES, LINKS);
+    ui.nodeEls[3]._handlers.click();          // Kalar (key 4), links 1-2, 1-3, 2-4, 4-5
+    assert.ok(!ui.linkEls[0].classList.contains('is-active'), 'NCS to Limit-1 does not touch Kalar');
+    assert.ok(!ui.linkEls[1].classList.contains('is-active'), 'NCS to Limit-6 does not touch Kalar');
+    assert.ok(ui.linkEls[2].classList.contains('is-active'), 'Limit-1 to Kalar is an upstream cable');
+    assert.ok(ui.linkEls[3].classList.contains('is-active'), 'Kalar to Tower-A is a downstream cable');
+});
+
 test('the detail panel shows the selected device', () => {
     const ui = build(NODES, LINKS);
     ui.nodeEls[3]._handlers.click();

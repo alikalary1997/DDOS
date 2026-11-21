@@ -2,7 +2,7 @@
 {% block title %}Topology Map | NetShield{% endblock %}
 {% block body_class %}devices-page fleet-page topology-map-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
-<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261119-switchview">{% endblock %}
+<link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/topology_map.css' %}?v=20261121-vertical">{% endblock %}
 {% block footer_note %}Topology map{% endblock %}
 {% block content %}
 <div class="tmap-tree-actions"><a class="secondary-button" href="{% url 'device_topology' %}">Chain outline</a><a class="secondary-button" href="{% url 'device_tree' %}">Groups</a><a class="secondary-button" href="{% url 'devices' %}">Back to devices</a></div>
@@ -18,8 +18,8 @@
                 {% for column in topology_map.columns %}
                 <text class="tmap-col" x="{{ column.x }}" y="{{ column.y }}">{{ column.label }}<tspan class="tmap-col-count"> {{ column.count }}</tspan></text>
                 {% endfor %}
-                {# Horizontal flow: a soft S-curve from the parent's right edge to the child's left edge. #}
-                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.mid }},{{ link.y1 }} {{ link.mid }},{{ link.y2 }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
+                {# Vertical flow: a bold curve from the parent's bottom edge down into the child's top edge. #}
+                <g class="tmap-links">{% for link in topology_map.links %}<path class="tmap-link" d="M{{ link.x1 }},{{ link.y1 }} C{{ link.x1 }},{{ link.mid }} {{ link.x2 }},{{ link.mid }} {{ link.x2 }},{{ link.y2 }}" data-link="{{ link.id }}" data-from="{{ link.from }}" data-to="{{ link.to }}"/>{% endfor %}</g>
                 <g class="tmap-nodes">
                     {% for node in topology_map.nodes %}
                     <g class="tmap-node" data-node="{{ node.key }}" data-level="{{ node.level }}" data-device-type="{{ node.device_type }}" data-state="{{ node.state }}" transform="translate({{ node.x }},{{ node.y }})" tabindex="0" role="button" aria-label="{{ node.name }}, {{ node.summary }}">
@@ -58,5 +58,5 @@
 {# The switch view: on its own page, with a way back to the map. #}
 <section class="tmap-switch-view" id="tmapSwitch" data-ports-url-template="{% url 'device_switch_ports' 0 %}" hidden></section>
 {{ topology_map.nodes|json_script:"topo-nodes-data" }}
-<script src="{% static 'monitor/js/topology_map.js' %}?v=20261119-switchview" defer></script>
+<script src="{% static 'monitor/js/topology_map.js' %}?v=20261121-vertical" defer></script>
 {% endblock %}

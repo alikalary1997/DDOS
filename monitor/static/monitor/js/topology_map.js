@@ -79,9 +79,11 @@
                 el.classList.toggle('is-dim', !inBranch);
             });
             linkEls.forEach(el => {
-                // A link belongs to the branch when both ends are in it.
+                // Only the links that touch the selected device glow. Lighting the whole branch
+                // made several limits look identical, so the cable you clicked was unclear.
+                const touches = el.dataset.from === key || el.dataset.to === key;
                 const inBranch = branch.has(el.dataset.from) && branch.has(el.dataset.to);
-                el.classList.toggle('is-active', inBranch);
+                el.classList.toggle('is-active', touches);
                 el.classList.toggle('is-dim', !inBranch);
             });
             if (title) title.textContent = node.name;

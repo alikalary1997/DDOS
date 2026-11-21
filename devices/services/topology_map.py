@@ -25,6 +25,7 @@ LEVELS = (
     ("tower", "Towers"),
 )
 LEVELS_INDEX = {key: index for index, (key, _label) in enumerate(LEVELS)}
+LEVELS_LABELS = dict(LEVELS)
 
 
 def _level_key(depth, device=None):
@@ -188,45 +189,47 @@ def _stats(node, subtree):
     return ("Site", None, "", "No data")
 
 
-# Canvas geometry, matching the reference topology view: four fixed columns left to right,
-# cards stacked top to bottom inside each column, and horizontal S-curve connectors running
-# from a parent's right edge to a child's left edge.
-NODE_WIDTH = 152
+# Canvas geometry. The chain runs TOP to BOTTOM: the core sits at the top and each level is a
+# band underneath it, with cards spread left to right inside their band. Connectors are bold
+# vertical curves from a parent's bottom edge down into its child's top edge.
+NODE_WIDTH = 168
 NODE_HEIGHT = 40
-ROW_HEIGHT = 50              # vertical pitch inside a column
-COLUMN_X = (8, 200, 392, 584)
-HEADER_HEIGHT = 34           # column labels sit above the first card
-# The viewBox is wider than the columns need so the panel renders it close to 1:1: a narrow
-# viewBox stretched across a wide panel is what makes 12px card text look oversized.
-CANVAS_WIDTH = 760
+# Horizontal pitch between sibling cards, and the gap between level bands.
+COLUMN_GAP = 16
+ROW_GAP = 62
+HEADER_HEIGHT = 30           # room for the per-level band labels
+SIDE_PADDING = 8
+# A wide-enough minimum keeps a small tree from stretching across the panel, which is what makes
+# the 12px card text look oversized. The canvas still grows with the widest band.
+MIN_CANVAS_WIDTH = 760
 
 
 def _row_layout(ordered, children_of):
-    """Row index per device, with each parent centred on its children.
+    """Horizontal position per device, with each parent centred over its children.
 
-    This is the reference map's `lay()`: leaves are numbered top to bottom, then every parent
-    takes the midpoint of its children's rows. Leaves first keeps a column compact; the
-    midpoint keeps each fan-out symmetrical however deep or lopsided a branch is.
+    The map flows top to bottom, so a device's ROW is its depth in the chain and its COLUMN is
+    where it sits across that band. Leaves are numbered left to right, then every parent takes
+    the midpoint of its children - keeping each fan-out symmetrical however lopsided a branch is.
     """
-    rows = {}
+    columns = {}
     cursor = [0]
 
     def resolve(node, seen):
-        if node.device.pk in rows:
-            return rows[node.device.pk]
+        if node.device.pk in columns:
+            return columns[node.device.pk]
         kids = [child for child in children_of.get(node.device.pk, [])
                 if child.device.pk not in seen and child.device.pk != node.device.pk]
         if not kids:
-            rows[node.device.pk] = cursor[0]
+            columns[node.device.pk] = cursor[0]
             cursor[0] += 1
-            return rows[node.device.pk]
+            return columns[node.device.pk]
         placed = [resolve(child, seen | {child.device.pk}) for child in kids]
-        rows[node.device.pk] = (min(placed) + max(placed)) / 2
-        return rows[node.device.pk]
+        columns[node.device.pk] = (min(placed) + max(placed)) / 2
+        return columns[node.device.pk]
 
     for node in ordered:
         resolve(node, frozenset({node.device.pk}))
-    return rows
+    return columns
 
 
 def _column_layout(ordered):
@@ -244,7 +247,7 @@ def _device_state(device):
 
 
 def build_map():
-    """Nodes laid out in four columns plus the connector curves between them."""
+    """Nodes laid out in depth bands (top to bottom) plus the connectors between them."""
     ordered = _build_chain()
     descendants = {node.device.pk: [] for node in ordered}
 
@@ -264,9 +267,21 @@ def build_map():
             collect(node, frozenset({node.device.pk}))
 
     children_of = {node.device.pk: list(node.children) for node in ordered}
-    rows = _row_layout(ordered, children_of)
-    deepest = max(rows.values(), default=0)
-    canvas_height = HEADER_HEIGHT + (int(deepest) + 1) * ROW_HEIGHT + 12
+    columns = _row_layout(ordered, children_of)
+
+    # One band per depth in the chain. The chain is not a balanced tree (a tower can hang
+    # straight off a limit), so the bands come from each device's own depth rather than from
+    # a fixed four-level list.
+    depths = {node.device.pk: _depth_of(node, ordered) for node in ordered}
+    band_count = max(depths.values(), default=0) + 1
+
+    # Width: enough for the widest band. Cards are centred inside it so a narrow band does not
+    # sit against the left edge.
+    widest = max((max(columns.values()) if columns else 0) + 1, 1)
+    content_width = widest * NODE_WIDTH + max(0, widest - 1) * COLUMN_GAP
+    canvas_width = max(MIN_CANVAS_WIDTH, int(content_width) + SIDE_PADDING * 2)
+    left = (canvas_width - content_width) / 2
+    canvas_height = HEADER_HEIGHT + band_count * (NODE_HEIGHT + ROW_GAP) + 8
 
     nodes = []
     for node in ordered:
@@ -278,9 +293,9 @@ def build_map():
             "ip": str(node.device.management_ip), "state": _device_state(node.device),
             "device_type": node.device.device_type,
             "level": node.level, "label": label, "value": value, "unit": unit, "note": note,
-            # Fixed column per stage, row from the centred layout - the reference's grid.
-            "x": COLUMN_X[LEVELS_INDEX[node.level]],
-            "y": round(HEADER_HEIGHT + rows[node.device.pk] * ROW_HEIGHT),
+            # Depth picks the band (row), the centred layout picks the place across it.
+            "x": round(left + columns[node.device.pk] * (NODE_WIDTH + COLUMN_GAP)),
+            "y": round(HEADER_HEIGHT + depths[node.device.pk] * (NODE_HEIGHT + ROW_GAP)),
             "w": NODE_WIDTH, "h": NODE_HEIGHT,
             "summary": _summary(node, value, unit),
             "site_count": site_group if node.level == "tower" and site_group > 1 else 0,
@@ -296,26 +311,50 @@ def build_map():
             parent_node, child_node = by_key.get(node.device.pk), by_key.get(child.device.pk)
             if not parent_node or not child_node:
                 continue
-            # Horizontal flow: out of the parent's right edge, into the child's left edge. `mid`
-            # is the control-point x both bezier handles share, which is what makes the S-curve.
+            # Vertical flow: out of the parent's bottom edge, into the child's top edge. `mid`
+            # is the control-point y both bezier handles share, which is what makes the curve.
             links.append({
                 "id": f"{node.device.pk}-{child.device.pk}",
                 "from": node.device.pk, "to": child.device.pk,
-                "x1": parent_node["x"] + NODE_WIDTH, "y1": parent_node["y"] + NODE_HEIGHT / 2,
-                "x2": child_node["x"], "y2": child_node["y"] + NODE_HEIGHT / 2,
-                "mid": round((parent_node["x"] + NODE_WIDTH + child_node["x"]) / 2),
+                "x1": parent_node["x"] + NODE_WIDTH / 2, "y1": parent_node["y"] + NODE_HEIGHT,
+                "x2": child_node["x"] + NODE_WIDTH / 2, "y2": child_node["y"],
+                "mid": round((parent_node["y"] + NODE_HEIGHT + child_node["y"]) / 2),
             })
+
+    # A band label above each depth, showing how many devices are in it. Every level gets a
+    # label even when it holds nothing, so the map always reads Core / Limit / PPPoE / Towers
+    # in that order and a skipped level is visibly empty rather than silently absent.
+    band_labels = []
+    for depth in range(band_count):
+        members = [node for node in ordered if depths[node.device.pk] == depth]
+        # A band's label follows the first level present in it; an empty band keeps the level
+        # of the stage it stands in for, taken from the fixed chain order.
+        level = members[0].level if members else LEVELS[min(depth, len(LEVELS) - 1)][0]
+        band_labels.append({"depth": depth, "key": level, "label": LEVELS_LABELS.get(level, level.title()),
+                            "count": len(members), "x": SIDE_PADDING,
+                            "y": round(HEADER_HEIGHT + depth * (NODE_HEIGHT + ROW_GAP) - 8)})
 
     return {
         "nodes": nodes, "links": links, "height": canvas_height,
-        "width": CANVAS_WIDTH, "node_width": NODE_WIDTH, "node_height": NODE_HEIGHT,
-        "columns": [
-            {"key": key, "label": label, "x": COLUMN_X[index], "y": 14,
-             "count": sum(1 for node in nodes if node["level"] == key)}
-            for index, (key, label) in enumerate(LEVELS)
-        ],
+        "width": canvas_width, "node_width": NODE_WIDTH, "node_height": NODE_HEIGHT,
+        "columns": band_labels,
         "total": len(ordered), "core_count": sum(1 for node in nodes if node["level"] == "core"),
     }
+
+
+def _depth_of(node, ordered):
+    """How many links sit between this device and a root - its band on the map."""
+    parent_of = {}
+    for parent in ordered:
+        for child in parent.children:
+            parent_of.setdefault(child.device.pk, parent.device.pk)
+    depth, seen = 0, set()
+    current = parent_of.get(node.device.pk)
+    while current is not None and current not in seen:
+        seen.add(current)
+        depth += 1
+        current = parent_of.get(current)
+    return depth
 
 
 def _summary(node, value, unit):

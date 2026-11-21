@@ -47,7 +47,8 @@ class MapTests(TestCase):
     def columns(self, data=None):
         """Device names grouped by column, read from the node list."""
         data = data or build_map()
-        grouped = {column["key"]: [] for column in data["columns"]}
+        grouped = {key: [] for key, _label in
+                   [("core", "Core"), ("limit", "Limit Servers"), ("pppoe", "PPPoE Servers"), ("tower", "Towers")]}
         for node in data["nodes"]:
             grouped[node["level"]].append(node["name"])
         return grouped
@@ -58,6 +59,44 @@ class MapTests(TestCase):
             if node["name"] == name:
                 return node
         raise AssertionError(f"{name} is not on the map")
+
+    def test_the_chain_runs_top_to_bottom(self):
+        """Each level sits below its parent: the map is vertical, not four side-by-side columns."""
+        core = self.device("NCS")
+        limit = self.device("Limit-1", core)
+        server = self.device("Kalar", limit)
+        self.sensor(server, kind="pppoe", value=2)
+        self.device("Tower-A", server)
+        data = build_map()
+        top = self.card("NCS", data)["y"]
+        middle = self.card("Limit-1", data)["y"]
+        below = self.card("Kalar", data)["y"]
+        leaf = self.card("Tower-A", data)["y"]
+        self.assertLess(top, middle)
+        self.assertLess(middle, below)
+        self.assertLess(below, leaf)
+        # A parent is centred over its child, so the two share a horizontal position.
+        self.assertEqual(self.card("Limit-1", data)["x"], self.card("Kalar", data)["x"])
+
+    def test_connectors_leave_the_bottom_and_enter_the_top(self):
+        core = self.device("NCS")
+        limit = self.device("Limit-1", core)
+        self.sensor(limit, kind="pppoe", value=1)
+        data = build_map()
+        top, bottom = self.card("NCS", data), self.card("Limit-1", data)
+        link = data["links"][0]
+        self.assertEqual(link["y1"], top["y"] + top["h"], "starts at the parent's bottom edge")
+        self.assertEqual(link["y2"], bottom["y"], "ends at the child's top edge")
+        # A vertical curve: both control points share one y, between the two cards.
+        self.assertTrue(top["y"] + top["h"] < link["mid"] < bottom["y"])
+
+    def test_a_branch_that_skips_a_level_still_stacks_by_depth(self):
+        """Limit-6 talks straight to a tower; the tower still sits below the limits band."""
+        core = self.device("NCS")
+        limit = self.device("Limit-6", core)
+        tower = self.device("Tower-B", limit)
+        data = build_map()
+        self.assertLess(self.card("Limit-6", data)["y"], self.card("Tower-B", data)["y"])
 
     def test_full_depth_branch_puts_each_device_in_its_column(self):
         core = self.device("NCS")
@@ -86,7 +125,7 @@ class MapTests(TestCase):
         limit_node = self.card("Limit-6", data)
         tower_node = self.card("Tower-B", data)
         self.assertEqual(link["to"], tower_node["key"])
-        self.assertLess(limit_node["x"], tower_node["x"], "the tower sits in a later column")
+        self.assertLess(limit_node["y"], tower_node["y"], "the tower sits in a lower band")
 
     def test_any_number_of_devices_per_level(self):
         core = self.device("Core")
@@ -104,18 +143,19 @@ class MapTests(TestCase):
             slots = [(self.card(name, data)["x"], self.card(name, data)["y"]) for name in names]
             self.assertEqual(len(slots), len(set(slots)), f"overlapping nodes in {column}")
 
-    def test_a_parent_is_vertically_centred_on_its_children(self):
-        # The reference layout centres each parent on its children's rows inside its column.
+    def test_a_parent_is_centred_over_its_children(self):
+        # The map flows top to bottom, so a parent is centred horizontally over its children and
+        # always sits in the band above them.
         core = self.device("Core")
         for n in range(1, 4):
             self.device(f"Limit-{n}", core)
         data = build_map()
         core_node = self.card("Core", data)
-        child_ys = [self.card(f"Limit-{n}", data)["y"] for n in range(1, 4)]
-        centre = (min(child_ys) + max(child_ys)) / 2
-        self.assertAlmostEqual(core_node["y"], centre, delta=1, msg="the core sits level with its limits")
-        # Every stage owns one fixed column, so the core is never to the right of its limits.
-        self.assertLess(core_node["x"], self.card("Limit-1", data)["x"])
+        child_xs = [self.card(f"Limit-{n}", data)["x"] for n in range(1, 4)]
+        centre = (min(child_xs) + max(child_xs)) / 2
+        self.assertAlmostEqual(core_node["x"], centre, delta=1, msg="the core sits over its limits")
+        for n in range(1, 4):
+            self.assertLess(core_node["y"], self.card(f"Limit-{n}", data)["y"])
 
     def test_status_colour_reflects_the_device_state(self):
         self.device("Online-Dev", tested=True)
@@ -176,32 +216,30 @@ class MapTests(TestCase):
         self.assertEqual(self.card("Limit-1")["value"], 1, "one PPPoE server below the limit")
         self.assertEqual(self.card("Kalar")["value"], 2, "two towers below the PPPoE server")
 
-    def test_stages_run_left_to_right_in_chain_order(self):
-        """The map flows left to right, as in the reference: CORE, LIMIT, PPPoE, TOWERS."""
+    def test_stages_run_top_to_bottom_in_chain_order(self):
+        """The map flows downwards: CORE, LIMIT, PPPoE, TOWERS as bands from top to bottom."""
         core = self.device("NCS")
         limit = self.device("Limit-1", core)
         server = self.device("Kalar", limit)
         self.sensor(server, kind="pppoe", value=4)
         self.device("Tower-A", server)
         data = build_map()
-        order = [column["key"] for column in data["columns"]]
-        self.assertEqual(order, ["core", "limit", "pppoe", "tower"])
-        column_xs = [column["x"] for column in data["columns"]]
-        self.assertEqual(column_xs, sorted(column_xs), "stage columns run left to right")
-        self.assertEqual(len({column["y"] for column in data["columns"]}), 1,
-                         "all stage labels sit on the same header line")
-        # Each device sits one stage to the right of its parent.
-        self.assertLess(self.card("NCS", data)["x"], self.card("Limit-1", data)["x"])
-        self.assertLess(self.card("Limit-1", data)["x"], self.card("Kalar", data)["x"])
-        self.assertLess(self.card("Kalar", data)["x"], self.card("Tower-A", data)["x"])
-        # Connectors leave a parent's right edge and land on the child's left edge.
-        width = data["node_width"]
+        labels = [column["label"] for column in data["columns"]]
+        self.assertEqual(labels, ["Core", "Limit Servers", "PPPoE Servers", "Towers"])
+        band_ys = [column["y"] for column in data["columns"]]
+        self.assertEqual(band_ys, sorted(band_ys), "stage labels run top to bottom")
+        self.assertEqual(len(set(band_ys)), len(band_ys), "each band gets its own line")
+        # Each device sits one stage BELOW its parent: the chain flows downwards.
+        self.assertLess(self.card("NCS", data)["y"], self.card("Limit-1", data)["y"])
+        self.assertLess(self.card("Limit-1", data)["y"], self.card("Kalar", data)["y"])
+        self.assertLess(self.card("Kalar", data)["y"], self.card("Tower-A", data)["y"])
+        # Connectors leave a parent's bottom edge and land on the child's top edge.
         for link in data["links"]:
-            self.assertLess(link["x1"], link["x2"], "connectors run rightwards")
+            self.assertLess(link["y1"], link["y2"], "connectors run downwards")
             parent = next(n for n in data["nodes"] if n["key"] == link["from"])
             child = next(n for n in data["nodes"] if n["key"] == link["to"])
-            self.assertEqual(link["x1"], parent["x"] + width)
-            self.assertEqual(link["x2"], child["x"])
+            self.assertEqual(link["y1"], parent["y"] + parent["h"])
+            self.assertEqual(link["y2"], child["y"])
 
     def test_cards_never_overlap_even_in_a_wide_stage(self):
         core = self.device("Core")
@@ -216,12 +254,23 @@ class MapTests(TestCase):
                             and first[1] < second[1] + second[3] and second[1] < first[1] + first[3])
                 self.assertFalse(overlaps, "two cards are drawn on top of each other")
 
-    def test_map_page_renders_four_fixed_columns_in_order(self):
-        self.device("NCS")
+    def test_map_page_renders_one_band_per_level_present(self):
+        """Bands are labelled in chain order; a level with no devices has no band at all."""
+        core = self.device("NCS")
+        limit = self.device("Limit-1", core)
+        server = self.device("Kalar", limit)
+        self.sensor(server, kind="pppoe", value=2)
+        self.device("Tower-A", server)
         response = self.client.get(reverse("device_topology_map"))
         self.assertEqual(response.status_code, 200)
         labels = [column["label"] for column in response.context["topology_map"]["columns"]]
         self.assertEqual(labels, ["Core", "Limit Servers", "PPPoE Servers", "Towers"])
+
+    def test_a_single_device_map_is_one_band(self):
+        self.device("NCS")
+        labels = [column["label"] for column in self.client.get(
+            reverse("device_topology_map")).context["topology_map"]["columns"]]
+        self.assertEqual(labels, ["Core"], "no empty bands are drawn for levels with no devices")
 
     def test_a_zero_count_is_always_labelled_never_a_bare_number(self):
         core = self.device("NCS")
