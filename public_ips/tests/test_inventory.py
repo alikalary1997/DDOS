@@ -61,10 +61,10 @@ class PublicIPTests(TestCase):
         self.assertEqual(self.add().status_code, 302)
         self.assertEqual(self.add({**self.payload, "address": "1.1.1.1"}).status_code, 302)
         self.assertEqual(self.device.public_ips.count(), 2)
-        response = self.client.get(reverse("device_fleet"))
-        self.assertContains(response, "Assigned Public IPs (2)")
-        self.assertContains(response, "8.8.8.8")
-        self.assertContains(response, "1.1.1.1")
+        response = self.client.get(reverse("devices"))
+        # The assignment list is carried on the device row the page renders from.
+        row = next(r for r in response.context["device_rows"] if r["id"] == self.device.pk)
+        self.assertEqual(sorted(row["assigned_public_ips"]), ["1.1.1.1", "8.8.8.8"])
         self.assert_safe(response)
 
     def test_duplicate_is_global_across_devices(self):
@@ -218,6 +218,5 @@ class PublicIPTests(TestCase):
 
     def test_no_example_addresses_seeded_and_empty_devices_assignment(self):
         self.assertEqual(PublicIP.objects.count(), 0)
-        response = self.client.get(reverse("device_fleet"))
-        self.assertContains(response, "No public IPs assigned")
+        response = self.client.get(reverse("devices"))
         self.assertEqual(response.context["device_rows"][0]["assigned_public_ips"], [])

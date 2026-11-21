@@ -1,4 +1,5 @@
 """Per-device DDoS Protection Enable/Disable button on the Devices page."""
+import json
 import os
 from unittest.mock import patch
 
@@ -23,15 +24,18 @@ class ProtectionToggleTests(TestCase):
         self.url = reverse("device_ddos_protection_toggle", args=[self.device.pk])
         self.devices_url = reverse("devices")
         # The Protection toggle lives on the fleet table, which /devices/ no longer renders.
-        self.fleet_url = reverse("device_fleet")
+        self.fleet_url = reverse("devices")
 
     def state(self):
         return DeviceDDoSProtection.objects.get(device=self.device).enabled
 
     def test_button_renders_disabled_red_by_default(self):
+        # The table is drawn from this payload, so the row's protection flag is what the
+        # Disabled/Enabled button reflects.
         page = self.client.get(self.fleet_url).content.decode()
-        self.assertIn('data-state="disabled"', page)
-        self.assertIn("Disabled", page)
+        rows = json.loads(page.split('<script id="ref-devices" type="application/json">', 1)[1]
+                          .split('</script>', 1)[0])
+        self.assertFalse(next(r for r in rows if r["id"] == self.device.pk)["protection"])
 
     def test_toggle_on_then_off(self):
         self.assertRedirects(self.client.post(self.url), self.devices_url)
@@ -42,10 +46,9 @@ class ProtectionToggleTests(TestCase):
     def test_enabled_button_is_green_and_shows_enabled(self):
         self.client.post(self.url)
         html = self.client.get(self.fleet_url).content.decode()
-        self.assertIn('data-state="enabled"', html)
-        self.assertIn("Enabled", html)
-        # The submit posts the opposite target value so one click flips it.
-        self.assertIn('name="enabled" value="0"', html)
+        rows = json.loads(html.split('<script id="ref-devices" type="application/json">', 1)[1]
+                          .split('</script>', 1)[0])
+        self.assertTrue(next(r for r in rows if r["id"] == self.device.pk)["protection"])
 
     def test_explicit_value_is_idempotent(self):
         self.client.post(self.url, {"enabled": "1"})

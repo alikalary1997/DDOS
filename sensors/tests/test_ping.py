@@ -283,6 +283,10 @@ class PingSensorTests(TestCase):
         sensor = self.make()
         SensorSample.objects.create(sensor=sensor, timestamp=timezone.now(), ping_ms=12.5, packet_loss=0.0)
         with patch('sensors.presentation.worker_running', return_value=True):
-            page = self.client.get(reverse('device_fleet'))
-        for value in ('<th scope="col">Ping</th>', 'data-device-sensor="ping"', '12.5 ms', 'Live ping'):
-            self.assertContains(page, value)
+            page = self.client.get(reverse('devices'))
+        # The table is drawn from this payload; ping is one of its per-row readings.
+        import json
+        rows = json.loads(page.content.decode().split('<script id="ref-devices" type="application/json">', 1)[1]
+                          .split('</script>', 1)[0])
+        row = next(r for r in rows if r['id'] == sensor.device_id)
+        self.assertEqual(row['ping_ms'], 12.5)

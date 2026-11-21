@@ -106,7 +106,9 @@ class AddDeviceInventoryTests(TestCase):
                 self.assertIn(field, response.context["add_device_form"].errors)
                 self.assertNotContains(response, "Device saved successfully.", status_code=400)
                 self.assertTrue(self.password not in response.content.decode())
-                self.assertContains(response, 'data-has-errors="true"', status_code=400)
+                # The page reopens the Add form so the errors are visible on it.
+                self.assertContains(response, 'ref-form-error', status_code=400)
+                self.assertNotIn(' hidden>', response.content.decode().split('id="addDeviceForm"')[0].rsplit('<form', 1)[1])
         self.assertEqual(Device.objects.count(), 0)
 
     def test_invalid_ip_port_type_and_transport_are_rejected(self):
@@ -200,7 +202,7 @@ class AddDeviceInventoryTests(TestCase):
         self.add()
         device = Device.objects.get()
         with CaptureQueriesContext(connection) as queries:
-            response = self.client.get(reverse("device_fleet"))
+            response = self.client.get(reverse("devices"))
         self.assertEqual(response.context["total_devices"], 1)
         row = response.context["device_rows"][0]
         self.assertEqual(row["name"], device.name)
@@ -211,8 +213,10 @@ class AddDeviceInventoryTests(TestCase):
         self.assertTrue(all("encrypted_password" not in sql and "username" not in sql for sql in inventory_sql))
         self.assert_no_credentials(response, device.encrypted_password)
         self.assertContains(response, "Not available")
-        self.assertContains(response, reverse("device_edit", args=[device.pk]))
-        self.assertContains(response, reverse("device_delete", args=[device.pk]))
+        # The table is rendered client-side from this JSON, so the row payload is what matters.
+        self.assertIn(f'"id": {device.pk}', response.content.decode())
+        # Delete is a per-row action the script attaches, gated by this config flag.
+        self.assertIn('"canDelete": true', response.content.decode())
 
     def test_disabled_device_status_reflects_configuration(self):
         self.client.force_login(self.admin)
@@ -232,7 +236,7 @@ class AddDeviceInventoryTests(TestCase):
     def test_inventory_escapes_router_names_and_models(self):
         self.client.force_login(self.admin)
         self.add({**self.payload, "name": "<script>alert(1)</script>"})
-        response = self.client.get(reverse("device_fleet"))
+        response = self.client.get(reverse("devices"))
         self.assertContains(response, "&lt;script&gt;")
         self.assertNotContains(response, "<script>alert(1)</script>")
 

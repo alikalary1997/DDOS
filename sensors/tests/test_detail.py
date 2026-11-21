@@ -125,15 +125,18 @@ class SensorDetailTests(TestCase):
         self.assertNotIn("DDoS Settings", page)
         self.assertNotIn("DDoS Protection", page)
 
-    def test_devices_page_inspector_links_to_the_detail_view(self):
-        """Regression: the Devices page sensor list showed names as plain text."""
-        page = self.client.get(reverse("device_fleet")).content.decode()
+    def test_the_devices_page_still_reaches_the_sensor_pages(self):
+        """The device page no longer renders an inspector; its rows link to device settings.
+
+        The sensor list itself lives on the device's Sensors page, which must stay reachable.
+        """
+        page = self.client.get(reverse("devices")).content.decode()
+        self.assertNotIn("Device Management Fleet", page, "the retired fleet page is gone")
+        # Row settings lead to the device's own page, where its sensors are listed.
+        sensors_page = self.client.get(reverse("device_sensors", args=[self.device.pk]))
+        self.assertEqual(sensors_page.status_code, 200)
         url, _history, _settings = self.urls(self.cpu)
-        # The inspector renders one entry per sensor, each linking to its own detail page.
-        self.assertIn(f'href="{url}"', page)
-        self.assertIn(">Details</a>", page)
-        # The sensor's own edit form is still reachable alongside it.
-        self.assertIn(reverse("sensor_edit", args=[self.device.pk, self.cpu.pk]), page)
+        self.assertIn(url, sensors_page.content.decode())
 
     # --- range switching -------------------------------------------------
     def test_switching_range_returns_different_stored_samples(self):

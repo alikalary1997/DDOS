@@ -1,3 +1,9 @@
+"""The device page must never leak credentials, and readers must not get management actions.
+
+These used to drive the retired Fleet Table / Router Grid page. The device page replaced it, so
+the same guarantees are asserted against the payload the page actually renders from.
+"""
+import json
 import os
 from unittest.mock import patch
 
@@ -5,12 +11,19 @@ from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from devices.models import Device
 
 
-class DeviceNOCUITests(TestCase):
+def payload(html, script_id):
+    """Parse one of the page's embedded JSON payloads."""
+    marker = f'<script id="{script_id}" type="application/json">'
+    if marker not in html:
+        return []
+    return json.loads(html.split(marker, 1)[1].split('</script>', 1)[0])
+
+
+class DevicePageTests(TestCase):
     def setUp(self):
         self.actor = get_user_model().objects.create_user(username="noc-admin", is_staff=True)
         self.client.force_login(self.actor)
@@ -20,41 +33,33 @@ class DeviceNOCUITests(TestCase):
             self.device.set_password("private-api-password")
             self.device.save()
 
-    def test_grid_matrix_inspector_and_actions_use_real_rows_without_router_calls(self):
+    def test_the_device_rows_come_from_the_server_without_router_calls(self):
         with patch("routeros_api.RouterOsApiPool") as pool:
-            response = self.client.get(reverse("device_fleet"))
+            response = self.client.get(reverse("devices"))
         pool.assert_not_called()
-        self.assertContains(response, f'data-inspect-device="{self.device.pk}"', count=1)
-        self.assertContains(response, f'aria-label="Settings for {self.device.name}"')
-        self.assertContains(response, f'<button class="noc-name" type="button" data-inspect-device="{self.device.pk}" data-cell="name" aria-haspopup="dialog" aria-controls="deviceInspector{self.device.pk}">Actual router</button>', html=True)
-        for text in ('data-view="grid"', 'data-inventory-view="matrix"', 'data-inspector-tab="audit"',
-                     'IP Address', 'Interface Traffic', 'Uptime', 'Configured sensors',
-                     'Actual router', '10.3.15.122', 'Not Tested', 'Not available',
-                     reverse("device_raw_provisioning", args=[self.device.pk]),
-                     reverse("device_edit", args=[self.device.pk]),
-                     reverse("device_delete", args=[self.device.pk])):
-            self.assertContains(response, text)
-        for text in ("private-api-user", "private-api-password", self.device.encrypted_password, "Live Online"):
-            self.assertNotContains(response, text)
+        rows = payload(response.content.decode(), "ref-devices")
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["id"], self.device.pk)
+        self.assertEqual(row["name"], "Actual router")
+        self.assertEqual(row["ip"], "10.3.15.122")
+        self.assertEqual(row["status_label"], "NOT TESTED")
 
-    def test_real_zero_metrics_and_failed_snapshots(self):
-        Device.objects.filter(pk=self.device.pk).update(last_connection_test=timezone.now(),
-            last_connection_test_succeeded=True, cpu_usage=0, total_memory=1024, free_memory=1024)
-        response = self.client.get(reverse("device_fleet"))
-        row = response.context["device_rows"][0]
-        self.assertEqual(row["cpu_display"], "0%")
-        self.assertEqual(row["ram_usage_percent"], 0)
-        self.assertContains(response, "Last Test Successful")
-        Device.objects.filter(pk=self.device.pk).update(last_connection_test_succeeded=False)
-        row = self.client.get(reverse("device_fleet")).context["device_rows"][0]
-        self.assertEqual(row["cpu_display"], "Not available")
-        self.assertIsNone(row["ram_usage_percent"])
+    def test_the_payload_never_carries_credentials(self):
+        html = self.client.get(reverse("devices")).content.decode()
+        for secret in ("private-api-user", "private-api-password", self.device.encrypted_password):
+            with self.subTest(secret=secret[:12]):
+                self.assertNotIn(secret, html)
 
-    def test_reader_cannot_see_management_actions_and_revalidation_is_visible(self):
-        Device.objects.filter(pk=self.device.pk).update(raw_preflight_message="Device configuration changed. Validate again.")
+    def test_a_reader_gets_no_management_actions(self):
         reader = get_user_model().objects.create_user(username="noc-reader")
         self.client.force_login(reader)
-        response = self.client.get(reverse("device_fleet"))
-        self.assertContains(response, "Needs Revalidation")
-        self.assertNotContains(response, 'data-test-connection')
-        self.assertNotContains(response, reverse("device_delete", args=[self.device.pk]))
+        html = self.client.get(reverse("devices")).content.decode()
+        config = payload(html, "ref-config")
+        self.assertFalse(config["canAdd"], "a reader cannot add devices")
+        self.assertFalse(config["canDelete"], "a reader cannot delete devices")
+
+    def test_a_staff_user_gets_management_actions(self):
+        config = payload(self.client.get(reverse("devices")).content.decode(), "ref-config")
+        self.assertTrue(config["canAdd"])
+        self.assertTrue(config["canDelete"])

@@ -43,6 +43,36 @@ class AddDeviceInlineFormTests(TestCase):
             with self.subTest(field=field):
                 self.assertIn(f'name="{field}"', html)
 
+    def test_a_cisco_switch_keeps_user_and_password_visible(self):
+        """Only the RouterOS API fields are hidden for Cisco.
+
+        The Add form is rendered by the reference template (device_tree.html), not the modal one,
+        so it carries its own data-api-only-field markers. When a Cisco device hid the whole
+        credential block there was no way to enter the SSH login it now needs.
+        """
+        form = self.page().split('id="addDeviceForm"')[1].split("</form>")[0]
+
+        def block(field):
+            return form.split(f'name="{field}"')[0].rsplit('<div class="ref-field', 1)[1]
+
+        for field in ("api_port", "use_ssl", "incoming_monitoring_interface"):
+            with self.subTest(field=field):
+                self.assertIn("data-api-only-field", block(field), f"{field} belongs to MikroTik only")
+        for field in ("username", "password"):
+            with self.subTest(field=field):
+                self.assertNotIn("data-api-only-field", block(field),
+                                 f"{field} is the Cisco SSH login and must stay visible")
+
+    def test_no_template_comment_leaks_into_the_page(self):
+        """Django's {# #} comment is single-line only.
+
+        A multi-line one is not a comment at all: it renders as literal text. One sat above the
+        credential fields, so the markup guidance appeared inside the Add Device card.
+        """
+        html = self.page()
+        self.assertNotIn("{#", html, "a template comment was rendered as text")
+        self.assertNotIn("#}", html)
+
     def test_device_type_is_a_required_select_with_real_choices(self):
         # It is required by the form, so it must be present or the save fails validation.
         form = self.page().split('id="addDeviceForm"')[1]
@@ -65,18 +95,31 @@ class AddDeviceInlineFormTests(TestCase):
     def test_model_field_is_not_offered(self):
         self.assertNotIn('name="model"', self.page())
 
-    def test_a_cisco_switch_needs_only_a_name_and_ip_address(self):
+    def test_a_cisco_switch_requires_a_login(self):
         response = self.client.post(reverse("device_add"), {
             "name": "SW-Tower-1", "management_ip": "10.60.0.10", "device_type": "cisco",
             "group": "", "topology_parent": "", "description": "",
         })
-        self.assertEqual(response.status_code, 302, "no credentials were required")
+        self.assertEqual(response.status_code, 400, "the form is redisplayed with errors")
+        self.assertFalse(Device.objects.filter(name="SW-Tower-1").exists())
+        form = response.context["add_device_form"]
+        self.assertIn("username", form.errors)
+        self.assertIn("password", form.errors)
+
+    def test_a_cisco_switch_is_saved_with_its_ssh_login(self):
+        response = self.client.post(reverse("device_add"), {
+            "name": "SW-Tower-1", "management_ip": "10.60.0.10", "device_type": "cisco",
+            "username": "ahmad", "password": "Online123#@!",
+            "group": "", "topology_parent": "", "description": "",
+        })
+        self.assertEqual(response.status_code, 302)
         device = Device.objects.get(name="SW-Tower-1")
         self.assertEqual(device.device_type, "cisco")
-        self.assertEqual(device.username, "")
-        self.assertEqual(device.encrypted_password, "")
+        self.assertEqual(device.username, "ahmad")
+        self.assertTrue(device.encrypted_password, "the SSH password is stored encrypted")
+        self.assertEqual(device.get_password(), "Online123#@!")
+        # A Cisco switch has no RouterOS API surface, so those fields stay at their defaults.
         self.assertEqual(device.incoming_monitoring_interface, "")
-        # Stored defaults still let the record behave normally in the fleet.
         self.assertEqual(device.api_port, 8729)
         device.full_clean()  # a credential-less Cisco switch is a valid record
 
@@ -91,12 +134,13 @@ class AddDeviceInlineFormTests(TestCase):
 
     def test_cisco_fields_are_marked_so_the_ui_can_hide_them(self):
         form = self.page().split('id="addDeviceForm"')[1]
-        # API port/SSL/user/password/interface are RouterOS-only and hidden for Cisco.
-        for field in ("api_port", "use_ssl", "username", "password", "incoming_monitoring_interface"):
+        # Only the RouterOS API surface is hidden for Cisco. User and password are the SSH login
+        # a Cisco switch needs, so they stay visible (covered by the dedicated test above).
+        for field in ("api_port", "use_ssl", "incoming_monitoring_interface"):
             with self.subTest(field=field):
                 marker = form.find(f'name="{field}"')
                 self.assertGreaterEqual(marker, 0)
-                self.assertIn("data-api-field", form[max(0, marker - 300):marker],
+                self.assertIn("data-api-only-field", form[max(0, marker - 300):marker],
                               f"{field} must be grouped with the API-only fields")
 
     def test_group_and_topology_pickers_list_real_options(self):

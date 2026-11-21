@@ -132,21 +132,19 @@ class AddDeviceForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         device_type = cleaned.get("device_type")
-        # Only MikroTik talks the RouterOS API, so only it needs connection credentials.
-        # A Cisco switch is inventory-only: name and IP address are the whole record.
-        needs_credentials = device_type == Device.DeviceType.MIKROTIK
-        self.credentials_required = needs_credentials
-        if needs_credentials:
-            for field in ("username", "password"):
-                if not cleaned.get(field):
-                    self.add_error(field, "This field is required.")
+        is_mikrotik = device_type == Device.DeviceType.MIKROTIK
+        # MikroTik talks the RouterOS API; a Cisco switch is managed over SSH. Both need a
+        # login, but the API-only fields (port, SSL, interface) belong to MikroTik alone.
+        self.credentials_required = True
+        for field in ("username", "password"):
+            if not cleaned.get(field):
+                self.add_error(field, "This field is required.")
+        if is_mikrotik:
             if not cleaned.get("api_port"):
                 self.add_error("api_port", "This field is required.")
         else:
-            cleaned["username"] = ""
-            cleaned["password"] = ""
+            # A Cisco switch has no RouterOS API: no port or SSL, and no monitoring interface.
             cleaned["incoming_monitoring_interface"] = ""
-            # A Cisco switch never shows these, so they get their defaults.
             cleaned["api_port"] = cleaned.get("api_port") or 8729
         if cleaned.get("use_ssl") is None and not self.has_error("use_ssl"):
             cleaned["use_ssl"] = True
@@ -241,21 +239,21 @@ class EditDeviceForm(AddDeviceForm):
         # Do not call AddDeviceForm.clean(), which creates a new device.
         cleaned = forms.Form.clean(self)
         replacement = cleaned.pop("password", "")
-        # Only MikroTik talks the RouterOS API; a Cisco switch stores no credentials.
+        # Both device types store a login. Only MikroTik has the RouterOS API fields on top.
         is_mikrotik = cleaned.get("device_type") == Device.DeviceType.MIKROTIK
         if not is_mikrotik:
-            cleaned["username"] = ""
             cleaned["api_port"] = cleaned.get("api_port") or 8729
             cleaned["incoming_monitoring_interface"] = ""
-        elif not cleaned.get("username"):
+        if not cleaned.get("username"):
             self.add_error("username", "This field is required.")
         if self.errors:
             return cleaned
         if Device.objects.filter(management_ip=cleaned["management_ip"], api_port=cleaned["api_port"]).exclude(pk=self.instance.pk).exists():
             self.add_error(None, "A device with this management IP and API port already exists.")
             return cleaned
-        if is_mikrotik and not (replacement or self.instance.encrypted_password):
-            self.add_error("password", "A MikroTik device needs an API password.")
+        # A new device needs a password; an existing one may keep the stored one.
+        if not (replacement or self.instance.encrypted_password):
+            self.add_error("password", "This device needs a password.")
             return cleaned
         for field in self.EDIT_FIELDS:
             setattr(self.instance, field, cleaned[field])
@@ -275,8 +273,6 @@ class EditDeviceForm(AddDeviceForm):
             if replacement:
                 self.instance.set_password(replacement)
                 self.changed_fields.append("password")
-            elif self.instance.device_type != Device.DeviceType.MIKROTIK:
-                self.instance.encrypted_password = ""
             self.instance.full_clean()
         except (ImproperlyConfigured, CredentialError):
             self.add_error(None, "Device credential encryption is unavailable. Contact the server administrator.")

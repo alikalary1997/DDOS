@@ -54,24 +54,28 @@
         }
     }
 
-    // A Cisco switch is inventory-only: name and IP address are the whole record. The RouterOS
-    // API fields are hidden and disabled so the browser never submits them.
+    // A Cisco switch is managed over SSH, so it needs a login just like a MikroTik device. What
+    // it does not have is the RouterOS API, so those fields are hidden and disabled so the
+    // browser never submits them.
     function syncApiFields(scope) {
         const typeField = scope.querySelector('[name="device_type"]');
         if (!typeField) return;
-        const needsApi = typeField.value === "mikrotik";
-        scope.querySelectorAll("[data-api-field]").forEach((field) => {
-            field.hidden = !needsApi;
-            field.querySelectorAll("input, select").forEach((input) => { input.disabled = !needsApi; });
+        const isMikrotik = typeField.value === "mikrotik";
+        scope.querySelectorAll("[data-api-only-field]").forEach((field) => {
+            field.hidden = !isMikrotik;
+            field.querySelectorAll("input, select").forEach((input) => { input.disabled = !isMikrotik; });
         });
         const note = scope.querySelector("[data-api-note]");
-        if (note) note.hidden = needsApi;
+        if (note) note.hidden = isMikrotik;
     }
     window.NetShieldSyncApiFields = syncApiFields;
-    document.querySelectorAll("#addDeviceForm").forEach((scope) => {
-        const typeField = scope.querySelector('[name="device_type"]');
-        typeField?.addEventListener("change", () => syncApiFields(scope));
-        syncApiFields(scope);
+    // Both the Add and Edit dialogs render a device_type picker, so both are kept in sync.
+    ["#addDeviceForm", "[data-device-edit-form]"].forEach((selector) => {
+        document.querySelectorAll(selector).forEach((scope) => {
+            const typeField = scope.querySelector('[name="device_type"]');
+            typeField?.addEventListener("change", () => syncApiFields(scope));
+            syncApiFields(scope);
+        });
     });
     const search = document.getElementById("deviceSearch");
     const status = document.getElementById("statusFilter");

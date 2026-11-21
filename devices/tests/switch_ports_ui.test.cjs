@@ -266,7 +266,8 @@ const FIBER_PAYLOAD = {
     ok: true, name: 'Sarchl', ip: '10.10.10.15', total: 2, connected: 2, fiber_count: 1,
     ports: [
         { index: 10401, name: 'TenGigabitEthernet1/1', oper: 'up', admin: 'up', speed_mbps: 10000, alias: '',
-          fiber: true, optical: { tx: -3.4, rx: -7.3, state: 'good' }, neighbors: [] },
+          fiber: true, optical: { temperature: 46.6, voltage: 3.21, tx: -3.3, rx: -9.4, state: 'good' },
+          neighbors: [] },
         { index: 10101, name: 'GigabitEthernet0/1', oper: 'up', admin: 'up', speed_mbps: 1000, alias: '',
           fiber: false, optical: null, neighbors: [] },
     ],
@@ -292,9 +293,30 @@ test('opening a fiber port shows its optical transmit and receive levels', async
     button();
     const html = writes[writes.length - 1];
     assert.match(html, /Optical/, 'the optical block is rendered');
-    assert.match(html, /-3\.4 dBm/, 'transmit power');
-    assert.match(html, /-7\.3 dBm/, 'receive power');
+    assert.match(html, /-3\.3 dBm/, 'transmit power');
+    assert.match(html, /-9\.4 dBm/, 'receive power');
+    assert.match(html, /46\.6/, 'module temperature');
+    assert.match(html, /3\.21 V/, 'supply voltage');
     assert.match(html, /Fiber \(optical transceiver\)/, 'media is reported');
+});
+
+test('a transceiver whose platform reports no diagnostics says so', async () => {
+    // A 2960 lists the sensor names but serves no values; the app must not claim copper, and
+    // must not leave an empty panel with no explanation.
+    const payload = {
+        ok: true, name: 'Anfalakan', ip: '10.10.10.27', total: 1, connected: 1, fiber_count: 1,
+        ports: [{ index: 10102, name: 'GigabitEthernet0/2', oper: 'up', admin: 'up',
+                  speed_mbps: 1000, alias: '', fiber: true, optical: null,
+                  optical_unavailable: true, neighbors: [] }],
+    };
+    writes.length = 0;
+    const ui = run(payload);
+    ui.click();
+    await new Promise(r => setTimeout(r, 0));
+    portButton(ui, '10102')();
+    const html = writes[writes.length - 1];
+    assert.match(html, /Fiber \(optical transceiver\)/, 'still identified as fiber');
+    assert.match(html, /does not publish optical diagnostics over SNMP/, 'and says why it is blank');
 });
 
 test('a copper port shows no optical block', async () => {

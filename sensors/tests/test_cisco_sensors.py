@@ -472,7 +472,8 @@ class OpticalPowerTests(TestCase):
             client = Client("127.0.0.1", "community", 161)
             await client.open()
             try:
-                return await client.optical_by_port(self.PORTS)
+                optical, _transceivers = await client.optical_by_port(self.PORTS)
+                return optical
             finally:
                 if client.engine:
                     client.engine.close_dispatcher()
@@ -529,9 +530,9 @@ class OpticalPowerTests(TestCase):
             }
             self.assertEqual(self.optical(batches)["TenGigabitEthernet1/1"]["state"], expected, rx)
 
-    def test_an_impossible_positive_transmit_is_dropped_not_shown(self):
-        # This IOS build reported -34 dBm as +34; a laser cannot transmit a positive dBm, so the
-        # bogus value is withheld rather than presented as a real reading.
+    def test_an_unsigned_transmit_value_has_its_sign_restored(self):
+        # This IOS build reported -3.4 dBm as +34. A laser cannot transmit a positive dBm, so the
+        # value is restored to -3.4 rather than shown as an impossible +3.4.
         batches = {
             snmp.ENTITY_PHYSICAL_NAME: [self.name(1071, "Te1/1 Transmit Power Sensor"),
                                         self.name(1072, "Te1/1 Receive Power Sensor")],
@@ -543,8 +544,43 @@ class OpticalPowerTests(TestCase):
                                            self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1072, 1)],
         }
         entry = self.optical(batches)["TenGigabitEthernet1/1"]
-        self.assertIsNone(entry["tx"])
+        self.assertEqual(entry["tx"], -3.4, "the sign is recovered, not discarded")
         self.assertEqual(entry["rx"], -7.3)
 
     def test_an_all_copper_switch_reports_no_optics(self):
         self.assertEqual(self.optical({}), {})
+
+    def test_a_transceivers_temperature_and_voltage_are_read_too(self):
+        # The reference switch reports exactly these four for Gi1/3; the panel shows all of
+        # them, and getting the precision wrong turns 47.0 C into 470 C.
+        batches = {
+            snmp.ENTITY_PHYSICAL_NAME: [
+                self.name(1074, "Gi1/3 Module Temperature Sensor"),
+                self.name(1075, "Gi1/3 Supply Voltage Sensor"),
+                self.name(1077, "Gi1/3 Transmit Power Sensor"),
+                self.name(1078, "Gi1/3 Receive Power Sensor"),
+            ],
+            snmp.ENTITY_SENSOR_VALUE: [
+                self.sensor(snmp.ENTITY_SENSOR_VALUE, 1074, 466),
+                self.sensor(snmp.ENTITY_SENSOR_VALUE, 1075, 321),
+                self.sensor(snmp.ENTITY_SENSOR_VALUE, 1077, -33),
+                self.sensor(snmp.ENTITY_SENSOR_VALUE, 1078, -94),
+            ],
+            snmp.ENTITY_SENSOR_SCALE: [
+                self.sensor(snmp.ENTITY_SENSOR_SCALE, 1074, 9),
+                self.sensor(snmp.ENTITY_SENSOR_SCALE, 1075, 9),
+                self.sensor(snmp.ENTITY_SENSOR_SCALE, 1077, 9),
+                self.sensor(snmp.ENTITY_SENSOR_SCALE, 1078, 9),
+            ],
+            snmp.ENTITY_SENSOR_PRECISION: [
+                self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1074, 1),
+                self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1075, 2),
+                self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1077, 1),
+                self.sensor(snmp.ENTITY_SENSOR_PRECISION, 1078, 1),
+            ],
+        }
+        entry = self.optical(batches)["GigabitEthernet1/3"]
+        self.assertEqual(entry["temperature"], 46.6)
+        self.assertEqual(entry["voltage"], 3.21)
+        self.assertEqual(entry["tx"], -3.3)
+        self.assertEqual(entry["rx"], -9.4)

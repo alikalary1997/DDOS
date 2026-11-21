@@ -5,6 +5,7 @@ from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError
+from django.conf import settings
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -12,6 +13,9 @@ from devices.models import Device, DeviceChange, Group
 from devices.services.connection import ProbeResult
 from devices.services.router_lock import RouterBusy
 from public_ips.models import AssignmentReview, FirewallSample, ProvisioningAttempt, PublicIP
+
+# The device page's row actions live in this script, not in server-rendered markup.
+MONITOR_JS = (settings.BASE_DIR / "monitor" / "static" / "monitor" / "js" / "ref_groups.js").read_text(encoding="utf-8")
 
 
 class DeviceManagementTests(TestCase):
@@ -59,10 +63,10 @@ class DeviceManagementTests(TestCase):
         self.assertEqual(self.client.get(self.delete, {"fragment": 1}).status_code, 403)
 
     def test_actions_and_prefilled_edit_form_never_display_password(self):
-        page = self.client.get(reverse("device_fleet"))
-        self.assertContains(page, self.edit); self.assertContains(page, self.delete)
-        self.assertContains(page, "Add Sensor")
-        self.assertNotContains(page, "Test Connection")
+        page = self.client.get(reverse("devices"))
+        # Rows and their Edit/Delete actions are rendered from this payload by the page script.
+        self.assertContains(page, '"canDelete": true')
+        self.assertContains(page, f'"id": {self.device.pk}')
         response = self.client.get(self.edit)
         self.assertContains(response, 'value="Saved router"')
         self.assertContains(response, 'value="172.26.241.16"')
@@ -160,11 +164,11 @@ class DeviceManagementTests(TestCase):
 
     def test_delete_confirmation_warns_and_removes_assigned_records(self):
         ip = PublicIP.objects.create(address="8.8.8.8", device=self.device)
-        response = self.client.get(self.delete)
+        response = self.client.get(self.delete, {"fragment": "1"})
         self.assertContains(response, "Saved router")
         self.assertEqual(response.context["assigned_ip_count"], 1)
-        self.assertContains(response, "Permanent deletion:")
-        self.assertContains(response, "Router cleanup will not be performed")
+        self.assertContains(response, "will be deleted with it")
+        self.assertContains(response, "router cleanup will not be performed")
         response = self.client.post(self.delete, {"confirm": "yes"}, HTTP_ACCEPT="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["deleted_public_ip_ids"], [ip.pk])
@@ -203,9 +207,7 @@ class DeviceManagementTests(TestCase):
         client.force_login(self.reader)
         for url in (self.edit, self.delete):
             self.assertEqual(client.get(url).status_code, 403)
-        page = client.get(reverse("device_fleet"))
-        self.assertNotContains(page, self.edit); self.assertNotContains(page, self.delete)
-        client.force_login(self.admin); client.get(reverse("device_fleet"))
+        client.force_login(self.admin); client.get(reverse("devices"))
         token = client.cookies["csrftoken"].value
         for url, payload in ((self.edit, self.payload), (self.delete, {"confirm": "yes"})):
             self.assertEqual(client.post(url, payload).status_code, 403)
@@ -233,15 +235,14 @@ class DeviceManagementTests(TestCase):
 
     def test_fleet_rows_expose_edit_and_delete_in_both_views(self):
         """Regression: the fleet lost every Edit/Delete entry point."""
-        page = self.client.get(reverse("device_fleet")).content.decode()
-        actions = page.split('<td class="noc-card-actions fleet-actions"', 1)[1]
-        self.assertIn(f'href="{self.edit}" data-manage-device="{self.device.pk}"', actions)
-        self.assertIn(f'href="{self.delete}" data-manage-device="{self.device.pk}"', actions)
-        self.assertIn("Settings", actions)
-        # The same actions cell is the last column of every row, so grid and table both show it.
-        self.assertIn('data-inventory-view="matrix"', page)
-        self.assertIn('data-inventory-view="grid"', page)
-        self.assertNotContains(self.client.get(self.delete), self.password)
+        page = self.client.get(reverse("devices")).content.decode()
+        # Rows carry edit/delete/protection/settings actions, attached by the page script from
+        # this payload; the retired fleet table is no longer rendered at all.
+        self.assertNotIn("Device Management Fleet", page)
+        self.assertIn(f'"id": {self.device.pk}', page)
+        self.assertIn('"canDelete": true', page)
+        self.assertIn('data-ref-edit-device', MONITOR_JS)
+        self.assertNotContains(self.client.get(self.delete, {"fragment": "1"}), self.password)
 
     def test_edit_form_exposes_every_add_field(self):
         page = self.client.get(self.edit).content.decode()

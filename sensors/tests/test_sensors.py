@@ -86,11 +86,16 @@ class SensorTests(TestCase):
     def test_device_fleet_shows_sensor_values_without_snmp_requests(self):
         SensorSample.objects.create(sensor=self.sensor, timestamp=timezone.now(), in_mbps=1.5, out_mbps=0, uptime_seconds=90)
         with patch('sensors.snmp.read') as probe:
-            page = self.client.get(reverse('device_fleet'))
+            page = self.client.get(reverse('devices'))
             response = self.client.get(reverse('device_sensor_data'))
         probe.assert_not_called()
-        self.assertContains(page, 'data-device-add-sensor')
-        self.assertContains(page, 'data-device-sensor="traffic"')
+        # The device table is rendered from this payload, so its traffic reading is asserted
+        # there; the raw sample endpoint stays the source for live polling.
+        import json
+        rows = json.loads(page.content.decode().split('<script id="ref-devices" type="application/json">', 1)[1]
+                          .split('</script>', 1)[0])
+        row = next(r for r in rows if r['id'] == self.device.pk)
+        self.assertEqual(row['traffic_in'], 1.5)
         item = response.json()['devices'][str(self.device.pk)][0]
         self.assertEqual(item['in_mbps'], 1.5)
         self.assertEqual(item['out_mbps'], 0)

@@ -3,10 +3,11 @@
 {% block body_class %}devices-page fleet-page tree-page ref-groups-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
 <link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree"><link rel="stylesheet" href="{% static 'monitor/css/ref_groups.css' %}?v=20261119-ref">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261119-ref" defer></script><script src="{% static 'monitor/js/ref_groups.js' %}?v=20261119-ref" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261121-cisco-ssh" defer></script><script src="{% static 'monitor/js/ref_groups.js' %}?v=20261119-ref" defer></script>{% endblock %}
 {% block footer_note %}Devices{% endblock %}
 {% block content %}
-{% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}
+{# A previous save's success notice must not sit above a form that just failed validation. #}
+{% if not open_add_device %}{% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}{% endif %}
 
 <div class="ref-wrap">
     {# Heading row, as in the reference: title, subtitle, spacer, tools. #}
@@ -38,12 +39,14 @@
             <div class="ref-field"><div class="mut">Device name</div>{{ add_device_form.name }}{% if add_device_form.name.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.name.errors|striptags }}</span>{% endif %}</div>
             <div class="ref-field"><div class="mut">IP address</div>{{ add_device_form.management_ip }}{% if add_device_form.management_ip.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.management_ip.errors|striptags }}</span>{% endif %}</div>
             <div class="ref-field"><div class="mut">Device type</div>{{ add_device_form.device_type }}{% if add_device_form.device_type.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.device_type.errors|striptags }}</span>{% endif %}</div>
-            {# RouterOS API settings: only a MikroTik device uses them. A Cisco switch needs name + IP. #}
-            <div class="ref-field ref-field-sm" data-api-field><div class="mut">API port</div>{{ add_device_form.api_port }}{% if add_device_form.api_port.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.api_port.errors|striptags }}</span>{% endif %}</div>
-            <div class="ref-field" data-api-field><div class="mut">API-SSL</div>{{ add_device_form.use_ssl }}</div>
-            <div class="ref-field" data-api-field><div class="mut">User</div>{{ add_device_form.username }}{% if add_device_form.username.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.username.errors|striptags }}</span>{% endif %}</div>
-            <div class="ref-field" data-api-field><div class="mut">Password</div>{{ add_device_form.password }}{% if add_device_form.password.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.password.errors|striptags }}</span>{% endif %}</div>
-            <div class="ref-field" data-api-field><div class="mut">Interface</div>{{ add_device_form.incoming_monitoring_interface }}{% if add_device_form.incoming_monitoring_interface.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.incoming_monitoring_interface.errors|striptags }}</span>{% endif %}</div>
+            {# Only a MikroTik device has the RouterOS API. A Cisco switch is managed over SSH, so #}
+            {# it needs just name, IP, user and password; port/SSL/interface are MikroTik-only.  #}
+            <div class="ref-field ref-field-sm" data-api-only-field><div class="mut">API port</div>{{ add_device_form.api_port }}{% if add_device_form.api_port.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.api_port.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field" data-api-only-field><div class="mut">API-SSL</div>{{ add_device_form.use_ssl }}</div>
+            <div class="ref-field"><div class="mut">User</div>{{ add_device_form.username }}{% if add_device_form.username.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.username.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field"><div class="mut">Password</div>{{ add_device_form.password }}{% if add_device_form.password.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.password.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field" data-api-only-field><div class="mut">Interface</div>{{ add_device_form.incoming_monitoring_interface }}{% if add_device_form.incoming_monitoring_interface.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.incoming_monitoring_interface.errors|striptags }}</span>{% endif %}</div>
+            <div class="ref-field ref-field-grow" data-api-note hidden><div class="mut">Cisco</div><div class="ref-form-note">A Cisco switch is managed over SSH: its user and password are the SSH login.</div></div>
             <div class="ref-field"><div class="mut">Group (agent)</div>{{ add_device_form.group }}{% if add_device_form.group.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.group.errors|striptags }}</span>{% endif %}</div>
             <div class="ref-field ref-field-grow"><div class="mut">Connect to topology</div>{{ add_device_form.topology_parent }}{% if add_device_form.topology_parent.errors %}<span class="ref-field-error" role="alert">{{ add_device_form.topology_parent.errors|striptags }}</span>{% endif %}</div>
             <div class="ref-form-actions"><button class="btn go" type="submit" id="saveDeviceButton">Add device</button><button class="btn" type="button" id="cancelDeviceDialog">Cancel</button></div>

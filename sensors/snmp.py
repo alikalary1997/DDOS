@@ -87,10 +87,14 @@ ENTITY_SENSOR_PRECISION = "1.3.6.1.4.1.9.9.91.1.1.1.1.3"
 ENTITY_PHYSICAL_NAME = "1.3.6.1.2.1.47.1.1.1.1.7"
 # entSensorType 14 = dBm (optical power). Other sensor types on a transceiver are ignored.
 ENTITY_SENSOR_TYPE_DBM = 14
-# Sensor-name suffixes. A port with a receive-power sensor has an optical transceiver fitted;
-# a copper port has none, which is what lets the panel mark a port as fiber.
-OPTICAL_TX_SUFFIX = "transmit power sensor"
-OPTICAL_RX_SUFFIX = "receive power sensor"
+# Sensor-name suffixes on a transceiver. A port with a receive-power sensor has an optical
+# transceiver fitted; a copper port has none, which is what lets the panel mark a port as fiber.
+OPTICAL_SENSORS = (
+    ("transmit power sensor", "tx"),
+    ("receive power sensor", "rx"),
+    ("module temperature sensor", "temperature"),
+    ("supply voltage sensor", "voltage"),
+)
 OPTICAL_WALK_LIMIT = 5000
 
 # --- VLAN membership, for switch ports ------------------------------------------------------
@@ -281,10 +285,13 @@ class Client:
                 "speed_mbps": mbps,
                 "alias": "",
             })
-        optical = await self.optical_by_port(result)
+        optical, transceivers = await self.optical_by_port(result)
         for port in result:
             port["optical"] = optical.get(port["name"], None)
-            port["fiber"] = port["name"] in optical
+            port["fiber"] = port["name"] in transceivers
+            # A transceiver whose platform serves no DOM values (some Catalyst models do not
+            # implement CISCO-ENTITY-SENSOR-MIB at all) is still fiber, but has no readings.
+            port["optical_unavailable"] = port["fiber"] and port["optical"] is None
         vlan = await self.vlans_by_port(result)
         for port in result:
             entry = vlan.get(port["name"]) or {}
@@ -373,19 +380,29 @@ class Client:
         try:
             names = {row[-1]: text(value) for row, value in await self._walk_with_retry(ENTITY_PHYSICAL_NAME)}
         except SNMPError:
-            return {}
+            return {}, {}
         if not names:
-            return {}                       # no ENTITY-MIB: this agent exposes no optics
+            return {}, {}                   # no ENTITY-MIB: this agent exposes no optics
 
         wanted = {}
         for index, name in names.items():
             lowered = name.lower()
-            if lowered.endswith(OPTICAL_TX_SUFFIX):
-                wanted[index] = (name[:len(name) - len(OPTICAL_TX_SUFFIX)].strip(), "tx")
-            elif lowered.endswith(OPTICAL_RX_SUFFIX):
-                wanted[index] = (name[:len(name) - len(OPTICAL_RX_SUFFIX)].strip(), "rx")
+            for suffix, metric in OPTICAL_SENSORS:
+                if lowered.endswith(suffix):
+                    wanted[index] = (name[:len(name) - len(suffix)].strip(), metric)
+                    break
         if not wanted:
-            return {}                       # all-copper switch: nothing to read
+            return {}, {}                   # all-copper switch: nothing to read
+
+        # The sensor NAMES alone prove a transceiver is fitted, even on a platform that serves
+        # no sensor values (a 2960 lists "Gi0/2 Receive Power Sensor" and answers nothing for
+        # it). Those ports are reported as fiber without readings, rather than as copper.
+        def slot_port(name):
+            return ''.join(ch for ch in name if ch.isdigit() or ch == '/')
+
+        transceivers = {known_port for known_port in
+                        ({slot_port(p["name"]): p["name"] for p in ports}.get(slot_port(port_name), port_name)
+                         for port_name, _metric in wanted.values())}
 
         try:
             values = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_VALUE)}
@@ -393,51 +410,58 @@ class Client:
             precisions = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_PRECISION)}
             types = {row[-1]: value for row, value in await self._walk_with_retry(ENTITY_SENSOR_TYPE)}
         except SNMPError:
-            return {}
+            return {}, transceivers
+        if not values:
+            return {}, transceivers         # sensors listed, but the platform serves no values
 
-        # The switch names ports in ENTITY-MIB as "Te1/1" but ifDescr calls the same port
-        # "TenGigabitEthernet1/1"; match on the trailing <slot>/<port> number instead.
-        def slot_port(name):
-            return ''.join(ch for ch in name if ch.isdigit() or ch == '/')
+        # entSensorScale is an exponent in the MIB's own enum: 9 means -9 (nano), 8 means -6
+        # (micro), and so on. `precision` then says how many of the digits are fractional, so a
+        # value of -73 at scale 9 / precision 1 is -7.3 dBm.
+        EXPONENTS = {1: -24, 2: -21, 3: -18, 4: -15, 5: -12, 6: -9, 7: -6, 8: -3, 9: 0,
+                     10: 3, 11: 6, 12: 9, 13: 12, 14: 15, 15: 18, 16: 21, 17: 24}
 
-        known = {slot_port(port["name"]): port["name"] for port in ports}
-        by_port = {}
-        for index, (sensor_port, direction) in wanted.items():
-            if types and int(types.get(index, ENTITY_SENSOR_TYPE_DBM)) != ENTITY_SENSOR_TYPE_DBM:
-                continue                   # not an optical reading (temperature, volts, mA)
+        def scaled(index, metric="dbm"):
             raw = values.get(index)
             if raw is None:
-                continue
+                return None
             try:
                 magnitude = int(raw)
             except (TypeError, ValueError):
-                continue
-            # entSensorScale is an exponent in MIB convention shared with entSensorValue: an enum
-            # where 9 means -9 (nano). On a real Catalyst an optical sensor reports scale 9 and
-            # value -73 with precision 1, which is -7.3 dBm.
-            raw_scale = int(scales[index]) if isinstance(scales.get(index), Integer32) else 0
-            exponent = {1: -24, 2: -21, 3: -18, 4: -15, 5: -12, 6: -9, 7: -6, 8: -3, 9: 0,
-                        10: 3, 11: 6, 12: 9, 13: 12, 14: 15, 15: 18, 16: 21, 17: 24}.get(
-                            raw_scale, 0 if raw_scale == 9 else raw_scale)
+                return None
+            raw_scale = int(scales[index]) if isinstance(scales.get(index), Integer32) else 9
+            exponent = EXPONENTS.get(raw_scale, 0)
             precision = int(precisions[index]) if isinstance(precisions.get(index), Integer32) else 0
-            # `precision` says how many of the value's digits are fractional: -73 at exponent 0
-            # and precision 1 is -7.3 dBm.
-            dbm = round(magnitude * 10 ** exponent, 0) / (10 ** precision) if precision else magnitude * 10 ** exponent
-            dbm = round(dbm, precision)
+            # entSensorValue is the reading multiplied by 10^-entSensorScale, and
+            # entSensorPrecision says how many of its digits are fractional. So 470 at scale 9
+            # (0) with precision 1 is 47.0 C, -94 at scale 9 with precision 1 is -9.4 dBm, and
+            # 321 at scale 9 with precision 2 is 3.21 V.
+            value = magnitude * 10 ** exponent
+            return round(value / (10 ** precision), precision)
+
+        # The switch names ports in ENTITY-MIB as "Te1/1" but ifDescr calls the same port
+        # "TenGigabitEthernet1/1"; match on the trailing <slot>/<port> number instead.
+        known = {slot_port(port["name"]): port["name"] for port in ports}
+        by_port = {}
+        for index, (sensor_port, metric) in wanted.items():
+            value = scaled(index, metric)
+            if value is None:
+                continue
             port_name = known.get(slot_port(sensor_port), sensor_port)
             entry = by_port.setdefault(port_name, {})
-            entry[direction] = dbm
+            entry[metric] = value
 
         for port_name, entry in by_port.items():
-            entry.setdefault("tx", None)
-            entry.setdefault("rx", None)
+            for metric in ("tx", "rx", "temperature", "voltage"):
+                entry.setdefault(metric, None)
             # Some IOS builds report transmit power unsigned, so a real -3.4 dBm comes back as
-            # +3.4. A laser cannot transmit a positive dBm, so such a value is discarded rather
-            # than shown as fact: receive power is the reading that matters for a link anyway.
+            # +3.4. A laser cannot transmit a positive dBm, so a value above the physical maximum
+            # is restored to its negative form rather than shown as an impossible number, and is
+            # dropped entirely if even that is implausible.
             if entry["tx"] is not None and entry["tx"] > 3:
-                entry["tx"] = None
+                candidate = -entry["tx"]
+                entry["tx"] = candidate if candidate >= -25 else None
             entry["state"] = self._optical_state(entry["rx"])
-        return by_port
+        return by_port, transceivers
 
     @staticmethod
     def _optical_state(rx_dbm):

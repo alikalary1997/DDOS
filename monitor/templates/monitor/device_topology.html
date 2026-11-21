@@ -3,7 +3,7 @@
 {% block body_class %}devices-page fleet-page tree-page{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{% static 'sensors/sensors.css' %}?v=3-integrated">
 <link rel="stylesheet" href="{% static 'monitor/css/devices.css' %}?v=20261012-simple-fleet"><link rel="stylesheet" href="{% static 'monitor/css/device_fleet.css' %}?v=20261117-tree">{% endblock %}
-{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261117-tree" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'monitor/js/confirmation_text.js' %}?v=20261010-delete-fix2" defer></script><script src="{% static 'monitor/js/devices.js' %}?v=20261121-cisco-ssh" defer></script>{% endblock %}
 {% block footer_note %}Topology{% endblock %}
 {% block content %}
 {% for message in messages %}<div class="preview-notice" role="status"><strong>{{ message }}</strong></div>{% endfor %}

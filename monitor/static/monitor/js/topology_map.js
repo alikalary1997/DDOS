@@ -316,7 +316,7 @@
         function opticalBlock(port) {
             if (!port.fiber) return '';
             const o = port.optical || {};
-            const dbm = v => (v === null || v === undefined) ? '—' : `${Number(v).toFixed(1)} dBm`;
+            const num = (v, digits, unit) => (v === null || v === undefined) ? '—' : `${Number(v).toFixed(digits)}${unit}`;
             const tone = { good: 'online', ok: 'online', low: 'warn', none: 'error' }[o.state] || '';
             const note = {
                 good: 'Receive level is healthy.',
@@ -324,13 +324,19 @@
                 low: 'Receive level is low — check connectors and patch cords.',
                 none: 'Almost no light received — fiber disconnected, broken, or far end dark.',
             }[o.state] || 'No optical reading from this transceiver.';
+            // Temperature and voltage identify a healthy transceiver; the two dBm readings are
+            // the ones that explain why a fiber link is down.
             return '<div class="tmap-optical">' +
                 `<div class="tmap-nb-title">Optical</div>` +
                 '<div class="tmap-optical-grid">' +
-                `<div><span>Transmit</span><b>${esc(dbm(o.tx))}</b></div>` +
-                `<div><span>Receive</span><b${tone ? ` data-tone="${tone}"` : ''}>${esc(dbm(o.rx))}</b></div>` +
+                `<div><span>Temperature</span><b>${esc(num(o.temperature, 1, ' \u00b0C'))}</b></div>` +
+                `<div><span>Voltage</span><b>${esc(num(o.voltage, 2, ' V'))}</b></div>` +
+                `<div><span>Tx Power</span><b>${esc(num(o.tx, 1, ' dBm'))}</b></div>` +
+                `<div><span>Rx Power</span><b${tone ? ` data-tone="${tone}"` : ''}>${esc(num(o.rx, 1, ' dBm'))}</b></div>` +
                 '</div>' +
-                `<div class="tmap-optical-note">${esc(note)}</div></div>`;
+                `<div class="tmap-optical-note">${esc(port.optical_unavailable
+                    ? 'This switch platform does not publish optical diagnostics over SNMP, so no readings can be shown here.'
+                    : note)}</div></div>`;
         }
 
         // Which VLAN a port is in. An access port has exactly one; a trunk reports the native

@@ -58,11 +58,6 @@ def dashboard(request):
     return render(request, "monitor/dashboard.html", {"dashboard_data": dashboard_data(may_add_devices(request.user))})
 
 
-def devices(request):
-    """Render the device UI without storing credentials or contacting routers."""
-    return render(request, "monitor/devices.html")
-
-
 def public_ips(request):
     """Render public IP management previews without persistence or router calls."""
     return render(request, "monitor/public_ips.html", {"active_page": "public_ips"})

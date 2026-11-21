@@ -1,0 +1,14 @@
+{# The Edit Device form on its own, fetched by the devices page so editing stays in-page. #}
+{# The page lifts form[data-device-edit-form] out of this document and renders it inline. #}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Edit Device</title></head><body>
+{% if edit_device and can_add_devices %}
+<div id="editDeviceDialog" data-device-management-dialog>
+<form method="post" action="{% url 'device_edit' edit_device.id %}" autocomplete="off" data-device-edit-form>{% csrf_token %}
+<div data-management-errors role="alert">{% if edit_device_form.errors %}<strong>Device was not saved.</strong>{{ edit_device_form.non_field_errors }}{% endif %}</div>
+<div class="form-grid">{% for field in edit_device_form %}<label for="{{ field.id_for_label }}"{% if field.name == 'description' %} class="full-width"{% elif field.name == 'api_port' or field.name == 'use_ssl' or field.name == 'incoming_monitoring_interface' %} data-api-only-field{% endif %}><span>{{ field.label }}</span>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<span role="alert">{{ field.errors }}</span>{% endif %}</label>{% endfor %}</div>
+<p class="modal-notice">Database changes only. Leave the password blank to keep it. Connection or interface changes clear old connection results and require provisioning review for assigned IPs. Existing router rules are retained.</p>
+<div class="dialog-footer"><a class="secondary-button" href="{% url 'devices' %}">Cancel</a><button class="primary-button" type="submit">Save changes</button></div>
+</form></div>
+{% endif %}
+</body></html>

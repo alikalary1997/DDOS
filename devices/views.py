@@ -164,17 +164,13 @@ def inventory_context(request, form=None, unavailable=False):
 @login_required(login_url="device_login")
 @require_GET
 def inventory(request):
-    try:
-        # "+ Device" on a tree node opens the Add Device dialog with that node preselected.
-        parent_node = request.GET.get("parent_node") if request.GET.get("add_device") else None
-        topology_parent = request.GET.get("topology_parent") if request.GET.get("add_device") else None
-        if parent_node or topology_parent:
-            form = AddDeviceForm(initial={"group": parent_node or "", "topology_parent": topology_parent or ""})
-            return render(request, "monitor/devices.html", inventory_context(request, form))
-        context = inventory_context(request)
-    except DatabaseError:
-        return render(request, "monitor/devices.html", inventory_context(request, unavailable=True), status=503)
-    return render(request, "monitor/devices.html", context)
+    """Retired fleet page. The device page replaced it, so this only redirects.
+
+    Keeping the route (rather than deleting it) means a bookmark, a stale link or a browser
+    history entry lands on the current page instead of a 404 - and no request can render the
+    old template again.
+    """
+    return redirect("devices")
 
 
 @never_cache
@@ -241,7 +237,7 @@ def delete_group(request, group_id):
 @login_required(login_url="device_login")
 @require_GET
 def tree(request):
-    """Groups view, laid out like the reference: group sidebar, summary and device table."""
+    """The device-management page: Groups sidebar, summary and device table."""
     from .services.tree_view import build_group_page
     context = inventory_context(request)
     context.update(active_page="devices", parent_choices=group_choices(), **build_group_page())
@@ -319,8 +315,22 @@ def add_device(request):
         form.add_error(None, "Device credential encryption is unavailable. Contact the server administrator.")
     except DatabaseError:
         form.add_error(None, "The device could not be saved. Please try again.")
-        return render(request, "monitor/devices.html", inventory_context(request, form, unavailable=True), status=503)
-    return render(request, "monitor/devices.html", inventory_context(request, form), status=400)
+        return tree_page(request, form, unavailable=True, status=503)
+    return tree_page(request, form, status=400)
+
+
+def tree_page(request, form, unavailable=False, status=200):
+    """Render the Groups/Devices page (the only device page now) with a bound form.
+
+    A failed Add or Edit used to render the retired fleet template, which dropped the user onto
+    a page that no longer exists in the navigation. Every device-management response now comes
+    back to the same page the form lives on.
+    """
+    from .services.tree_view import build_group_page
+    context = inventory_context(request, form, unavailable=unavailable)
+    context.update(active_page="devices", parent_choices=group_choices(), **build_group_page())
+    context["open_add_device"] = True
+    return render(request, "monitor/device_tree.html", context, status=status)
 
 
 @never_cache
@@ -486,9 +496,11 @@ def edit_device(request, device_id):
             status = 503
         if ajax:
             return JsonResponse({"ok": False, "error": "Device was not saved. Correct the errors below.", "errors": form.errors.get_json_data()}, status=status)
+    # The device page fetches this endpoint and lifts the form out of the response, so the
+    # document has to carry the form - but it is a fragment host, not a page of its own.
     context = inventory_context(request)
     context.update(edit_device_form=form, edit_device={"id": device.pk, "name": device.name})
-    return render(request, "monitor/devices.html", context, status=status)
+    return render(request, "monitor/components/device_edit_fragment.html", context, status=status)
 
 
 @never_cache
@@ -532,4 +544,6 @@ def delete_device(request, device_id):
     # The Devices table asks for the confirmation as a fragment so deletion stays in-page.
     if request.GET.get("fragment"):
         return render(request, "monitor/components/device_delete_fragment.html", context, status=status)
-    return render(request, "monitor/devices.html", context, status=status)
+    from .services.tree_view import build_group_page
+    context.update(active_page="devices", parent_choices=group_choices(), **build_group_page())
+    return render(request, "monitor/device_tree.html", context, status=status)

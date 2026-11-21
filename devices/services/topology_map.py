@@ -372,6 +372,9 @@ def switch_ports(device):
         optical = port.get("optical")
         port["fiber"] = bool(port.get("fiber"))
         port["optical"] = optical if isinstance(optical, dict) else None
+        # A port can have a transceiver yet publish no DOM values (older Catalyst platforms do
+        # not serve CISCO-ENTITY-SENSOR-MIB at all). Saying so is better than an empty panel.
+        port["optical_unavailable"] = port["fiber"] and port["optical"] is None
     # VLAN membership is reported per port: an access port names the VLAN it is in, a trunk the
     # native VLAN it carries untagged. A port with no membership (uplink, routed port) sends
     # nothing, which the panel shows as no VLAN row rather than inventing one.

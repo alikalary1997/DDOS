@@ -139,10 +139,10 @@ class DeviceCascadeDeletionTests(TestCase):
 
     def test_confirmation_is_informational_even_with_multiple_assignments(self):
         self.assignment("8.8.8.8"); self.assignment("8.8.4.4")
-        response = self.client.get(self.delete)
+        response = self.client.get(self.delete, {"fragment": "1"})
         self.assertEqual(response.context["assigned_ip_count"], 2)
-        self.assertContains(response, "permanently deleted from NetShield")
-        self.assertContains(response, "Router cleanup will not be performed")
+        self.assertContains(response, "will be deleted with it")
+        self.assertContains(response, "router cleanup will not be performed")
         self.assertNotContains(response, "Deletion is blocked")
         self.assertTrue(Device.objects.filter(pk=self.device.pk).exists())
         self.assertEqual(PublicIP.objects.filter(device=self.device).count(), 2)
@@ -163,9 +163,9 @@ class DeviceCascadeDeletionTests(TestCase):
     def test_confirmation_loads_text_decoder_without_unescaping_html(self):
         self.device.name = "Router <script>alert(1)</script>"
         self.device.save()
-        response = self.client.get(self.delete)
-        self.assertContains(response, "confirmation_text.js")
+        response = self.client.get(self.delete, {"fragment": "1"})
+        self.assertContains(response, "data-ref-delete-confirm")
         self.assertContains(response, "Router &lt;script&gt;alert(1)&lt;/script&gt;")
         self.assertNotContains(response, "Router <script>")
-        self.assertContains(response, "permanently deleted from NetShield")
+        self.assertContains(response, "will be deleted with it")
         self.assertTrue(Device.objects.filter(pk=self.device.pk).exists())

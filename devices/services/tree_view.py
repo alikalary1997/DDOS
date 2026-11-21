@@ -6,6 +6,11 @@ topology lives in devices/services/topology.py and is entirely separate.
 from devices.models import Device, Group
 
 
+# Every column the device table reads. Credentials are deliberately absent.
+DEVICE_ROW_FIELDS = ("id", "name", "management_ip", "model", "device_type", "group_id",
+                     "topology_parent_id", "enabled")
+
+
 def _children_map():
     children = {}
     for group in Group.objects.all():
@@ -124,7 +129,9 @@ def _device_rows():
     snapshots = fleet_snapshot()
     protection = dict(DeviceDDoSProtection.objects.values_list("device_id", "enabled"))
     rows = []
-    for device in Device.objects.all().order_by("name"):
+    # Only the columns the table shows. Loading whole Device rows would pull the encrypted
+    # credentials into memory for every device on the page for no reason.
+    for device in Device.objects.only(*DEVICE_ROW_FIELDS).order_by("name"):
         sensors = snapshots.get(device.pk, [])
 
         def sensor_of(kind):
@@ -189,7 +196,7 @@ def build_group_page():
     """Data for the reference-style Groups page: sidebar groups, summary and device rows."""
     groups = list(Group.objects.all().order_by("name"))
     devices = _device_rows()
-    names = {device.pk: device.name for device in Device.objects.all()}
+    names = {device.pk: device.name for device in Device.objects.only("id", "name")}
 
     # Sidebar entries mirror the reference: All devices, each group, then Ungrouped.
     sidebar = [{"key": "all", "label": "All devices", "counts": _status_counts(devices)}]
@@ -204,7 +211,7 @@ def build_group_page():
         "devices_json": devices,
         "sidebar_json": sidebar,
         "group_options": _group_options(groups),
-        "topology_options": _topology_options(Device.objects.all().order_by("name"), names),
+        "topology_options": _topology_options(Device.objects.only("id", "name").order_by("name"), names),
         "tree_summary": tree_summary_with_status(),
     }
 
