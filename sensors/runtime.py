@@ -72,6 +72,11 @@ def stop_worker():
         pid = int(raw) if raw.isdigit() and int(raw) > 1 else None
     except OSError:
         pid = None
+    if pid is None:
+        # No usable pid file. A worker can still be holding the lock (the file can be deleted,
+        # truncated, or written by a mocked spawn), so it is found by its command line instead
+        # of being declared unstoppable - that used to disable every sensor on every device.
+        pid = _worker_pid_from_processes()
     if pid:
         if os.name == 'nt':
             # An invisible child has no console to send a signal to; taskkill is deterministic.
@@ -89,6 +94,40 @@ def stop_worker():
             return True
         time.sleep(.1)
     return not worker_running()
+
+
+def _worker_pid_from_processes():
+    """The pid of a running poll_sensors process, or None.
+
+    Only this project's own managed poll_sensors worker is matched, so an unrelated process can
+    never be signalled.
+    """
+    marker = str(settings.BASE_DIR / 'manage.py')
+    try:
+        if os.name == 'nt':
+            listing = subprocess.run(
+                ['wmic', 'process', 'where', "name='python.exe'", 'get', 'ProcessId,CommandLine',
+                 '/format:list'], capture_output=True, text=True, timeout=15).stdout
+            current, found = {}, None
+            for line in listing.replace('\r', '').split('\n') + ['']:
+                if not line.strip():
+                    if 'poll_sensors' in (current.get('CommandLine') or '') and marker in (current.get('CommandLine') or ''):
+                        found = int(current['ProcessId'])
+                        break
+                    current = {}
+                    continue
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    current[key] = value
+            return found
+        listing = subprocess.run(['ps', '-eo', 'pid=,args='], capture_output=True, text=True,
+                                 timeout=15).stdout
+        for line in listing.splitlines():
+            if 'poll_sensors' in line and marker in line:
+                return int(line.split(None, 1)[0])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return None
 
 
 def ensure_worker(restart_outdated=True):

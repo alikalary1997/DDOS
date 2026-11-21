@@ -434,6 +434,33 @@ class AdapterTests(SimpleTestCase):
                 runtime.ensure_worker()
         proc.Popen.assert_not_called()
 
+    def test_stop_worker_finds_the_worker_when_the_pid_file_is_unusable(self):
+        """A missing or malformed worker.pid must not make the worker unstoppable.
+
+        A mocked spawn once wrote "1" into worker.pid. stop_worker() then declared the running
+        worker unstoppable, ensure_worker() raised, and every sensor on every device was left
+        disabled - the switch panel showed "—" for ping, bandwidth, uptime and neighbours.
+        """
+        from sensors import runtime
+        with patch.object(runtime, '_worker_pid_from_processes', return_value=4242) as finder,              patch.object(runtime, 'worker_running', side_effect=[True, False]),              patch.object(runtime, 'subprocess') as proc:
+            self.assertTrue(runtime.stop_worker())
+        finder.assert_called_once()
+        killed = [call for call in proc.run.call_args_list if 'taskkill' in str(call)]
+        self.assertTrue(killed, "the discovered pid is what gets terminated")
+        self.assertIn('4242', str(killed[0]))
+
+    def test_the_pid_file_is_preferred_over_a_process_search(self):
+        from sensors import runtime
+        from pathlib import Path
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / 'worker.pid'
+            pid_file.write_text('777', encoding='utf-8')
+            with patch.object(runtime, '_runtime_directory', return_value=Path(directory)),                  patch.object(runtime, '_worker_pid_from_processes') as finder,                  patch.object(runtime, 'worker_running', side_effect=[True, False]),                  patch.object(runtime, 'subprocess') as proc:
+                self.assertTrue(runtime.stop_worker())
+        finder.assert_not_called()
+        self.assertIn('777', str([c for c in proc.run.call_args_list if 'taskkill' in str(c)][0]))
+
     def test_version_stamp_tracks_edits_to_the_sensor_code(self):
         from sensors import runtime
         import tempfile
