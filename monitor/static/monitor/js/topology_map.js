@@ -72,19 +72,17 @@
         function select(key) {
             const node = byKey.get(key);
             if (!node) return;
-            const branch = branchOf(key);
             nodeEls.forEach(el => {
-                const inBranch = branch.has(el.dataset.node);
+                // Only the clicked device stays lit; every other card darkens, so with several
+                // limits and connections the one you picked is unmistakable.
                 el.classList.toggle('is-selected', el.dataset.node === key);
-                el.classList.toggle('is-dim', !inBranch);
+                el.classList.toggle('is-dim', el.dataset.node !== key);
             });
             linkEls.forEach(el => {
-                // Only the links that touch the selected device glow. Lighting the whole branch
-                // made several limits look identical, so the cable you clicked was unclear.
+                // Only the cables attached to the selected device glow.
                 const touches = el.dataset.from === key || el.dataset.to === key;
-                const inBranch = branch.has(el.dataset.from) && branch.has(el.dataset.to);
                 el.classList.toggle('is-active', touches);
-                el.classList.toggle('is-dim', !inBranch);
+                el.classList.toggle('is-dim', !touches);
             });
             if (title) title.textContent = node.name;
             if (hint) hint.hidden = true;

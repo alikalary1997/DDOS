@@ -1,0 +1,160 @@
+/* Topology map — the reference layout: four fixed columns left to right (CORE / LIMIT
+   SERVERS / PPPoE SERVERS / TOWERS), cards stacked down each column, and dashed S-curve
+   connectors running from a parent's right edge to a child's left edge. */
+.tmap-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start;margin-bottom:16px}
+.tmap-panel{padding:16px 18px}
+/* The page intro was removed; the secondary links now sit as a compact row above the map. */
+.tmap-tree-actions{display:flex;justify-content:flex-end;gap:8px;padding:18px 0 14px}
+.tmap-tree-actions .secondary-button{font-size:11.5px}
+.tmap-live{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--muted);background:var(--surface-2)}
+.tmap-canvas{overflow:auto}
+/* Render at the diagram's own scale, like the reference: a 690px-wide viewBox stretched across
+   the panel is what makes 12px card text look like 18px. The canvas scrolls if it is short. */
+.tmap-svg{display:block;width:auto;height:auto}
+
+.tmap-col{fill:var(--muted);font:500 10.5px "Segoe UI",Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.tmap-col-count{fill:var(--muted);opacity:.55;font-weight:600}
+
+/* Connectors: bold flowing dashes. On the selected device's own cables they light up, so with
+   several limits and connections you can see at a glance which branch belongs to which. The
+   stroke is generous because the map is scaled down to fit its panel. */
+.tmap-link{fill:none;stroke:#3d5170;stroke-width:4;stroke-linecap:round;stroke-dasharray:9 7;animation:tmap-flow 1.1s linear infinite;transition:opacity .15s,stroke-width .15s,stroke .15s,filter .15s}
+@keyframes tmap-flow{to{stroke-dashoffset:-16}}
+@media(prefers-reduced-motion:reduce){.tmap-link{animation:none}}
+.tmap-link.is-active{stroke:var(--blue);opacity:1;stroke-width:5.5;animation-duration:.7s}
+/* A separate rule for the halo: if a browser cannot parse the filter it only loses the glow,
+   never the colour and width above (a single unparsable declaration drops the whole block). */
+.tmap-link.is-active{filter:drop-shadow(0 0 4px #4c9aff) drop-shadow(0 0 10px rgba(76,154,255,.55))}
+.tmap-link.is-dim{opacity:.1;stroke-width:3}
+
+.tmap-node{cursor:pointer;outline:none;transition:opacity .15s}
+.tmap-box{fill:#0f151d;stroke:#2a3a4d;stroke-width:1;transition:fill .15s,stroke .15s,filter .15s}
+.tmap-node:hover .tmap-box{stroke:#4a6280}
+.tmap-node:focus-visible .tmap-box{stroke:var(--blue);stroke-width:2}
+/* The selected card is the only one left lit; everything else fades back. */
+.tmap-node.is-selected .tmap-box{fill:#17283a;stroke:var(--blue);stroke-width:2.2;filter:drop-shadow(0 0 6px #4c9aff)}
+.tmap-node.is-selected .tmap-name{fill:#fff}
+.tmap-node.is-dim{opacity:.22}
+.tmap-node.is-selected.is-dim{opacity:1}
+.tmap-name{fill:var(--text);font:600 12px "Segoe UI",Arial,sans-serif}
+.tmap-sum{fill:var(--muted);font:10px ui-monospace,Consolas,monospace}
+.tmap-dot{fill:var(--muted)}
+.tmap-dot[data-state=online]{fill:var(--green)}
+.tmap-dot[data-state=offline]{fill:var(--red)}
+.tmap-dot[data-state=not-tested]{fill:var(--muted)}
+.tmap-badge rect{fill:#17283a;stroke:var(--blue);stroke-opacity:.5}
+.tmap-badge text{fill:#8cc0f5;font:700 9px "Segoe UI",Arial,sans-serif}
+
+.tmap-inspect{position:sticky;top:16px}
+.tmap-hint{margin:0 0 12px;color:var(--muted);font-size:11.5px;line-height:1.6}
+.tmap-detail{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0 0 14px;font-size:12px}
+.tmap-detail dt{color:var(--muted)}
+.tmap-detail dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+/* Sensor readings for the selected device: a 2x2 stat grid. */
+.tmap-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}
+.tmap-stat{border:1px solid var(--border);border-radius:7px;padding:9px 11px;background:var(--surface-2);min-width:0}
+.tmap-stat span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.tmap-stat b{display:block;margin-top:2px;font:650 17px/1.35 "Segoe UI",Arial,sans-serif;
+    color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tmap-stat b em{font-style:normal;font-size:10px;font-weight:500;color:var(--muted);margin-left:3px}
+.tmap-stat.is-empty b{color:var(--muted);font-weight:500}
+.tmap-stat[data-tone=ok] b{color:var(--green)}
+.tmap-stat[data-tone=wn] b{color:var(--amber)}
+.tmap-stat[data-tone=bad] b{color:var(--red)}
+.tmap-kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--border);padding-top:12px}
+.tmap-kv div{border:1px solid var(--border);border-radius:7px;padding:9px 11px;background:var(--surface-2)}
+.tmap-kv span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.tmap-kv b{display:block;font:650 18px/1.4 "Segoe UI",Arial,sans-serif}
+.tmap-note{margin:12px 0 0;color:var(--muted);font-size:11.5px}
+
+.topo-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:11px;color:var(--muted);margin:0 0 22px}
+.topo-legend-item{display:inline-flex;align-items:center;gap:6px}
+.topo-legend-note{color:var(--muted);opacity:.85}
+.topo-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}
+.topo-dot[data-state=online]{background:var(--green)}
+.topo-dot[data-state=offline]{background:var(--red)}
+.topo-dot[data-state=not-tested]{background:var(--muted)}
+
+/* ---- switch view (Cisco) -----------------------------------------------------
+   A switch replaces the map rather than sitting under it: the topology table is hidden and
+   this view takes the page, with a Back button returning to the map. The grid is the
+   reference's port square: green = link up, red = not connected, hatched = shut by an operator. */
+.tmap-switch-view[hidden]{display:none}
+.tmap-sw-bar{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+.tmap-back{display:inline-flex;align-items:center;gap:7px;font:600 11.5px "Segoe UI",Arial,sans-serif;
+    color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:7px;
+    padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+.tmap-back:hover{border-color:var(--blue);background:var(--surface-2)}
+.tmap-back:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tmap-sw-card{padding:18px 20px}
+.tmap-sw-title{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.tmap-sw-title .eyebrow{margin:0 0 3px}
+.tmap-sw-title h2{margin:0;font:600 19px "Space Grotesk","Segoe UI",sans-serif;letter-spacing:-.2px}
+.tmap-sw-ip{display:block;margin-top:3px;font:11.5px ui-monospace,Consolas,monospace;color:var(--muted)}
+.tmap-sw-state{margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--muted);background:var(--surface-2);white-space:nowrap}
+.tmap-sw-state[data-state=online]{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent);background:color-mix(in srgb,var(--green) 12%,transparent)}
+.tmap-sw-state[data-state=warn]{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent);background:color-mix(in srgb,var(--amber) 12%,transparent)}
+.tmap-sw-state[data-state=error]{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent);background:color-mix(in srgb,var(--red) 12%,transparent)}
+.tmap-port-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:7px;max-width:900px}
+.tmap-port{font:600 11px ui-monospace,Consolas,monospace;padding:11px 4px;border-radius:5px;cursor:pointer;
+    border:1px solid transparent;transition:border-color .12s,filter .12s;text-align:center}
+.tmap-port[data-state=up]{background:color-mix(in srgb,var(--green) 82%,#0b1118);border-color:#1d7a46;color:#07130d}
+.tmap-port[data-state=down]{background:color-mix(in srgb,var(--red) 82%,#0b1118);border-color:#9a2a2a;color:#160809}
+.tmap-port[data-state=disabled]{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 4px,#1c2633 4px,#1c2633 8px);border-color:var(--border);color:var(--muted)}
+.tmap-port:hover{filter:brightness(1.12);border-color:#fff}
+.tmap-port:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tmap-port.is-selected{outline:2px solid #8cc0f5;outline-offset:1px}
+.tmap-sw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin:16px 0 0;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
+.tmap-key{display:inline-flex;align-items:center;gap:6px}
+.tmap-key i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.tmap-key i[data-state=up]{background:color-mix(in srgb,var(--green) 82%,#0b1118)}
+.tmap-key i[data-state=down]{background:color-mix(in srgb,var(--red) 82%,#0b1118)}
+.tmap-key i[data-state=disabled]{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 3px,#1c2633 3px,#1c2633 6px);border:1px solid var(--border)}
+.tmap-port-detail{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);max-width:560px}
+.tmap-port-detail[hidden]{display:none}
+.tmap-port-detail .tmap-detail{margin:0 0 4px}
+
+/* Switch reading tiles: ping / bandwidth / uptime / neighbours, above the port grid. */
+.tmap-rd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 18px;max-width:900px}
+.tmap-rd{border:1px solid var(--border);border-radius:8px;padding:11px 14px;background:var(--surface-2);min-width:0}
+.tmap-rd span{display:block;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.tmap-rd b{display:block;margin-top:4px;font:650 18px/1.3 "Space Grotesk","Segoe UI",sans-serif;color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tmap-rd b em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--muted);margin-left:4px}
+.tmap-rd[data-tone=ok] b{color:var(--green)}
+.tmap-rd[data-tone=wn] b{color:var(--amber)}
+.tmap-rd[data-tone=bad] b{color:var(--red)}
+
+/* A small dot marks a port that has a neighbour learned on it. */
+.tmap-port{position:relative}
+.tmap-port-dot{position:absolute;top:5px;right:5px;width:5px;height:5px;border-radius:50%;background:#0b1118;opacity:.55}
+
+/* Neighbours of the selected port only. */
+.tmap-nb-title{margin:16px 0 8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tmap-nb-list{display:grid;gap:8px}
+.tmap-nb{border:1px solid var(--border);border-radius:7px;padding:9px 12px;background:var(--surface-2)}
+.tmap-nb-head{display:flex;align-items:center;gap:10px}
+.tmap-nb-head b{font-size:12.5px;color:var(--text)}
+.tmap-nb-port{margin-left:auto;font:11px ui-monospace,Consolas,monospace;color:var(--blue);background:color-mix(in srgb,var(--blue) 13%,transparent);border-radius:4px;padding:1px 7px}
+.tmap-nb small{display:block;margin-top:3px;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.tmap-nb-empty{font-size:11.5px;color:var(--muted);border:1px dashed var(--border);border-radius:7px;padding:12px}
+
+/* A fiber port carries an optical transceiver: marked so it stands out from the copper rows. */
+.tmap-port.is-fiber{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 55%,transparent)}
+.tmap-key i.tmap-key-fiber{background:transparent;border:1px solid color-mix(in srgb,var(--blue) 70%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 35%,transparent)}
+
+/* Optical transmit/receive levels for the selected fiber port. */
+.tmap-optical{margin-top:4px}
+.tmap-optical-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tmap-optical-grid>div{border:1px solid var(--border);border-radius:7px;padding:9px 12px;background:var(--surface-2)}
+.tmap-optical-grid span{display:block;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tmap-optical-grid b{display:block;margin-top:3px;font:600 15px ui-monospace,Consolas,monospace;color:var(--text)}
+.tmap-optical-grid b[data-tone=online]{color:var(--green)}
+.tmap-optical-grid b[data-tone=warn]{color:var(--amber)}
+.tmap-optical-grid b[data-tone=error]{color:var(--red)}
+.tmap-optical-note{margin-top:7px;font-size:11px;color:var(--muted)}
+
+/* VLAN membership, laid out like the optical block so the two read as one panel. */
+.tmap-vlan{margin-top:4px}
+.tmap-vlan .tmap-optical-grid b{font-size:13px;font-weight:600;color:var(--blue)}
+
+@media(max-width:1100px){.tmap-layout{grid-template-columns:1fr}.tmap-inspect{position:static}}

@@ -95,16 +95,16 @@ const NODES = [
 ];
 const LINKS = [{ from: 1, to: 2 }, { from: 1, to: 3 }, { from: 2, to: 4 }, { from: 4, to: 5 }];
 
-test('selecting a node highlights its branch and dims the rest', () => {
+test('selecting a device dims every other card', () => {
     const ui = build(NODES, LINKS);
     ui.nodeEls[3]._handlers.click();          // Kalar (key 4)
-    assert.ok(ui.nodeEls[3].classList.contains('is-selected'));
-    // Ancestors and descendants stay lit.
-    assert.ok(!ui.nodeEls[0].classList.contains('is-dim'), 'root is on the path');
-    assert.ok(!ui.nodeEls[1].classList.contains('is-dim'), 'Limit-1 is on the path');
-    assert.ok(!ui.nodeEls[4].classList.contains('is-dim'), 'Tower-A is below');
-    // Unrelated sibling branch is dimmed.
-    assert.ok(ui.nodeEls[2].classList.contains('is-dim'), 'Limit-6 is unrelated');
+    assert.ok(ui.nodeEls[3].classList.contains('is-selected'), 'the clicked card stays lit');
+    assert.ok(!ui.nodeEls[3].classList.contains('is-dim'));
+    // Everything else darkens - ancestors, descendants and unrelated branches alike - so with
+    // several limits and connections the one you clicked is unmistakable.
+    for (const index of [0, 1, 2, 4]) {
+        assert.ok(ui.nodeEls[index].classList.contains('is-dim'), `node ${index} is dimmed`);
+    }
 });
 
 test('only the cables touching the selected device glow', () => {

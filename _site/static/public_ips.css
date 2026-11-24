@@ -1,0 +1,135 @@
+.workflow-panel{margin-bottom:20px}.workflow-panel .eyebrow{margin:0 0 5px}.workflow-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.workflow-grid article{display:flex;align-items:flex-start;gap:14px;border:1px solid var(--border);background:var(--ns-surface-3);border-radius:9px;padding:19px}.step-mark{font-size:12px;color:var(--blue);background:var(--ns-info-surface-2);border:1px solid var(--ns-info-border-4);border-radius:7px;padding:7px}.workflow-grid h3{margin:0;font-size:14px}.workflow-grid p{color:var(--muted);font-size:12px;margin:7px 0 14px}.rules-placeholder{grid-column:1/-1}.rules-placeholder small{display:block;color:var(--muted);font-size:11px;margin-top:8px}
+.public-ip-actions .action-popover{width:260px}.public-ip-actions .action-popover a{display:block;padding:9px 10px;color:var(--text);text-decoration:none;border-radius:5px;font-size:12px}.public-ip-actions .action-popover a:hover,.public-ip-actions .action-popover button:not(:disabled):hover{background:var(--ns-nav-surface-3)}.public-ip-actions .action-popover small{font-size:9px;color:var(--blue);margin-left:5px}.public-ip-actions .action-popover button:not(:disabled){opacity:1;cursor:pointer}
+.public-ips-page .check-field{flex-direction:row;align-items:flex-start;gap:10px}.public-ips-page .check-field input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--blue);flex:none}.check-field small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:4px}.change-ip-dialog{width:min(850px,calc(100% - 32px))}.illustrative-example{display:flex;gap:14px;align-items:center;justify-content:space-between;margin:20px 0;padding:13px 15px;border:1px dashed var(--ns-info-border-9);border-radius:8px;background:var(--ns-raised-2)}.illustrative-example strong{font-size:12px;color:var(--ns-secondary-text-15)}.illustrative-example p{font-size:11px;color:var(--muted);margin:4px 0 0;max-width:430px}.illustrative-example .secondary-button{font-size:11px}
+.change-preview{padding:18px;border:1px solid var(--ns-info-border-4);border-radius:10px;background:var(--ns-surface-2)}.preview-heading{display:flex;gap:12px;justify-content:space-between;align-items:center}.preview-heading h3{margin:0;font-size:14px}#previewSource{font-size:11px;color:var(--muted);margin:10px 0 15px}.address-change{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:15px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}.address-change div{display:grid;gap:5px;min-width:0}.address-change div>span{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}.address-change strong{font-size:14px;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.change-arrow{color:var(--blue);font-size:22px}#changeValidation{font-size:12px;color:var(--amber);margin:12px 0}#changeValidation:empty{display:none}.rule-preview-table{min-width:490px;margin-top:16px}.rule-preview-table th,.rule-preview-table td{text-align:left!important;font-size:11px;overflow-wrap:anywhere}.rule-preview-table td{font-family:Consolas,monospace;font-weight:400}.rule-preview-table td:last-child{color:var(--green)}.backend-plan{font-size:11px;line-height:1.7;color:var(--muted);margin:14px 0 0}.backend-plan strong{color:var(--ns-secondary-text-10)}.confirmation-field{margin-top:18px}.public-ips-page:has(.ip-dialog[open]){overflow:hidden}
+@media(max-width:1120px){.workflow-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.illustrative-example{flex-wrap:wrap}.preview-heading{flex-wrap:wrap}.rule-preview-table{min-width:430px}.address-change{gap:10px;padding:12px}.change-preview{padding:13px}.address-change strong{font-size:12px}}
+@media(max-width:480px){.address-change{grid-template-columns:1fr}.change-arrow{transform:rotate(90deg);justify-self:start}.public-ips-page .page-intro{flex-wrap:wrap;gap:12px}.workflow-grid article{padding:14px}.public-ip-actions .action-popover{width:min(260px,calc(100vw - 60px))}}
+
+
+/* Monitoring workspace: responsive cards using the shared NetShield theme tokens. */
+.public-ips-page .main-content{min-width:0}
+.public-ips-page .ip-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:22px}
+.ip-summary .summary-card{padding:18px 20px;min-height:0}
+.ip-summary .card-value{font-size:30px;line-height:1.25;margin-top:8px}
+.ip-summary .card-label{font-size:12px;letter-spacing:0;text-transform:none}
+.noc-icon{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
+.noc-icon.status-good{color:var(--green)}
+.public-ips-page .inventory-panel{padding:22px;min-width:0}
+.public-ips-page .inventory-panel .panel-heading{padding:0 0 18px;gap:16px;align-items:center;flex-wrap:wrap}
+.public-ips-page .inventory-panel .device-toolbar{padding:0;grid-template-columns:minmax(160px,1.5fr) minmax(140px,1fr) minmax(130px,.8fr) auto;gap:12px;align-items:end}
+.public-ips-page .device-toolbar label>span{font-size:11px}
+.public-ips-page .device-toolbar input,.public-ips-page .device-toolbar select{min-width:0;width:100%;font-size:12px;height:39px}
+.telemetry-note{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+.telemetry-dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.public-ips-page .filter-note{padding:0;margin:14px 0 20px;font-size:11px;color:var(--muted)}
+.ip-monitor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
+.ip-monitor-card{min-width:0;background:var(--ns-surface-2);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s}
+.ip-monitor-card:hover{border-color:var(--ns-info-border-5)}
+.ip-monitor-card[hidden],.ip-empty-state[hidden]{display:none!important}
+.ip-card-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ip-identity{min-width:0}
+.ip-address-label{font-size:9px;font-weight:700;letter-spacing:1.2px;color:var(--muted)}
+.ip-identity h3{font-size:23px;letter-spacing:-.6px;line-height:1.3;margin:5px 0 0;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ip-badge{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:10px;font-weight:600;line-height:1.5;padding:4px 9px;border-radius:6px;border:1px solid var(--border);color:var(--muted);background:var(--surface)}
+.ip-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.ip-badge[data-state="provisioned"],.ip-badge[data-state="active"]{color:var(--green);background:var(--ns-success-surface-1);border-color:var(--ns-success-border-1)}
+.ip-badge[data-state="pending"],.ip-badge[data-state="no-data"]{color:var(--amber);background:var(--ns-warning-surface-1);border-color:var(--ns-warning-border-1)}
+.ip-badge[data-state="failed"],.ip-badge[data-state="conflict"]{color:var(--red);background:var(--ns-danger-surface-1);border-color:var(--ns-danger-border-1)}
+.ip-device-meta{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--muted);min-width:0}
+.ip-device-meta>div{display:grid;gap:2px;min-width:0}
+.ip-device-meta strong{font-size:12px;color:var(--text);overflow-wrap:anywhere}
+.ip-device-meta span{font-size:11px;overflow-wrap:anywhere}
+.ip-interface{margin-left:auto;max-width:45%;border:1px solid var(--border);background:var(--surface);border-radius:5px;padding:3px 7px;font-family:Consolas,monospace}
+.ip-monitor-line{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:11px}
+.ip-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:18px 0;gap:10px}
+.ip-metrics div{min-width:0}
+.ip-metrics dt{font-size:10px;color:var(--muted);margin-bottom:5px}
+.ip-metrics dd{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px;margin:0;overflow-wrap:anywhere;line-height:1.35}
+.ip-last-update{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:10px;padding-bottom:15px;border-bottom:1px solid var(--border)}
+.ip-last-update .noc-icon{width:13px;height:13px}
+.ip-last-update time{margin-left:auto;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.ip-primary-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:14px}
+.ip-primary-actions form,.ip-row-actions form{margin:0}
+.public-ips-page .ip-card-footer .secondary-button{font-size:11px;padding:7px 11px;min-height:32px;text-decoration:none}
+.ip-card-details{margin-top:13px}
+.ip-card-details summary,.ip-operations>summary{font-size:11px;color:var(--muted);cursor:pointer;width:fit-content;list-style-position:inside}
+.ip-card-details summary:hover,.ip-operations>summary:hover{color:var(--text)}
+.ip-card-details summary:focus-visible,.ip-operations>summary:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:3px}
+.ip-detail-content{margin-top:12px}
+.ip-diagnostic{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;font-size:11px;overflow-wrap:anywhere}
+.ip-diagnostic strong{font-weight:600}
+.ip-diagnostic p{margin:6px 0 0;color:var(--muted);line-height:1.6;white-space:pre-wrap}
+.ip-description{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.ip-row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.public-ips-page .ip-delete-button{color:var(--red)}
+.ip-empty-state{grid-column:1/-1;text-align:center;padding:45px 18px;color:var(--muted);font-size:12px;width:100%;min-width:0}
+.ip-empty-state .noc-icon{width:32px;height:32px;margin-bottom:8px}
+.ip-empty-state h3{font-size:16px;color:var(--text);margin:4px 0}
+.ip-empty-state p{margin:8px 0 18px}
+.public-ips-page .ip-operations{padding:16px 22px;margin-top:16px}
+.ip-operations-content{border-top:1px solid var(--border);padding-top:16px;margin-top:14px;font-size:12px}
+.ip-device-controls{display:grid;gap:10px}
+.ip-device-controls>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.ip-device-controls strong{margin-right:auto}
+.ip-device-controls form{margin:0}
+@media(min-width:1600px){.ip-monitor-grid{grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}}
+@media(max-width:1100px){.public-ips-page .inventory-panel .device-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-identity h3{font-size:21px}}
+@media(max-width:760px){.public-ips-page .inventory-panel{padding:16px}.ip-summary .summary-card{padding:14px}.ip-summary .card-value{font-size:25px}.ip-summary .card-note{font-size:10px}.ip-summary .noc-icon{display:none}.ip-monitor-card{padding:17px}.ip-monitor-grid{gap:12px}.ip-summary .card-top{min-height:34px;align-items:start}}
+@media(max-width:480px){.public-ips-page .ip-summary{gap:8px}.ip-summary .summary-card{padding:12px 10px}.ip-summary .card-label{font-size:10px}.ip-summary .card-note{line-height:1.4}.public-ips-page .inventory-panel .device-toolbar{grid-template-columns:1fr}.ip-metrics{gap:8px}.ip-metrics dd{font-size:16px}.ip-last-update time{margin-left:0}.public-ips-page .ip-operations{padding:14px 16px}}
+@media(prefers-reduced-motion:reduce){.ip-monitor-card{transition:none}}
+
+.ip-monitor-controls{margin-bottom:12px}.ip-badge[data-state="saved-sample"]{color:var(--muted)}
+
+/* Compact fleet rows: rates and counters stay separate and use real sample bindings. */
+.ip-fleet-heading{display:grid;grid-template-columns:minmax(155px,1.4fr) minmax(100px,1fr) repeat(4,minmax(75px,1fr)) minmax(135px,1.2fr);gap:18px;padding:16px;background:var(--surface-2);border-bottom:1px solid var(--border);color:var(--muted);font:11px ui-monospace,Consolas,monospace}
+.ip-monitor-grid.ip-fleet{display:block}
+.ip-fleet .ip-monitor-card{display:grid;grid-template-columns:minmax(155px,1.4fr) minmax(100px,1fr) repeat(4,minmax(75px,1fr)) minmax(135px,1.2fr);gap:14px 18px;padding:20px 16px;background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0}
+.ip-fleet .ip-monitor-card:hover{background:var(--surface-2)}
+.ip-fleet-identity{grid-column:1;grid-row:1;min-width:0;padding-left:12px;border-left:3px solid var(--ns-info-border-5)}
+.ip-fleet .ip-address-label{display:none}
+.ip-fleet .ip-identity h3{font:800 17px/1.4 ui-monospace,Consolas,monospace;letter-spacing:-.4px;margin:0;color:var(--text)}
+.ip-fleet .ip-device-meta{grid-column:2;grid-row:1;margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.ip-fleet .ip-device-label{display:none}
+.ip-fleet .ip-device-meta>.noc-icon{display:none}
+.ip-fleet .ip-device-meta strong{font-size:14px;font-weight:750;line-height:1.4;color:var(--text)}
+.ip-fleet .ip-device-meta>div{gap:4px;width:100%}
+.ip-fleet .ip-device-meta>div>span{font:11px/1.5 ui-monospace,Consolas,monospace;color:var(--muted)}
+.ip-fleet .ip-interface{margin-left:0;font-size:10px;max-width:100%}
+.ip-fleet .ip-metrics{grid-column:3/7;grid-row:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin:0;align-content:start}
+.ip-fleet .ip-metrics dt{font-size:10px;line-height:1.4;margin-bottom:6px}
+.ip-fleet .ip-metrics dd{font:600 14px ui-monospace,Consolas,monospace;line-height:1.5;letter-spacing:0}
+.ip-fleet .ip-metrics>div:nth-child(-n+4) dd{color:var(--blue)}
+.ip-fleet .ip-metrics>div:nth-child(1) dd{color:var(--amber)}
+.ip-fleet-status{grid-column:7;grid-row:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.ip-fleet .ip-monitor-line{border:0;padding:0;gap:7px;flex-wrap:wrap}
+.ip-fleet .ip-monitor-line>span:first-child{display:none}
+.ip-fleet .detection-inline{margin:0;flex-wrap:wrap;gap:6px;font-size:10px}
+.ip-fleet .detection-inline small{overflow-wrap:anywhere}
+.ip-fleet [data-ddos-message]{margin:0;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+.ip-fleet .ip-last-update{grid-column:1/7;margin:0;padding:0;border:0;align-self:center}
+.ip-fleet .ip-last-update time{margin-left:5px}
+.ip-fleet [data-retained-note]{grid-column:1/-1;margin:0}
+.ip-fleet .ip-card-footer{grid-column:7;grid-row:2;min-width:0}
+.ip-fleet .ip-card-footer:has(.ip-fleet-controls[open]){grid-column:1/-1;grid-row:3}
+.ip-fleet .ip-card-footer:has(.ip-fleet-controls[open])>.ip-fleet-controls>summary{margin-left:auto}
+.ip-fleet-controls>summary{font-size:11px;color:var(--blue);cursor:pointer;width:fit-content;list-style-position:inside}
+.ip-fleet-controls>summary:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+.ip-fleet-control-body{border:1px solid var(--border);border-radius:8px;margin-top:12px;padding:0 14px 14px;background:var(--surface)}
+@media(min-width:1201px){.ip-fleet .ip-metrics>div:nth-child(-n+4) dt{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}}
+@media(max-width:1200px){
+ .ip-fleet-heading{display:none}
+ .ip-fleet .ip-monitor-card{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ip-fleet .ip-metrics{grid-column:1/-1;grid-row:2}
+ .ip-fleet .ip-address-label,.ip-fleet .ip-device-label{display:block;font-size:10px;font-weight:500;letter-spacing:0;color:var(--muted);margin-bottom:6px}
+ .ip-fleet-status{grid-column:1/-1;grid-row:3;flex-direction:row;align-items:center;flex-wrap:wrap}
+ .ip-fleet .ip-last-update{grid-column:1/-1}
+ .ip-fleet .ip-card-footer,.ip-fleet .ip-card-footer:has(.ip-fleet-controls[open]){grid-column:1/-1;grid-row:4}
+}
+@media(max-width:650px){
+ .ip-fleet .ip-monitor-card{padding:18px 0;gap:16px}
+ .ip-fleet .ip-identity h3{font-size:15px}
+ .ip-fleet .ip-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+ .ip-fleet .ip-metrics dt{position:static;width:auto;height:auto;clip-path:none}
+ .ip-fleet .ip-last-update time{margin-left:0}
+}

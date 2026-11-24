@@ -27,12 +27,15 @@
 .tmap-link.is-active{filter:drop-shadow(0 0 4px #4c9aff) drop-shadow(0 0 10px rgba(76,154,255,.55))}
 .tmap-link.is-dim{opacity:.1;stroke-width:3}
 
-.tmap-node{cursor:pointer;outline:none}
-.tmap-box{fill:#0f151d;stroke:#2a3a4d;stroke-width:1;transition:fill .15s,stroke .15s}
+.tmap-node{cursor:pointer;outline:none;transition:opacity .15s}
+.tmap-box{fill:#0f151d;stroke:#2a3a4d;stroke-width:1;transition:fill .15s,stroke .15s,filter .15s}
 .tmap-node:hover .tmap-box{stroke:#4a6280}
 .tmap-node:focus-visible .tmap-box{stroke:var(--blue);stroke-width:2}
-.tmap-node.is-selected .tmap-box{fill:#17283a;stroke:var(--blue);stroke-width:1.6}
-.tmap-node.is-dim{opacity:.32}
+/* The selected card is the only one left lit; everything else fades back. */
+.tmap-node.is-selected .tmap-box{fill:#17283a;stroke:var(--blue);stroke-width:2.2;filter:drop-shadow(0 0 6px #4c9aff)}
+.tmap-node.is-selected .tmap-name{fill:#fff}
+.tmap-node.is-dim{opacity:.22}
+.tmap-node.is-selected.is-dim{opacity:1}
 .tmap-name{fill:var(--text);font:600 12px "Segoe UI",Arial,sans-serif}
 .tmap-sum{fill:var(--muted);font:10px ui-monospace,Consolas,monospace}
 .tmap-dot{fill:var(--muted)}

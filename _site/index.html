@@ -1,0 +1,190 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07111f">
+    <title>Topology Map | NetShield | Network Operations Center</title>
+    <script src="static/theme.js"></script>
+    <link rel="stylesheet" href="static/theme.css">
+    <link rel="stylesheet" href="static/dashboard.css">
+    <link rel="stylesheet" href="static/detection.css">
+    <script src="static/detection_ui.js" defer></script>
+    <link rel="stylesheet" href="/static/sensors/sensors.css?v=3-integrated">
+<link rel="stylesheet" href="static/devices.css"><link rel="stylesheet" href="static/device_fleet.css"><link rel="stylesheet" href="static/topology_map.css">
+    
+</head>
+<body class="devices-page fleet-page topology-map-page">
+    <a class="skip-link" href="#pageContent">Skip to content</a>
+    <div class="app-shell">
+                <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand" href="/" aria-label="NetShield dashboard">
+                <span class="brand-mark" aria-hidden="true">N</span>
+                <span class="brand-name">Net<span>Shield</span></span>
+            </a>
+            <div class="nav-label">WORKSPACE</div>
+            <nav class="nav-list">
+                <a class="nav-item" href="/"><span class="nav-icon">▦</span>Dashboard</a>
+                <a class="nav-item" href="/devices/"><span class="nav-icon">▣</span>Devices</a>
+                <a class="nav-item active" href="/devices/topology/map/" aria-current="page"><span class="nav-icon">⌸</span>Topology</a>
+                <a class="nav-item" href="/public-ips/"><span class="nav-icon">◎</span>Public IPs</a>
+                <a class="nav-item" href="/traffic-monitor/"><span class="nav-icon">⌁</span>Traffic Monitor</a>
+                <a class="nav-item" href="/ddos-detection/"><span class="nav-icon">◈</span>DDoS Detection</a>
+                <a class="nav-item" href="/alerts/"><span class="nav-icon">♧</span>Alerts</a>
+                <a class="nav-item" href="/reports/"><span class="nav-icon">▤</span>Reports</a>
+                <a class="nav-item" href="/settings/"><span class="nav-icon">⚙</span>Settings</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="sidebar-status"><span class="pulse-dot" data-state="stopped"></span><span><b>Network topology</b><small>7 devices in the chain</small></span></div>
+                <div class="sidebar-foot">NETSHIELD NOC <span>v1.0</span></div>
+            </div>
+        </aside>
+
+        <main class="main-content" id="pageContent">
+                        <header class="topbar">
+                <div class="topbar-title"><h1>NetShield</h1></div>
+                <div class="topbar-meta">
+                    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to Light Mode" title="Switch to Light Mode"><span data-theme-icon aria-hidden="true">&#9728;</span></button>
+                    <div class="live-state"><span class="pulse-dot" data-state="stopped"></span><span class="status-text" data-state="stopped">DEVICE INVENTORY</span></div><div class="last-update">TELEMETRY <strong>Not available</strong></div>
+                </div>
+            </header>
+
+            
+<div class="tmap-tree-actions"><a class="secondary-button" href="/devices/topology/">Chain outline</a><a class="secondary-button" href="/devices/tree/">Groups</a><a class="secondary-button" href="/devices/">Back to devices</a></div>
+
+
+<div data-topo-view>
+<div class="tmap-layout">
+    <section class="panel tmap-panel" aria-label="Network topology map" data-topo-map>
+        <div class="panel-heading"><div><p class="eyebrow">NETWORK</p><h2>Topology</h2></div>
+            <span class="tmap-live"><span class="pulse-dot small"></span>7 devices</span></div>
+        <div class="tmap-canvas">
+            <svg class="tmap-svg" data-topo-svg viewBox="0 0 760 446" role="img" aria-label="Device topology: core, limit servers, PPPoE servers and towers">
+                
+                <text class="tmap-col" x="8" y="22">Core<tspan class="tmap-col-count"> 1</tspan></text>
+                
+                <text class="tmap-col" x="8" y="124">Limit Servers<tspan class="tmap-col-count"> 2</tspan></text>
+                
+                <text class="tmap-col" x="8" y="226">PPPoE Servers<tspan class="tmap-col-count"> 2</tspan></text>
+                
+                <text class="tmap-col" x="8" y="328">Towers<tspan class="tmap-col-count"> 2</tspan></text>
+                
+                
+                <g class="tmap-links"><path class="tmap-link" d="M426.0,70 C426.0,101 288.0,101 288.0,132" data-link="30-34" data-from="30" data-to="34"/><path class="tmap-link" d="M426.0,70 C426.0,101 564.0,101 564.0,132" data-link="30-43" data-from="30" data-to="43"/><path class="tmap-link" d="M288.0,172 C288.0,203 288.0,203 288.0,234" data-link="34-33" data-from="34" data-to="33"/><path class="tmap-link" d="M288.0,274 C288.0,305 196.0,305 196.0,336" data-link="33-41" data-from="33" data-to="41"/><path class="tmap-link" d="M288.0,274 C288.0,305 380.0,305 380.0,336" data-link="33-40" data-from="33" data-to="40"/><path class="tmap-link" d="M564.0,172 C564.0,203 564.0,203 564.0,234" data-link="43-42" data-from="43" data-to="42"/></g>
+                <g class="tmap-nodes">
+                    
+                    <g class="tmap-node" data-node="30" data-level="core" data-device-type="mikrotik" data-state="not-tested" transform="translate(342,30)" tabindex="0" role="button" aria-label="NCS, 8016.82 Mbps">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">NCS</text>
+                        <text class="tmap-sum" x="12" y="32">8016.82 Mbps</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="34" data-level="limit" data-device-type="mikrotik" data-state="not-tested" transform="translate(204,132)" tabindex="0" role="button" aria-label="limit-2, 1 PPPoE server">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">limit-2</text>
+                        <text class="tmap-sum" x="12" y="32">1 PPPoE server</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="33" data-level="pppoe" data-device-type="mikrotik" data-state="not-tested" transform="translate(204,234)" tabindex="0" role="button" aria-label="Connection Kalar-1, 2 towers">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">Connection Kalar-1</text>
+                        <text class="tmap-sum" x="12" y="32">2 towers</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="41" data-level="tower" data-device-type="cisco" data-state="not-tested" transform="translate(112,336)" tabindex="0" role="button" aria-label="Blue, 17.3 Mbps">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">Blue</text>
+                        <text class="tmap-sum" x="12" y="32">17.3 Mbps</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="40" data-level="tower" data-device-type="cisco" data-state="not-tested" transform="translate(296,336)" tabindex="0" role="button" aria-label="SARCHL, 582.26 Mbps">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">SARCHL</text>
+                        <text class="tmap-sum" x="12" y="32">582.26 Mbps</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="43" data-level="limit" data-device-type="mikrotik" data-state="not-tested" transform="translate(480,132)" tabindex="0" role="button" aria-label="limit-7, 0 PPPoE servers">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">limit-7</text>
+                        <text class="tmap-sum" x="12" y="32">0 PPPoE servers</text>
+                        
+                    </g>
+                    
+                    <g class="tmap-node" data-node="42" data-level="tower" data-device-type="mikrotik" data-state="not-tested" transform="translate(480,234)" tabindex="0" role="button" aria-label="Connection-2, No data">
+                        <rect class="tmap-box" width="168" height="40" rx="6"/>
+                        <circle class="tmap-dot" data-state="not-tested" cx="12" cy="14" r="3.5"/>
+                        <text class="tmap-name" x="22" y="18">Connection-2</text>
+                        <text class="tmap-sum" x="12" y="32">No data</text>
+                        
+                    </g>
+                    
+                </g>
+            </svg>
+        </div>
+        
+    </section>
+
+    <aside class="panel tmap-inspect" data-topo-inspect aria-live="polite">
+        <div class="panel-heading"><div><p class="eyebrow">DETAIL</p><h2 data-inspect-title>Network overview</h2></div></div>
+        <p class="tmap-hint" data-inspect-hint>Select a node to see what it connects to. This view is read-only.</p>
+        <div class="tmap-detail-body" data-inspect-detail hidden></div>
+        <div class="tmap-kv">
+            <div><span>Core</span><b>1</b></div>
+            <div><span>Devices</span><b>7</b></div>
+        </div>
+    </aside>
+</div>
+
+<p class="topo-legend">
+    <span class="topo-legend-item"><i class="topo-dot" data-state="online"></i>Online</span>
+    <span class="topo-legend-item"><i class="topo-dot" data-state="offline"></i>Offline / disabled</span>
+    <span class="topo-legend-item"><i class="topo-dot" data-state="not-tested"></i>Not tested</span>
+    <span class="topo-legend-note">Node figures come from stored sensor readings. "No data" means no fresh reading exists — nothing is estimated.</span>
+</p>
+</div>
+
+
+<section class="tmap-switch-view" id="tmapSwitch" data-ports-url-template="/devices/topology/map/switch/0/ports/" hidden></section>
+<script id="topo-nodes-data" type="application/json">[{"key": 30, "name": "NCS", "ip": "10.3.15.126", "state": "not-tested", "device_type": "mikrotik", "level": "core", "label": "Network throughput", "value": 8016.82, "unit": "Mbps", "note": "2 limits below", "x": 342, "y": 30, "w": 168, "h": 40, "summary": "8016.82 Mbps", "site_count": 0, "readings": {"cpu": null, "bandwidth_in": null, "bandwidth_out": null, "bandwidth_interface": "", "uptime": null, "uptime_seconds": null, "users": null, "neighbors": null, "ping_ms": null, "packet_loss": null}, "children_count": 2}, {"key": 34, "name": "limit-2", "ip": "10.3.13.200", "state": "not-tested", "device_type": "mikrotik", "level": "limit", "label": "PPPoE servers", "value": 1, "unit": "PPPoE server", "note": "1 PPPoE server \u00b7 1.41 Mbps", "x": 204, "y": 132, "w": 168, "h": 40, "summary": "1 PPPoE server", "site_count": 0, "readings": {"cpu": 3.0, "bandwidth_in": 0.08787751058419789, "bandwidth_out": 1.3269745776893784, "bandwidth_interface": "Up", "uptime": "1d 11h 08m 29s", "uptime_seconds": 126509.0, "users": null, "neighbors": null, "ping_ms": 2.1666666666666665, "packet_loss": 0.0}, "children_count": 1}, {"key": 33, "name": "Connection Kalar-1", "ip": "172.21.15.2", "state": "not-tested", "device_type": "mikrotik", "level": "pppoe", "label": "Towers", "value": 2, "unit": "towers", "note": "2 towers \u00b7 1729 users", "x": 204, "y": 234, "w": 168, "h": 40, "summary": "2 towers", "site_count": 0, "readings": {"cpu": 18.5, "bandwidth_in": 3741.5480117029156, "bandwidth_out": 3674.3065352737026, "bandwidth_interface": "Up", "uptime": "8d 10h 37m 33s", "uptime_seconds": 729453.0, "users": 1729, "neighbors": null, "ping_ms": 18.0, "packet_loss": 33.33333333333333}, "children_count": 2}, {"key": 41, "name": "Blue", "ip": "10.255.155.254", "state": "not-tested", "device_type": "cisco", "level": "tower", "label": "Site", "value": 17.3, "unit": "Mbps", "note": "17.30 Mbps", "x": 112, "y": 336, "w": 168, "h": 40, "summary": "17.3 Mbps", "site_count": 0, "readings": {"cpu": null, "bandwidth_in": 15.441255141873336, "bandwidth_out": 1.8575749996457271, "bandwidth_interface": "Up", "uptime": "0d 05h 16m 13s", "uptime_seconds": 18973.93, "users": null, "neighbors": 0, "ping_ms": 7.0, "packet_loss": 0.0}, "children_count": 0}, {"key": 40, "name": "SARCHL", "ip": "10.10.10.15", "state": "not-tested", "device_type": "cisco", "level": "tower", "label": "Site", "value": 582.26, "unit": "Mbps", "note": "582.26 Mbps", "x": 296, "y": 336, "w": 168, "h": 40, "summary": "582.26 Mbps", "site_count": 0, "readings": {"cpu": null, "bandwidth_in": 480.3670393892767, "bandwidth_out": 101.88836336413496, "bandwidth_interface": "Up", "uptime": "2d 05h 15m 45s", "uptime_seconds": 191745.36, "users": null, "neighbors": 44, "ping_ms": 12.333333333333334, "packet_loss": 0.0}, "children_count": 0}, {"key": 43, "name": "limit-7", "ip": "172.21.20.4", "state": "not-tested", "device_type": "mikrotik", "level": "limit", "label": "PPPoE servers", "value": 0, "unit": "PPPoE servers", "note": "0 PPPoE servers \u00b7 traffic no data", "x": 480, "y": 132, "w": 168, "h": 40, "summary": "0 PPPoE servers", "site_count": 0, "readings": {"cpu": null, "bandwidth_in": null, "bandwidth_out": null, "bandwidth_interface": "", "uptime": null, "uptime_seconds": null, "users": null, "neighbors": null, "ping_ms": null, "packet_loss": null}, "children_count": 1}, {"key": 42, "name": "Connection-2", "ip": "172.21.9.2", "state": "not-tested", "device_type": "mikrotik", "level": "tower", "label": "Site", "value": null, "unit": "", "note": "No data", "x": 480, "y": 234, "w": 168, "h": 40, "summary": "No data", "site_count": 0, "readings": {"cpu": null, "bandwidth_in": null, "bandwidth_out": null, "bandwidth_interface": "", "uptime": null, "uptime_seconds": null, "users": null, "neighbors": null, "ping_ms": null, "packet_loss": null}, "children_count": 0}]</script>
+<script src="static/topology_map.js" defer></script>
+
+            <footer class="page-footer"><span>NetShield Network Monitoring</span><span>Topology map</span></footer>
+        </main>
+    </div>
+    
+
+<script>
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    var g = [].slice.call(document.querySelectorAll('.tmap-node'))
+              .find(function (n) { return /limit-2/i.test(n.textContent); });
+    var box = g.querySelector('.tmap-box');
+    box.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    setTimeout(function () {
+      var act = document.querySelectorAll('.tmap-link.is-active');
+      var s = act[0] ? getComputedStyle(act[0]) : null;
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;background:#000;color:#fff;font:14px monospace;padding:8px';
+      d.textContent = 'selected=' + document.querySelectorAll('.tmap-node.is-selected').length
+        + ' dim=' + document.querySelectorAll('.tmap-node.is-dim').length
+        + ' activeLinks=' + act.length
+        + (s ? ' stroke=' + s.stroke + ' w=' + s.strokeWidth : '');
+      document.body.appendChild(d);
+    }, 800);
+  }, 1500);
+});
+</script>
+</body>
+</html>
